@@ -1,0 +1,25 @@
+#!/bin/bash
+
+sumfail=0
+sumok=0
+
+
+for a in build-O*/*.bc; do
+    echo "------------------------------------------------------------"
+    echo "--- Running test $a"
+    set -e
+    ../../vmir $a
+    set +e
+    if [ $? -ne 0 ]; then
+       echo "Test $a Failed"
+       ((sumfail++))
+    else
+       echo "Test $a OK"
+       ((sumok++))
+    fi
+
+done
+
+
+echo "Tests   OK: ${sumok}"
+echo "Tests Fail: ${sumfail}"

@@ -1,0 +1,8 @@
+*~
+*.o
+*.bc
+*.ll
+callgrind.*
+cachegrind.*
+vmir
+shatest
