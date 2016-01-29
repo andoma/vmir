@@ -657,10 +657,16 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
 
   int vm_argv = vmir_copy_argv(iu, argc, argv);
 
-  uint64_t ret;
+  union {
+    uint32_t u32;
+    uint64_t u64;
+  } ret;
+
   int64_t ts = get_ts();
   int r = vm_function_call(iu, f, &ret, argc, vm_argv);
   ts = get_ts() - ts;
+  if(r == 0)
+    printf("main() returned %d\n", ret.u32);
   printf("stopcode=%d call took %"PRId64"\n", r, ts);
 
   vmir_dump_instrumentation(iu);
