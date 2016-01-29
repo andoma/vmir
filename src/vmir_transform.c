@@ -1028,20 +1028,6 @@ break_crtitical_edges(ir_function_t *f)
 }
 
 
-
-typedef struct instr_meta {
-  ir_instr_t *ii;
-  ir_bb_t *ib;
-
-  uint32_t *gen;
-  uint32_t *out;
-  uint32_t *in;
-
-  int *succ;
-  int num_succ;
-} instr_meta_t;
-
-
 /**
  *
  */
@@ -1088,14 +1074,12 @@ bitset_or(uint32_t *bs, const uint32_t *src, int words)
  *
  */
 static void
-liveness_set_succ(ir_function_t *f, instr_meta_t *im, int instr)
+liveness_set_succ(ir_function_t *f, ir_instr_t *ii, int instr)
 {
-  ir_instr_t *ii = im->ii;
-
   switch(ii->ii_class) {
   case IR_IC_RET:
   case IR_IC_UNREACHABLE:
-    im->num_succ = 0;
+    ii->ii_num_succ = 0;
     break;
 
   case IR_IC_CAST:
@@ -1113,20 +1097,23 @@ liveness_set_succ(ir_function_t *f, instr_meta_t *im, int instr)
   case IR_IC_STACKCOPY:
   case IR_IC_STACKSHRINK:
   case IR_IC_MLA:
-    // -1 just means that we have one successor and it's the next instruction
-    im->num_succ = -1;
+    /* -1 just means that we have one successor and it's the next instruction
+     * Note that this is different from ii_num_suc == 1 where we have one
+     * successor and it's NOT the next instruction (unconditional branch)
+     */
+    ii->ii_num_succ = -1;
     break;
 
   case IR_IC_SWITCH:
     {
       ir_instr_switch_t *s = (ir_instr_switch_t *)ii;
 
-      im->num_succ = 1 + s->num_paths;
-      im->succ = malloc(sizeof(int) * im->num_succ);
-      im->succ[0] = bb_find(f, s->defblock)->ib_first_instr;
+      ii->ii_num_succ = 1 + s->num_paths;
+      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, s->defblock)->ib_first_instr;
 
       for(int i = 0; i < s->num_paths; i++)
-        im->succ[i + 1] = bb_find(f, s->paths[i].block)->ib_first_instr;
+        ii->ii_succ[i + 1] = bb_find(f, s->paths[i].block)->ib_first_instr;
     }
     break;
 
@@ -1134,14 +1121,14 @@ liveness_set_succ(ir_function_t *f, instr_meta_t *im, int instr)
     {
       ir_instr_br_t *b = (ir_instr_br_t *)ii;
 
-      im->num_succ = 1;
+      ii->ii_num_succ = 1;
       if(b->condition != -1)
-        im->num_succ = 2;
+        ii->ii_num_succ = 2;
 
-      im->succ = malloc(sizeof(int) * im->num_succ);
-      im->succ[0] = bb_find(f, b->true_branch)->ib_first_instr;
+      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, b->true_branch)->ib_first_instr;
       if(b->condition != -1)
-        im->succ[1] = bb_find(f, b->false_branch)->ib_first_instr;
+        ii->ii_succ[1] = bb_find(f, b->false_branch)->ib_first_instr;
     }
     break;
 
@@ -1149,10 +1136,10 @@ liveness_set_succ(ir_function_t *f, instr_meta_t *im, int instr)
     {
       ir_instr_cmp_branch_t *icb = (ir_instr_cmp_branch_t *)ii;
 
-      im->num_succ = 2;
-      im->succ = malloc(sizeof(int) * im->num_succ);
-      im->succ[0] = bb_find(f, icb->true_branch)->ib_first_instr;
-      im->succ[1] = bb_find(f, icb->false_branch)->ib_first_instr;
+      ii->ii_num_succ = 2;
+      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, icb->true_branch)->ib_first_instr;
+      ii->ii_succ[1] = bb_find(f, icb->false_branch)->ib_first_instr;
     }
     break;
 
@@ -1176,11 +1163,8 @@ liveness_set_value(uint32_t *bs, ir_unit_t *iu, int value)
 }
 
 static void
-liveness_set_gen(instr_meta_t *im, ir_unit_t *iu)
+liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
 {
-  ir_instr_t *ii = im->ii;
-  uint32_t *bs = im->gen;
-
   switch(ii->ii_class) {
   case IR_IC_UNREACHABLE:
   case IR_IC_STACKSHRINK:
@@ -1582,7 +1566,7 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
  *
  */
 static void
-coalesce(ir_unit_t *iu, const instr_meta_t *imv,
+coalesce(ir_unit_t *iu,
          int setwords, int temp_values, int instructions,
          int ffv, ir_function_t *f)
 {
@@ -1590,7 +1574,7 @@ coalesce(ir_unit_t *iu, const instr_meta_t *imv,
   uint32_t *mtx = tribitmtx_alloc(temp_values);
   ir_bb_t *ib;
   ir_instr_t *ii, *iin;
-  int j = 0;
+
   /*
    * Any non-move instruction that defines variable 'a' add
    * interference edges for (a,{liveout})
@@ -1600,7 +1584,6 @@ coalesce(ir_unit_t *iu, const instr_meta_t *imv,
    */
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      const instr_meta_t *im = &imv[j++];
       if(ii->ii_ret_value == -1)
         continue;
 
@@ -1618,13 +1601,15 @@ coalesce(ir_unit_t *iu, const instr_meta_t *imv,
       if(ii->ii_class == IR_IC_MOVE)
         v = ((ir_instr_move_t *)ii)->value - ffv;
 
+      const uint32_t *out = ii->ii_liveness;
+
       for(int a = 0; a < num_ret_values; a++) {
         int x = ret_values[a];
         ir_value_t *xval = value_get(iu, x);
         x-= ffv;
         int edges = 0;
         for(int j = 0; j < setwords; j++) {
-          uint32_t w = im->out[j];
+          uint32_t w = out[j];
           while(w) {
             int b = ffs(w) - 1;
             int y = (j << 5) + b;
@@ -1768,30 +1753,30 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
 
   ir_bb_t *ib;
   ir_instr_t *ii;
+  ir_instr_t **ivec;
 
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link)
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link)
       instructions++;
 
-  instr_meta_t *imv = calloc(sizeof(instr_meta_t), instructions);
+  ivec = malloc(sizeof(ir_instr_t *) * instructions);
 
   int i = 0;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ib->ib_first_instr = i;
-    imv[i].ib = ib;
 
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      imv[i].ii = ii;
-      imv[i].gen = calloc(1, sizeof(uint32_t) * setwords * 3);
-      imv[i].out = imv[i].gen + setwords;
-      imv[i].in  = imv[i].out + setwords;
+      ivec[i] = ii;
+      ii->ii_liveness = calloc(1, sizeof(uint32_t) * setwords * 3);
+      liveness_set_gen(ii, iu, ii->ii_liveness + setwords);
       i++;
     }
   }
 
+  // set_succ must be done in a separate pass as it needs to know
+  // ib_first_instr for all blocks
   for(i = 0; i < instructions; i++) {
-    liveness_set_gen(imv + i, iu);
-    liveness_set_succ(f, imv + i, i);
+    liveness_set_succ(f, ivec[i], i);
   }
 
 
@@ -1799,18 +1784,19 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
 
     int stable = 1;
     for(i = instructions - 1; i >= 0; i--) {
-      instr_meta_t *im = imv + i;
-      ir_instr_t *ii = im->ii;
+      ir_instr_t *ii = ivec[i];
 
       const uint32_t *o;
 
-      if(im->num_succ == -1) {
-        o = imv[i + 1].in;
+      if(ii->ii_num_succ == -1) {
+        o = ivec[i + 1]->ii_liveness + setwords * 2;
       } else {
         memset(new_out, 0, setwords * sizeof(uint32_t));
 
-        for(int j = 0; j < im->num_succ; j++)
-          bitset_or(new_out, imv[im->succ[j]].in, setwords);
+        for(int j = 0; j < ii->ii_num_succ; j++) {
+          const uint32_t *in = ivec[ii->ii_succ[j]]->ii_liveness + setwords * 2;
+          bitset_or(new_out, in, setwords);
+        }
         o = new_out;
       }
 
@@ -1824,28 +1810,28 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
         bitclr(new_in, ii->ii_ret_value - ffv);
       }
 
-      bitset_or(new_in, im->gen, setwords);
+      uint32_t       *out = ii->ii_liveness;
+      const uint32_t *gen = ii->ii_liveness + setwords;
+      uint32_t       *in  = ii->ii_liveness + setwords * 2;
 
-      if(!memcmp(im->out, o, setwords * sizeof(uint32_t)) &&
-         !memcmp(im->in,  new_in,  setwords * sizeof(uint32_t)))
+      bitset_or(new_in, gen, setwords);
+
+      if(!memcmp(out, o,       setwords * sizeof(uint32_t)) &&
+         !memcmp(in,  new_in,  setwords * sizeof(uint32_t)))
         continue;
 
       stable = 0;
-      memcpy(im->out, o, setwords * sizeof(uint32_t));
-      memcpy(im->in,  new_in,  setwords * sizeof(uint32_t));
+      memcpy(out, o,       setwords * sizeof(uint32_t));
+      memcpy(in,  new_in,  setwords * sizeof(uint32_t));
     }
 
     if(stable)
       break;
   }
 
-  coalesce(iu, imv, setwords, temp_values, instructions, ffv, f);
+  coalesce(iu, setwords, temp_values, instructions, ffv, f);
 
-  for(i = 0; i < instructions; i++) {
-    free(imv[i].gen);
-    free(imv[i].succ);
-  }
-  free(imv);
+  free(ivec);
 }
 
 

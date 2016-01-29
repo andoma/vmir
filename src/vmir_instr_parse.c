@@ -379,11 +379,10 @@ typedef struct ir_instr_extractval {
 static ir_instr_t *
 instr_create(size_t size, instr_class_t ic)
 {
-  ir_instr_t *ii = malloc(size);
+  ir_instr_t *ii = calloc(1, size);
   LIST_INIT(&ii->ii_values);
   ii->ii_class = ic;
   ii->ii_ret_value = -1;
-  ii->ii_ret_values = NULL;
   return ii;
 }
 
@@ -437,6 +436,9 @@ instr_destroy(ir_instr_t *ii)
 {
   instr_bind_clear(ii);
   free(ii->ii_ret_values);
+  free(ii->ii_succ);
+  free(ii->ii_liveness);
+
   TAILQ_REMOVE(&ii->ii_bb->ib_instrs, ii, ii_link);
   free(ii);
 }

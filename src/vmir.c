@@ -380,6 +380,18 @@ typedef struct ir_instr {
   struct ir_value_instr_list ii_values;
   instr_class_t ii_class;
   int ii_ret_value;  // -1 if instruction does not emit a new value
+
+
+  uint32_t *ii_liveness; /* Points to three consecutive bitfields used for
+                          * durign liveness analysis.
+                          * [out] [gen] [in]
+                          * The size of these bitfields are given by the number
+                          * of temporaries in each function
+                          */
+  int *ii_succ;
+
+  int16_t ii_num_succ;
+  int16_t ii_jitted : 1;
 } ir_instr_t;
 
 static void type_print_list(ir_unit_t *iu);
