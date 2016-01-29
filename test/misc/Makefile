@@ -7,7 +7,7 @@ O0FILES = ${patsubst %, build-O0/%.bc, ${CFILES}}
 O1FILES = ${patsubst %, build-O1/%.bc, ${CFILES}}
 O2FILES = ${patsubst %, build-O2/%.bc, ${CFILES}}
 
-SYSROOT = $(shell cd ../sysroot/ && pwd)
+SYSROOT = $(shell cd ../../sysroot/ && pwd)
 
 CFLAGS=-fno-vectorize -fno-slp-vectorize -emit-llvm -target le32-unknown-nacl
 CFLAGS += -ffreestanding
