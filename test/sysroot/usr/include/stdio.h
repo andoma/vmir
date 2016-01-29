@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdarg.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -29,6 +30,12 @@ int fseek(FILE *stream, long offset, int whence);
 long ftell(FILE *stream);
 int feof(FILE *stream);
 int fclose(FILE *fp);
+
+int fseeko(FILE *stream, off_t offset, int whence);
+off_t ftello(FILE *stream);
+
+int fgetc(FILE *stream);
+int fputc(const char *s, FILE *stream);
 
 int puts(const char *s);
 

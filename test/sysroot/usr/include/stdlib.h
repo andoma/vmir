@@ -12,6 +12,10 @@ void *realloc(void *ptr, size_t size);
 
 int atoi(const char *nptr);
 
+int abs(int j);
+
+char *getenv(const char *name);
+
 void __attribute__((noreturn)) exit(int status);
 void __attribute__((noreturn)) abort(void);
 

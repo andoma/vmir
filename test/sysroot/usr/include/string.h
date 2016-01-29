@@ -19,6 +19,13 @@ int strncmp(const char *s1, const char *s2, size_t n);
 char *strchr(const char *s, int c);
 char *strrchr(const char *s, int c);
 
+char *strdup(const char *s);
+size_t strlen(const char *s);
+
+char *strcat(char *dest, const char *src);
+char *strncat(char *dest, const char *src, size_t n);
+
+
 #ifdef __cplusplus
 }
 #endif
