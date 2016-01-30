@@ -29,7 +29,10 @@
 #include <stdint.h>
 
 // #define VM_TRACE
+
+#ifndef VM_TRACE
 #define VM_USE_COMPUTED_GOTO
+#endif
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
@@ -2209,7 +2212,7 @@ emit_op4(ir_unit_t *iu, vm_op_t op,
  *
  */
 static void
-vm_align64(ir_unit_t *iu, int imm_at_odd)
+vm_align32(ir_unit_t *iu, int imm_at_odd)
 {
   int text_is_odd = !!((intptr_t)iu->iu_text_ptr & 2);
   if(imm_at_odd != text_is_odd)
@@ -2280,7 +2283,7 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
       return;
     case IR_TYPE_INT64:
     case IR_TYPE_DOUBLE:
-      vm_align64(iu, 1);
+      vm_align32(iu, 1);
       emit_op(iu, VM_RET_R64C);
       emit_i64(iu, value_get_const64(iu, iv));
       return;
@@ -2437,7 +2440,7 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       return;
 
     case IR_TYPE_INT64:
-      vm_align64(iu, 1);
+      vm_align32(iu, 1);
       op = VM_ADD_R64C + binop;
       emit_op2(iu, op, value_reg(ret), value_reg(lhs));
       emit_i64(iu, value_get_const64(iu, rhs));
@@ -2454,7 +2457,7 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       default:
         parser_error(iu, "Can't binop %d for double", binop);
       }
-      vm_align64(iu, 1);
+      vm_align32(iu, 1);
       emit_op2(iu, op, value_reg(ret), value_reg(lhs));
       emit_i64(iu, value_get_const64(iu, rhs));
       break;
@@ -2470,6 +2473,7 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       default:
         parser_error(iu, "Can't binop %d for float", binop);
       }
+      vm_align32(iu, 1);
       emit_op2(iu, op, value_reg(ret), value_reg(lhs));
       emit_i32(iu, value_get_const32(iu, rhs));
       break;
@@ -2788,7 +2792,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
   case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-    vm_align64(iu, 0);
+    vm_align32(iu, 0);
     emit_op1(iu, VM_MOV64_C, 0);
     emit_i64(iu, value_get_const64(iu, val));
     emit_op1(iu, VM_STORE64_G, 0);
@@ -2800,7 +2804,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
-    vm_align64(iu, 1);
+    vm_align32(iu, 1);
     emit_op1(iu, VM_STORE64C_OFF, value_reg(ptr));
     emit_i16(iu, ii->offset);
     emit_i64(iu, value_get_const64(iu, val));
@@ -2966,7 +2970,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
       case IR_TYPE_DOUBLE:
         if(__builtin_isnan(rhs->iv_double))
           parser_error(iu, "Ugh, immediate is nan in fcmp");
-        vm_align64(iu, 1);
+        vm_align32(iu, 1);
         emit_op2(iu, pred - FCMP_OEQ + VM_OEQ_DBL_C,
                  value_reg(ret), value_reg(lhs));
         emit_i64(iu, value_get_const64(iu, rhs));
@@ -2976,6 +2980,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
         if(__builtin_isnan(rhs->iv_float))
           parser_error(iu, "Ugh, immediate is nan in fcmp");
 
+        vm_align32(iu, 1);
         emit_op2(iu, pred - FCMP_OEQ + VM_OEQ_FLT_C,
                  value_reg(ret), value_reg(lhs));
         emit_i32(iu, value_get_const32(iu, rhs));
@@ -3010,7 +3015,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
         return;
 
       case IR_TYPE_INT64:
-        vm_align64(iu, 1);
+        vm_align32(iu, 1);
         emit_op2(iu, pred - ICMP_EQ + VM_EQ64_C,
                  value_reg(ret), value_reg(lhs));
         emit_i64(iu, value_get_const64(iu, rhs));
@@ -3280,7 +3285,7 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
     assert(c->iv_class == IR_VC_REGFRAME);
     assert(type_get(iu, c->iv_type)->it_code == IR_TYPE_INT64);
 
-    vm_align64(iu, 1);
+    vm_align32(iu, 1);
 
     VECTOR_PUSH_BACK(&iu->iu_branch_fixups,
                      iu->iu_text_ptr - iu->iu_text_alloc);
@@ -3353,7 +3358,7 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
 
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT64):
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_DOUBLE):
-    vm_align64(iu, 0);
+    vm_align32(iu, 0);
     emit_op1(iu, VM_MOV64_C, value_reg(ret));
     emit_i64(iu, value_get_const64(iu, src));
     return;
@@ -3890,21 +3895,21 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
     break;
   case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT64):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_DOUBLE):
-    vm_align64(iu, 0);
+    vm_align32(iu, 0);
     emit_op3(iu, VM_SELECT64RC, value_reg(ret), value_reg(p),
              value_reg(tv));
     emit_i64(iu, value_get_const64(iu, fv));
     break;
   case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT64):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_DOUBLE):
-    vm_align64(iu, 0);
+    vm_align32(iu, 0);
     emit_op3(iu, VM_SELECT64CR, value_reg(ret), value_reg(p),
              value_reg(fv));
     emit_i64(iu, value_get_const64(iu, tv));
     break;
   case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT64):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_DOUBLE):
-    vm_align64(iu, 1);
+    vm_align32(iu, 1);
     emit_op2(iu, VM_SELECT64CC, value_reg(ret), value_reg(p));
     emit_i64(iu, value_get_const64(iu, tv));
     emit_i64(iu, value_get_const64(iu, fv));
