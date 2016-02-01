@@ -35,7 +35,7 @@ main(int argc, char **argv)
   int opt;
   const char *argv0 = argv[0];
   int print_stats = 0;
-  while((opt = getopt(argc, argv, "plidf:nhrbs")) != -1) {
+  while((opt = getopt(argc, argv, "plidf:nhrbsj")) != -1) {
     switch(opt) {
     case 'p':
       debug_flags |= VMIR_DBG_DUMP_PARSED_FUNCTION;
@@ -54,6 +54,9 @@ main(int argc, char **argv)
       break;
     case 'b':
       debug_flags |= VMIR_DBG_BB_INSTRUMENT;
+      break;
+    case 'j':
+      debug_flags |= VMIR_DBG_DISABLE_JIT;
       break;
     case 'f':
       debugged_function = optarg;

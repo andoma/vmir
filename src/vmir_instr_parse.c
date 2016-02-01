@@ -1115,7 +1115,7 @@ function_rec_handler(ir_unit_t *iu, int op,
 static void
 instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
 {
-  printf("%p: ", ii);
+  printf("%c %p: ", ii->ii_jit ? 'J' : ' ', ii);
   if(ii->ii_ret_value < - 1) {
     int num_values = -ii->ii_ret_value;
     printf("{ ");

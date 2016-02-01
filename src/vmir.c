@@ -151,7 +151,9 @@ struct ir_unit {
   jmp_buf iu_err_jmpbuf;
   int iu_exit_code;
   void *iu_opaque;
-
+  void *iu_jit_mem;
+  int iu_jit_mem_alloced;
+  int iu_jit_ptr;
 
   uint32_t iu_data_ptr;
   uint32_t iu_heap_start;
@@ -199,6 +201,9 @@ struct ir_unit {
   VECTOR_HEAD(, struct ir_initializer) iu_initializers;
 
   VECTOR_HEAD(, int) iu_branch_fixups;
+  VECTOR_HEAD(, int) iu_jit_vmcode_fixups;
+  VECTOR_HEAD(, int) iu_jit_vmbb_fixups;
+  VECTOR_HEAD(, int) iu_jit_branch_fixups;
 
   int iu_types_created;
 
@@ -303,8 +308,8 @@ typedef struct ir_bb {
   TAILQ_ENTRY(ir_bb) ib_link;
   struct ir_instr_queue ib_instrs;
   int ib_text_offset;
+  int ib_jit_offset;
   int ib_id;
-  int ib_first_instr; // Only valid during liveness analysis, etc
   int ib_mark;
 
   struct ir_bb_edge_list ib_incoming_edges;
@@ -388,10 +393,11 @@ typedef struct ir_instr {
                           * The size of these bitfields are given by the number
                           * of temporaries in each function
                           */
-  int *ii_succ;
+  struct ir_bb **ii_succ;
 
   int16_t ii_num_succ;
-  int16_t ii_jitted : 1;
+  int16_t ii_jit : 1;
+  int16_t ii_jit_checked : 1;
 } ir_instr_t;
 
 static void type_print_list(ir_unit_t *iu);
@@ -466,6 +472,9 @@ addstr(char **dst, const char *str)
 #include "vmir_vm.h"
 #include "vmir_instr_parse.c"
 #include "vmir_function.c"
+#if defined(__arm__) && defined(__linux__)
+#include "vmir_jit_arm.c"
+#endif
 #include "vmir_transform.c"
 #include "vmir_vm.c"
 #include "vmir_libc.c"
@@ -479,6 +488,9 @@ static void
 iu_cleanup(ir_unit_t *iu)
 {
   VECTOR_CLEAR(&iu->iu_branch_fixups);
+  VECTOR_CLEAR(&iu->iu_jit_vmcode_fixups);
+  VECTOR_CLEAR(&iu->iu_jit_vmbb_fixups);
+  VECTOR_CLEAR(&iu->iu_jit_branch_fixups);
   VECTOR_CLEAR(&iu->iu_initializers);
   value_resize(iu, 0);
 
@@ -571,6 +583,9 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   //  printf("Parse took %"PRId64"us\n", get_ts() - ts);
   free(iu->iu_text_alloc);
 
+#ifdef VMIR_VM_JIT
+  jit_seal_code(iu);
+#endif
   iu->iu_heap_start = VMIR_ALIGN(iu->iu_data_ptr, 4096);
 
   vmir_heap_init(iu);

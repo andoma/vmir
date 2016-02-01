@@ -107,3 +107,45 @@ vmir_llvm_alignment(int align)
     return 256;
   return (1 << align) >> 1;
 }
+
+
+/**
+ *
+ */
+static void
+bitset(uint32_t *bs, int v)
+{
+  bs[v >> 5] |= 1 << (v & 31);
+}
+
+/**
+ *
+ */
+static void
+bitclr(uint32_t *bs, int v)
+{
+  bs[v >> 5] &= ~(1 << (v & 31));
+}
+
+
+/**
+ *
+ */
+static int __attribute__((unused))
+bitchk(const uint32_t *bs, int v)
+{
+  if(bs[v >> 5] & (1 << (v & 31)))
+    return 1;
+  return 0;
+}
+
+
+/**
+ *
+ */
+static void
+bitset_or(uint32_t *bs, const uint32_t *src, int words)
+{
+  for(int i = 0; i < words; i++)
+    bs[i] |= src[i];
+}

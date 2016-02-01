@@ -30,6 +30,7 @@
 #define VM_STOP_BAD_FUNCTION 5
 
 typedef enum {
+  VM_JIT_CALL,
   VM_RET_VOID,
   VM_RET_R8,
   VM_RET_R16,

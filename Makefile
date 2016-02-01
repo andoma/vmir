@@ -8,6 +8,7 @@ DEPS = ${SRCS} \
 	src/vmir_instr_parse.c \
 	src/vmir_value.c \
 	src/vmir_type.c \
+	src/vmir_jit_arm.c \
 	src/vmir_vm.c \
 	src/vmir_vm.h \
 	src/vmir_transform.c \
@@ -23,3 +24,6 @@ CFLAGS += -DVMIR_USE_TLSF -I${CURDIR}/tlsf
 
 vmir: ${DEPS}
 	$(CC)  ${CFLAGS} -g ${SRCS} -lm -o $@
+
+vmir.arm: ${DEPS}
+	$(ARM_CC)  ${CFLAGS} -g ${SRCS} -lm -o $@

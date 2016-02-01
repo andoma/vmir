@@ -1,6 +1,6 @@
 # VMIR - Virtual Machine for LLVM Intermediate Representation
 
-VMIR is a standalone library written in C that can parse and execute LLVM bitcode (.bc) files.
+VMIR is a standalone library written in C that can parse and execute LLVM bitcode (.bc) files. Optionally it can generate machine code (JIT) to speed up execution significantly. JIT is currently only supported on 32 bit ARM.
 
 To build VMIR just type:
 ```
@@ -30,26 +30,31 @@ Hello world
 
 ### Performance
 
-Execution is about 10x slower than if the same binary is compiled to native code. Still it's a lot faster than LLVM's own interpreter (which by all means is not intended to run code fast in any way)
+Interpretion is about 10x slower (on x86) than the same binary compiled as native code. Still it's a lot faster than LLVM's own interpreter (which by all means is not intended to run code fast in any way)
 
-Example run of [test/misc/src/sha1test.c](test/misc/src/sha1test.c)  over 64MB of random data (Core i7 3.2GHz)
+Example run of [test/misc/src/sha1test.c](test/misc/src/sha1test.c)  over 64MB of random data
 
-Environment | Time
---- | ---
-Native | 0.39s
-VMIR | 4.8s
-LLVM LLI | 7m 39s
+Environment | (Core i7 3.2GHz) | ARMv7 BCM2709 (Rpi2)
+--- | --- | ---
+Native | 0.39s | 3.54s
+VMIR JIT | n/a | 17.5s
+VMIR | 4.8s | 1m 42s
+LLVM LLI | 7m 39s | n/a
 
 
 ### Status
+
 VMIR currently passes the gcc torture test suite on optimization level 0, 1 and 2. Those tests can be found in [test/gcc-torture](test/gcc-torture). Use `make && ./runtest` to run the tests.
 
 
 ### Missing features, known bugs
+
 * It only work on little endian machines.
 * The built-in libc is lacking a lot of functions and features. This is where most work needs to be done.
 * No support for vector types (Ie, code must be compiled with `-fno-vectorize -fno-slp-vectorize`).
-* No good C++ STL solution. Ideas welcome...
+* Not all instructions classes / value types are JITed.
+* No C++ STL solution. Ideas welcome...
+
 
 ### Compiling code for VMIR
 
@@ -59,6 +64,7 @@ When building bigger projects consisting of multiple files you must `llvm-link` 
 
 
 ### Embedding VMIR
+
 Including VMIR in your own project is pretty straight forward. Just copy the files from [src/](src/) to your project but only compile [vmir.c](src/vmir.c) (it will include all other .c -files on its own). The API is defined in [vmir.h](src/vmir.h). See [src/main.c](src/main.c) for example how to load and execute binaries.
 
 VMIR's libc also offers an option to use TLSF for memory allocation. The default built-in allocator is a very simple linear search first-fit algorithm.

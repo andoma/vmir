@@ -30,6 +30,7 @@ typedef enum {
   IR_VC_TEMPORARY,
   IR_VC_REGFRAME,
   IR_VC_CALL_ARGUMENT,
+  IR_VC_MACHINEREG,
   IR_VC_DATA,
   IR_VC_CE,   // Const expression
   IR_VC_AGGREGATE,
@@ -112,6 +113,7 @@ typedef struct ir_value {
     int iv_reg;
 
     int iv_num_values; // For aggregate types
+    int iv_jit;        // For temporary types that only exist in JITed code
   };
 
 } ir_value_t;
@@ -643,6 +645,12 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv)
     len += addstr(dstp, "(");
     len += type_print_id(dstp, iu, iv->iv_type);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{0x%x}", value, iv->iv_reg);
+    len += addstr(dstp, tmpbuf);
+    break;
+  case IR_VC_MACHINEREG:
+    len += addstr(dstp, "(");
+    len += type_print_id(dstp, iu, iv->iv_type);
+    snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{r%d}", value, iv->iv_reg);
     len += addstr(dstp, tmpbuf);
     break;
   case IR_VC_CALL_ARGUMENT:

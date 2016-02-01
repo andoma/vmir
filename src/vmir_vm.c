@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-// #define VM_TRACE
+//#define VM_TRACE
 
 #ifndef VM_TRACE
 #define VM_USE_COMPUTED_GOTO
@@ -449,6 +449,24 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define MEM(x) ((mem) + (x))
 
 
+static void * __attribute__((noinline))
+do_jit_call(void *rf, void *mem, void *(*code)(void *, void *))
+{
+#if 0
+  printf("%p: Pre jit call 8=%x c=%x 10=%x\n", code,
+         *(uint32_t *)(rf + 8),
+         *(uint32_t *)(rf + 12),
+         *(uint32_t *)(rf + 16));
+#endif
+  void *r = code(rf, mem);
+#if 0
+  printf("%p: Post jit call 8=%x c=%x 10=%x\n", code,
+         *(uint32_t *)(rf + 8),
+         *(uint32_t *)(rf + 12),
+         *(uint32_t *)(rf + 16));
+#endif
+  return r;
+}
 
 static int __attribute__((noinline))
 vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
@@ -497,6 +515,13 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
   VMOP(RET_VOID)
     return 0;
+
+  VMOP(JIT_CALL)
+  {
+    void *(*code)(void *, void *) = iu->iu_jit_mem + UIMM32(0);
+    I = do_jit_call(rf, iu->iu_mem, code);
+    NEXT(0);
+  }
 
   VMOP(RET_R8)
     *(uint32_t *)ret = R8(0);
@@ -1439,6 +1464,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   }
 
   VMOP(INSTRUMENT_COUNT)
+#ifdef VM_TRACE
+  {
+    ir_instrumentation_t *ii = &VECTOR_ITEM(&iu->iu_instrumentation, UIMM32(0));
+    printf("!!! BASIC BLOCK %s.%d\n", ii->ii_func->if_name, ii->ii_bb);
+  }
+#endif
     VECTOR_ITEM(&iu->iu_instrumentation, UIMM32(0)).ii_count++;
     NEXT(2);
   }
@@ -1449,6 +1480,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   switch(op) {
   case VM_NOP:       return &&NOP      - &&opz;     break;
 
+  case VM_JIT_CALL:  return &&JIT_CALL - &&opz;     break;
   case VM_RET_VOID:  return &&RET_VOID - &&opz;     break;
   case VM_RET_R8:    return &&RET_R8   - &&opz;     break;
   case VM_RET_R16:   return &&RET_R16  - &&opz;     break;
@@ -4028,8 +4060,23 @@ static void
 instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
 {
   ir_instr_t *ii;
+  //  printf("=========== BB %s.%d\n", f->if_name, bb->ib_id);
   TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
+
     //    printf("EMIT INSTR: ");  instr_print(iu, ii, 1);  printf("\n");
+
+#ifdef VMIR_VM_JIT
+    if(ii->ii_jit) {
+      int jitoffset;
+      ii = jit_emit(iu, ii, &jitoffset, iu->iu_text_ptr - iu->iu_text_alloc + 6);
+      if(jitoffset != -1) {
+        emit_op(iu, VM_JIT_CALL);
+        emit_i32(iu, jitoffset);
+      }
+      if(ii == NULL)
+        return;
+    }
+#endif
     switch(ii->ii_class) {
 
     case IR_IC_RET:
@@ -4186,6 +4233,9 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   iu->iu_text_ptr = iu->iu_text_alloc;
 
   VECTOR_RESIZE(&iu->iu_branch_fixups, 0);
+  VECTOR_RESIZE(&iu->iu_jit_vmcode_fixups, 0);
+  VECTOR_RESIZE(&iu->iu_jit_vmbb_fixups, 0);
+  VECTOR_RESIZE(&iu->iu_jit_branch_fixups, 0);
 
   ir_bb_t *ib;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
@@ -4210,6 +4260,9 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   memcpy(f->if_vm_text, iu->iu_text_alloc, f->if_vm_text_size);
 
   branch_fixup(iu);
+#ifdef VMIR_VM_JIT
+  jit_branch_fixup(iu, f);
+#endif
 }
 
 

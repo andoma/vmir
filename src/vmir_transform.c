@@ -23,6 +23,8 @@
  */
 
 
+static void liveness_set_succ(ir_function_t *f, ir_instr_t *ii);
+
 /**
  *
  */
@@ -552,7 +554,7 @@ eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
  * instead jump to 'nb'
  */
 static void
-bb_change_branch(ir_bb_t *from, ir_bb_t *to, ir_bb_t *nb)
+bb_change_branch(ir_bb_t *from, ir_bb_t *to, ir_bb_t *nb, ir_function_t *f)
 {
   ir_instr_t *ii;
 
@@ -595,6 +597,11 @@ bb_change_branch(ir_bb_t *from, ir_bb_t *to, ir_bb_t *nb)
     break;
   default:
     abort();
+  }
+
+  if(ii->ii_succ != NULL) {
+    free(ii->ii_succ);
+    liveness_set_succ(f, ii);
   }
 }
 
@@ -823,29 +830,6 @@ exit_ssa(ir_unit_t *iu, ir_function_t *f)
  *
  */
 static void
-remove_branches(ir_unit_t *iu, ir_function_t *f)
-{
-  ir_bb_t *ib;
-  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
-    ir_instr_t *ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue);
-    if(ii->ii_class == IR_IC_BR) {
-      ir_instr_br_t *b = (ir_instr_br_t *)ii;
-      if(b->condition == -1) {
-        ir_bb_t *tgt = bb_find(f, b->true_branch);
-        if(tgt == TAILQ_NEXT(ib, ib_link)) {
-          instr_destroy(ii);
-        }
-      }
-    }
-  }
-}
-
-
-
-/**
- *
- */
-static void
 remove_empty_bb(ir_unit_t *iu, ir_function_t *f)
 {
   ir_bb_t *ib, *nb, *next;
@@ -872,7 +856,7 @@ remove_empty_bb(ir_unit_t *iu, ir_function_t *f)
 
     for(ibe = LIST_FIRST(&ib->ib_incoming_edges); ibe != NULL; ibe = n) {
       n = LIST_NEXT(ibe, ibe_to_link);
-      bb_change_branch(ibe->ibe_from, ib, nb);
+      bb_change_branch(ibe->ibe_from, ib, nb, f);
 
       ibe->ibe_to = nb;
       LIST_REMOVE(ibe, ibe_to_link);
@@ -983,7 +967,7 @@ break_critical_edge(ir_function_t *f, ir_bb_edge_t *ibe)
   cfg_add_edge(f, nb, to->ib_id, 0);
 
   // Adjust final instrction of previous bb to point to new bb
-  bb_change_branch(from, to, nb);
+  bb_change_branch(from, to, nb, f);
 
   ir_instr_t *ii;
   // Adjust phi of target bb to point to new bb
@@ -1028,53 +1012,12 @@ break_crtitical_edges(ir_function_t *f)
 }
 
 
-/**
- *
- */
-static void
-bitset(uint32_t *bs, int v)
-{
-  bs[v >> 5] |= 1 << (v & 31);
-}
 
 /**
  *
  */
 static void
-bitclr(uint32_t *bs, int v)
-{
-  bs[v >> 5] &= ~(1 << (v & 31));
-}
-
-
-/**
- *
- */
-static int __attribute__((unused))
-bitchk(const uint32_t *bs, int v)
-{
-  if(bs[v >> 5] & (1 << (v & 31)))
-    return 1;
-  return 0;
-}
-
-
-/**
- *
- */
-static void
-bitset_or(uint32_t *bs, const uint32_t *src, int words)
-{
-  for(int i = 0; i < words; i++)
-    bs[i] |= src[i];
-}
-
-
-/**
- *
- */
-static void
-liveness_set_succ(ir_function_t *f, ir_instr_t *ii, int instr)
+liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
 {
   switch(ii->ii_class) {
   case IR_IC_RET:
@@ -1109,11 +1052,11 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii, int instr)
       ir_instr_switch_t *s = (ir_instr_switch_t *)ii;
 
       ii->ii_num_succ = 1 + s->num_paths;
-      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
-      ii->ii_succ[0] = bb_find(f, s->defblock)->ib_first_instr;
+      ii->ii_succ = malloc(sizeof(ir_bb_t *) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, s->defblock);
 
       for(int i = 0; i < s->num_paths; i++)
-        ii->ii_succ[i + 1] = bb_find(f, s->paths[i].block)->ib_first_instr;
+        ii->ii_succ[i + 1] = bb_find(f, s->paths[i].block);
     }
     break;
 
@@ -1125,10 +1068,10 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii, int instr)
       if(b->condition != -1)
         ii->ii_num_succ = 2;
 
-      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
-      ii->ii_succ[0] = bb_find(f, b->true_branch)->ib_first_instr;
+      ii->ii_succ = malloc(sizeof(ir_bb_t *) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, b->true_branch);
       if(b->condition != -1)
-        ii->ii_succ[1] = bb_find(f, b->false_branch)->ib_first_instr;
+        ii->ii_succ[1] = bb_find(f, b->false_branch);
     }
     break;
 
@@ -1137,9 +1080,9 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii, int instr)
       ir_instr_cmp_branch_t *icb = (ir_instr_cmp_branch_t *)ii;
 
       ii->ii_num_succ = 2;
-      ii->ii_succ = malloc(sizeof(int) * ii->ii_num_succ);
-      ii->ii_succ[0] = bb_find(f, icb->true_branch)->ib_first_instr;
-      ii->ii_succ[1] = bb_find(f, icb->false_branch)->ib_first_instr;
+      ii->ii_succ = malloc(sizeof(ir_bb_t *) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, icb->true_branch);
+      ii->ii_succ[1] = bb_find(f, icb->false_branch);
     }
     break;
 
@@ -1439,6 +1382,12 @@ value_info_cmp(const void *A, const void *B)
 }
 
 
+#define RA_CLASSES 3
+#define RA_CLASS_MACHINEREG_32  0
+#define RA_CLASS_REGFRAME_32    1
+#define RA_CLASS_REGFRAME_64    2
+
+
 
 /**
  *
@@ -1458,10 +1407,14 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
       continue;
 
     int s = value_regframe_size(iu, iv->iv_type);
-    if(s == 8)
-      vi[num_vertices].class = 1;
-    else
-      vi[num_vertices].class = 0;
+    if(s == 8) {
+      vi[num_vertices].class = RA_CLASS_REGFRAME_64;
+    } else {
+      if(iv->iv_jit)
+        vi[num_vertices].class = RA_CLASS_MACHINEREG_32;
+      else
+        vi[num_vertices].class = RA_CLASS_REGFRAME_32;
+    }
     int score = iv->iv_edges;
 
     ir_value_instr_t *ivi;
@@ -1479,19 +1432,17 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
   qsort(vi, num_vertices, sizeof(value_info_t), value_info_cmp);
 
   // Color graph and use color to allocate register
-#define RA_CLASSES 2
 
   uint32_t *colortab[RA_CLASSES];
-  int max_color[RA_CLASSES];
   int class_reg_size[RA_CLASSES];
   const int degree_words = (graph_degree + 32) / 32;
   for(int i = 0; i < RA_CLASSES; i++) {
     colortab[i] = malloc(degree_words * sizeof(uint32_t));
-    max_color[i] = -1;
   }
 
-  class_reg_size[0] = 4;
-  class_reg_size[1] = 8;
+  class_reg_size[RA_CLASS_MACHINEREG_32] = 0;
+  class_reg_size[RA_CLASS_REGFRAME_32] = 4;
+  class_reg_size[RA_CLASS_REGFRAME_64] = 8;
 
   int *colors = malloc(sizeof(int) * temp_values);
   memset(colors, 0xff, sizeof(int) * temp_values);
@@ -1528,37 +1479,173 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
         continue;
       c = c - 1 + j * 32;
       colors[val_index] = c;
-      max_color[class] = MAX(c, max_color[class]);
       break;
     }
   }
 
-  for(int c = 0; c < RA_CLASSES; c++) {
-    int rsize = class_reg_size[c];
+  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC)
+    printf("%s: Reg allocation, %d temporaries",
+           f->if_name, temp_values);
+
+
+#ifdef JIT_MACHINE_REGS
+  for(int c = 0; c < RA_CLASS_REGFRAME_32; c++) {
+
+    int regframe_slots = 0;
+    int machine_regs_used = 0;
+    const int rsize = 4;
 
     for(int i = 0; i < num_vertices; i++) {
       const int val_index = vi[i].value;
-      const int class = vi[i].class;
-      if(class != c)
+      if(vi[i].class != c)
+        continue;
+      const int color = colors[val_index];
+      ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_index + ffv);
+
+      if(color < JIT_MACHINE_REGS) {
+        iv->iv_class = IR_VC_MACHINEREG;
+        iv->iv_reg = color;
+        machine_regs_used = MAX(color + 1, machine_regs_used);
+      } else {
+        // Not enough machine regs, put value in regframe instead
+        iv->iv_class = IR_VC_REGFRAME;
+        const int rfcol = color - JIT_MACHINE_REGS;
+        regframe_slots = MAX(regframe_slots, rfcol + 1);
+        iv->iv_reg = f->if_regframe_size + rfcol * rsize;
+      }
+    }
+    f->if_regframe_size += regframe_slots * rsize;
+
+    if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC)
+      printf(", %d machine regs (%d spilled)",
+             machine_regs_used, regframe_slots);
+  }
+#endif
+
+  for(int c = RA_CLASS_REGFRAME_32; c < RA_CLASSES; c++) {
+    const int rsize = class_reg_size[c];
+    int regframe_slots = 0;
+
+    f->if_regframe_size = VMIR_ALIGN(f->if_regframe_size, rsize);
+
+    for(int i = 0; i < num_vertices; i++) {
+      const int val_index = vi[i].value;
+      if(vi[i].class != c)
         continue;
       const int color = colors[val_index];
       ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_index + ffv);
       iv->iv_class = IR_VC_REGFRAME;
       iv->iv_reg = f->if_regframe_size + color * rsize;
+      regframe_slots = MAX(regframe_slots, color + 1);
     }
-    f->if_regframe_size += (max_color[c] + 1) * rsize;
+    f->if_regframe_size += regframe_slots * rsize;
+
+    if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC)
+      printf(", %d rf%d", regframe_slots, rsize);
   }
 
-  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
-    printf("%s: Reg allocation, %d temporaries -> %d rsiz8, %d rsiz4\n",
-           f->if_name, num_vertices,
-           max_color[1] + 1, max_color[0] + 1);
-  }
+  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC)
+    printf("\n");
 
   for(int i = 0; i < RA_CLASSES; i++) {
     free(colortab[i]);
   }
   free(vi);
+}
+
+/**
+ *
+ */
+static void
+liveness_update(ir_function_t *f, int setwords, int ffv)
+{
+  uint32_t *new_in  = alloca(setwords * sizeof(uint32_t));
+  uint32_t *new_out = alloca(setwords * sizeof(uint32_t));
+  ir_bb_t *ib;
+  ir_instr_t *ii;
+  int rounds = 0;
+  while(1) {
+
+    int stable = 1;
+
+    // Liveness analysis reach stable state a lot faster if iterating
+    // backwards
+
+    for(ib = TAILQ_LAST(&f->if_bbs, ir_bb_queue); ib != NULL;
+        ib = TAILQ_PREV(ib, ir_bb_queue, ib_link)) {
+
+      for(ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue); ii != NULL;
+          ii = TAILQ_PREV(ii, ir_instr_queue, ii_link)) {
+
+        const uint32_t *o;
+
+        if(ii->ii_num_succ == -1) {
+          ir_instr_t *succ = TAILQ_NEXT(ii, ii_link);
+          o = succ->ii_liveness + setwords * 2;
+        } else {
+          memset(new_out, 0, setwords * sizeof(uint32_t));
+
+          for(int j = 0; j < ii->ii_num_succ; j++) {
+            ir_bb_t *ib = ii->ii_succ[j];
+            ir_instr_t *succ = TAILQ_FIRST(&ib->ib_instrs);
+            assert(succ != NULL);
+            const uint32_t *in = succ->ii_liveness + setwords * 2;
+            bitset_or(new_out, in, setwords);
+          }
+          o = new_out;
+        }
+
+        memcpy(new_in, o, setwords * sizeof(uint32_t));
+        if(ii->ii_ret_value < -1) {
+          // Multiple return values
+          for(int j = 0; j < -ii->ii_ret_value; j++) {
+            bitclr(new_in, ii->ii_ret_values[j] - ffv);
+          }
+        } else if(ii->ii_ret_value >= 0) {
+          bitclr(new_in, ii->ii_ret_value - ffv);
+        }
+
+        uint32_t       *out = ii->ii_liveness;
+        const uint32_t *gen = ii->ii_liveness + setwords;
+        uint32_t       *in  = ii->ii_liveness + setwords * 2;
+
+        bitset_or(new_in, gen, setwords);
+
+        if(!memcmp(out, o,       setwords * sizeof(uint32_t)) &&
+           !memcmp(in,  new_in,  setwords * sizeof(uint32_t)))
+          continue;
+
+        stable = 0;
+        memcpy(out, o,       setwords * sizeof(uint32_t));
+        memcpy(in,  new_in,  setwords * sizeof(uint32_t));
+      }
+    }
+    rounds++;
+    if(stable)
+      break;
+  }
+}
+
+
+
+/**
+ *
+ */
+static void __attribute__((unused))
+print_liveout(ir_unit_t *iu, ir_function_t *f, int temp_values, int ffv)
+{
+  ir_bb_t *ib;
+  ir_instr_t *ii;
+
+  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+    TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+      instr_print(iu, ii, 0);
+      printf("\n");
+      for(int j = 0; j < temp_values; j++)
+        if(bitchk(ii->ii_liveness, j))
+          printf("\tLiveout: %s\n", value_str_id(iu, j + ffv));
+    }
+  }
 }
 
 
@@ -1567,7 +1654,7 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
  */
 static void
 coalesce(ir_unit_t *iu,
-         int setwords, int temp_values, int instructions,
+         int setwords, int temp_values,
          int ffv, ir_function_t *f)
 {
   // Interference Matrix
@@ -1666,15 +1753,10 @@ coalesce(ir_unit_t *iu,
         assert(dst->iv_class == IR_VC_TEMPORARY);
 
         if(!tribitmtx_get(mtx, ii->ii_ret_value - ffv, v - ffv)) {
-          ir_value_t *killed;
-          if(ii->ii_ret_value < v) {
-            killed = src;
-          } else {
-            killed = dst;
-          }
-          ir_value_t *saved = killed == src ? dst : src;
+          ir_value_t *killed = src;
+          ir_value_t *saved = dst;
 
-          if(0 && iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
+          if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
             printf("Merging value %s -> %s based on instr: ",
                    value_str(iu, killed),  value_str(iu, saved));
             instr_print(iu, ii, 1);
@@ -1686,7 +1768,7 @@ coalesce(ir_unit_t *iu,
               ivi = ivin) {
             ivin = LIST_NEXT(ivi, ivi_value_link);
 
-            if(0 && iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
+            if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
               printf("\t Pre altering instruction ");
               instr_print(iu, ivi->ivi_instr, 1);
               printf("\n");
@@ -1698,7 +1780,15 @@ coalesce(ir_unit_t *iu,
             ivi->ivi_value = saved;
             LIST_INSERT_HEAD(&saved->iv_instructions, ivi, ivi_value_link);
 
-            if(0 && iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
+#ifdef VMIR_VM_JIT
+            if(!(iu->iu_debug_flags_func & VMIR_DBG_DISABLE_JIT)) {
+              memset(ivi->ivi_instr->ii_liveness + setwords,
+                     0, setwords * sizeof(uint32_t));
+              liveness_set_gen(ivi->ivi_instr, iu,
+                               ivi->ivi_instr->ii_liveness + setwords);
+            }
+#endif
+            if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
               printf("\tPost altering instruction ");
               instr_print(iu, ivi->ivi_instr, 1);
               printf("\n");
@@ -1728,6 +1818,18 @@ coalesce(ir_unit_t *iu,
     }
   }
 
+  remove_empty_bb(iu, f);
+
+#ifdef VMIR_VM_JIT
+  if(!(iu->iu_debug_flags_func & VMIR_DBG_DISABLE_JIT)) {
+    liveness_update(f, setwords, ffv);
+
+    if(0)
+      print_liveout(iu, f, temp_values, ffv);
+    jit_analyze(iu, f);
+  }
+#endif
+
   reg_alloc(iu, mtx, temp_values, ffv, f);
   free(mtx);
 }
@@ -1747,91 +1849,24 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
 
   // words needed for the value sets
   int setwords = (temp_values + 31) / 32;
-  uint32_t *new_in  = alloca(setwords * sizeof(uint32_t));
-  uint32_t *new_out = alloca(setwords * sizeof(uint32_t));
-  int instructions = 0;
 
   ir_bb_t *ib;
   ir_instr_t *ii;
-  ir_instr_t **ivec;
 
-  TAILQ_FOREACH(ib, &f->if_bbs, ib_link)
-    TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link)
-      instructions++;
-
-  ivec = malloc(sizeof(ir_instr_t *) * instructions);
-
-  int i = 0;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
-    ib->ib_first_instr = i;
-
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      ivec[i] = ii;
       ii->ii_liveness = calloc(1, sizeof(uint32_t) * setwords * 3);
       liveness_set_gen(ii, iu, ii->ii_liveness + setwords);
-      i++;
+      liveness_set_succ(f, ii);
     }
   }
 
-  // set_succ must be done in a separate pass as it needs to know
-  // ib_first_instr for all blocks
-  for(i = 0; i < instructions; i++) {
-    liveness_set_succ(f, ivec[i], i);
-  }
+  liveness_update(f, setwords, ffv);
 
+  if(0)
+    print_liveout(iu, f, temp_values, ffv);
 
-  while(1) {
-
-    int stable = 1;
-    for(i = instructions - 1; i >= 0; i--) {
-      ir_instr_t *ii = ivec[i];
-
-      const uint32_t *o;
-
-      if(ii->ii_num_succ == -1) {
-        o = ivec[i + 1]->ii_liveness + setwords * 2;
-      } else {
-        memset(new_out, 0, setwords * sizeof(uint32_t));
-
-        for(int j = 0; j < ii->ii_num_succ; j++) {
-          const uint32_t *in = ivec[ii->ii_succ[j]]->ii_liveness + setwords * 2;
-          bitset_or(new_out, in, setwords);
-        }
-        o = new_out;
-      }
-
-      memcpy(new_in, o, setwords * sizeof(uint32_t));
-      if(ii->ii_ret_value < -1) {
-        // Multiple return values
-        for(int j = 0; j < -ii->ii_ret_value; j++) {
-          bitclr(new_in, ii->ii_ret_values[j] - ffv);
-        }
-      } else if(ii->ii_ret_value >= 0) {
-        bitclr(new_in, ii->ii_ret_value - ffv);
-      }
-
-      uint32_t       *out = ii->ii_liveness;
-      const uint32_t *gen = ii->ii_liveness + setwords;
-      uint32_t       *in  = ii->ii_liveness + setwords * 2;
-
-      bitset_or(new_in, gen, setwords);
-
-      if(!memcmp(out, o,       setwords * sizeof(uint32_t)) &&
-         !memcmp(in,  new_in,  setwords * sizeof(uint32_t)))
-        continue;
-
-      stable = 0;
-      memcpy(out, o,       setwords * sizeof(uint32_t));
-      memcpy(in,  new_in,  setwords * sizeof(uint32_t));
-    }
-
-    if(stable)
-      break;
-  }
-
-  coalesce(iu, setwords, temp_values, instructions, ffv, f);
-
-  free(ivec);
+  coalesce(iu, setwords, temp_values, ffv, f);
 }
 
 
@@ -1987,7 +2022,8 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
 
   ir_value_t *lhs = value_get(iu, cmp->lhs_value);
   // This check could be relaxed if we do swapPred() in vm
-  if(lhs->iv_class != IR_VC_TEMPORARY)
+  if(lhs->iv_class != IR_VC_TEMPORARY &&
+     lhs->iv_class != IR_VC_REGFRAME)
     return;
   ir_type_t *ty = type_get(iu, lhs->iv_type);
   if(!(ty->it_code == IR_TYPE_INT8 ||
@@ -2350,8 +2386,4 @@ transform_function(ir_unit_t *iu, ir_function_t *f)
   int cs = prepare_calls(iu, f);
 
   value_alloc_registers(iu, f, cs);
-
-  remove_empty_bb(iu, f);
-
-  remove_branches(iu, f);
 }

@@ -84,6 +84,7 @@ void vmir_destroy(ir_unit_t *iu);
 #define VMIR_DBG_DUMP_DEV         0x8
 #define VMIR_DBG_DUMP_REGALLOC    0x10
 #define VMIR_DBG_BB_INSTRUMENT    0x20
+#define VMIR_DBG_DISABLE_JIT      0x40
 
 void vmir_set_debug_flags(ir_unit_t *iu, int flags);
 
