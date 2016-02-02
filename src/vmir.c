@@ -388,7 +388,7 @@ typedef struct ir_instr {
 
 
   uint32_t *ii_liveness; /* Points to three consecutive bitfields used for
-                          * durign liveness analysis.
+                          * during liveness analysis.
                           * [out] [gen] [in]
                           * The size of these bitfields are given by the number
                           * of temporaries in each function
