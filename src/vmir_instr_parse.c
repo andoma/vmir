@@ -1199,7 +1199,6 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       case CAST_PTRTOINT: op = "ptrtoint"; break;
       case CAST_INTTOPTR: op = "inttoptr"; break;
       case CAST_BITCAST: op = "bitcast"; break;
-      case CAST_ADDRSPACECAST: op = "addrspacecast"; break;
       }
       printf("cast.%s %s", op, value_str_id(iu, u->value));
     }

@@ -2883,15 +2883,15 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 }
 
 
-static enum Predicate
-swapPred(enum Predicate pred)
+static int
+swap_pred(int pred)
 {
-  switch (pred) {
+  switch(pred) {
   default:
     abort();
-    case ICMP_EQ: case ICMP_NE:
-      return pred;
-    case ICMP_SGT: return ICMP_SLT;
+  case ICMP_EQ: case ICMP_NE:
+    return pred;
+  case ICMP_SGT: return ICMP_SLT;
     case ICMP_SLT: return ICMP_SGT;
     case ICMP_SGE: return ICMP_SLE;
     case ICMP_SLE: return ICMP_SGE;
@@ -2923,7 +2923,7 @@ swapPred(enum Predicate pred)
 static void
 emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
-  enum Predicate pred = ii->op;
+  int pred = ii->op;
   const ir_value_t *lhs = value_get(iu, ii->lhs_value);
   const ir_value_t *rhs = value_get(iu, ii->rhs_value);
   const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
@@ -2993,7 +2993,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
       const ir_value_t *tmp = rhs;
       rhs = lhs;
       lhs = tmp;
-      pred = swapPred(pred);
+      pred = swap_pred(pred);
     }
 
     if(pred >= FCMP_OEQ && pred <= FCMP_UNE) {
@@ -3074,7 +3074,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
       const ir_value_t *tmp = rhs;
       rhs = lhs;
       lhs = tmp;
-      pred = swapPred(pred);
+      pred = swap_pred(pred);
     }
 
     if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
@@ -3110,7 +3110,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 static void
 emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 {
-  enum Predicate pred = ii->op;
+  int pred = ii->op;
   const ir_value_t *lhs = value_get(iu, ii->lhs_value);
   const ir_value_t *rhs = value_get(iu, ii->rhs_value);
 

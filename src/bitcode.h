@@ -1,285 +1,156 @@
-enum AttributeKindCodes {
-  // = 0 is unused
-  ATTR_KIND_ALIGNMENT = 1,
-  ATTR_KIND_ALWAYS_INLINE = 2,
-  ATTR_KIND_BY_VAL = 3,
-  ATTR_KIND_INLINE_HINT = 4,
-  ATTR_KIND_IN_REG = 5,
-  ATTR_KIND_MIN_SIZE = 6,
-  ATTR_KIND_NAKED = 7,
-  ATTR_KIND_NEST = 8,
-  ATTR_KIND_NO_ALIAS = 9,
-  ATTR_KIND_NO_BUILTIN = 10,
-  ATTR_KIND_NO_CAPTURE = 11,
-  ATTR_KIND_NO_DUPLICATE = 12,
-  ATTR_KIND_NO_IMPLICIT_FLOAT = 13,
-  ATTR_KIND_NO_INLINE = 14,
-  ATTR_KIND_NON_LAZY_BIND = 15,
-  ATTR_KIND_NO_RED_ZONE = 16,
-  ATTR_KIND_NO_RETURN = 17,
-  ATTR_KIND_NO_UNWIND = 18,
-  ATTR_KIND_OPTIMIZE_FOR_SIZE = 19,
-  ATTR_KIND_READ_NONE = 20,
-  ATTR_KIND_READ_ONLY = 21,
-  ATTR_KIND_RETURNED = 22,
-  ATTR_KIND_RETURNS_TWICE = 23,
-  ATTR_KIND_S_EXT = 24,
-  ATTR_KIND_STACK_ALIGNMENT = 25,
-  ATTR_KIND_STACK_PROTECT = 26,
-  ATTR_KIND_STACK_PROTECT_REQ = 27,
-  ATTR_KIND_STACK_PROTECT_STRONG = 28,
-  ATTR_KIND_STRUCT_RET = 29,
-  ATTR_KIND_SANITIZE_ADDRESS = 30,
-  ATTR_KIND_SANITIZE_THREAD = 31,
-  ATTR_KIND_SANITIZE_MEMORY = 32,
-  ATTR_KIND_UW_TABLE = 33,
-  ATTR_KIND_Z_EXT = 34,
-  ATTR_KIND_BUILTIN = 35,
-  ATTR_KIND_COLD = 36,
-  ATTR_KIND_OPTIMIZE_NONE = 37,
-  ATTR_KIND_IN_ALLOCA = 38,
-  ATTR_KIND_NON_NULL = 39,
-  ATTR_KIND_JUMP_TABLE = 40,
-  ATTR_KIND_DEREFERENCEABLE = 41
-};
+/*
+ * Copyright (c) 2016 Lonelycoder AB
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use, copy,
+ * modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#pragma once
+
+#define ATTR_KIND_BY_VAL  3
+
+#define TYPE_CODE_NUMENTRY     1
+#define TYPE_CODE_VOID         2
+#define TYPE_CODE_FLOAT        3
+#define TYPE_CODE_DOUBLE       4
+#define TYPE_CODE_LABEL        5
+#define TYPE_CODE_OPAQUE       6
+#define TYPE_CODE_INTEGER      7
+#define TYPE_CODE_POINTER      8
+#define TYPE_CODE_ARRAY        11
+#define TYPE_CODE_VECTOR       12
+#define TYPE_CODE_METADATA     16
+#define TYPE_CODE_STRUCT_NAME  19
+#define TYPE_CODE_STRUCT_NAMED 20
+#define TYPE_CODE_STRUCT_ANON  18
+#define TYPE_CODE_FUNCTION     21
+
+
+#define CST_CODE_SETTYPE         1
+#define CST_CODE_NULL            2
+#define CST_CODE_UNDEF           3
+#define CST_CODE_INTEGER         4
+#define CST_CODE_FLOAT           6
+#define CST_CODE_AGGREGATE       7
+#define CST_CODE_STRING          8
+#define CST_CODE_CSTRING         9
+#define CST_CODE_CE_BINOP        10
+#define CST_CODE_CE_CAST         11
+#define CST_CODE_CE_GEP          12
+#define CST_CODE_CE_CMP          17
+#define CST_CODE_INLINEASM_OLD   18
+#define CST_CODE_CE_INBOUNDS_GEP 20
+#define CST_CODE_BLOCKADDRESS    21
+#define CST_CODE_DATA            22
+#define CST_CODE_INLINEASM       23
+
+#define CAST_TRUNC    0
+#define CAST_ZEXT     1
+#define CAST_SEXT     2
+#define CAST_FPTOUI   3
+#define CAST_FPTOSI   4
+#define CAST_UITOFP   5
+#define CAST_SITOFP   6
+#define CAST_FPTRUNC  7
+#define CAST_FPEXT    8
+#define CAST_PTRTOINT 9
+#define CAST_INTTOPTR 10
+#define CAST_BITCAST  11
+
+#define BINOP_ADD   0
+#define BINOP_SUB   1
+#define BINOP_MUL   2
+#define BINOP_UDIV  3
+#define BINOP_SDIV  4
+#define BINOP_UREM  5
+#define BINOP_SREM  6
+#define BINOP_SHL   7
+#define BINOP_LSHR  8
+#define BINOP_ASHR  9
+#define BINOP_AND  10
+#define BINOP_OR   11
+#define BINOP_XOR  12
+
+
+#define ICMP_EQ    32
+#define ICMP_NE    33
+#define ICMP_UGT   34
+#define ICMP_UGE   35
+#define ICMP_ULT   36
+#define ICMP_ULE   37
+#define ICMP_SGT   38
+#define ICMP_SGE   39
+#define ICMP_SLT   40
+#define ICMP_SLE   41
+
+#define FUNC_CODE_DECLAREBLOCKS          1
+#define FUNC_CODE_INST_BINOP             2
+#define FUNC_CODE_INST_CAST              3
+#define FUNC_CODE_INST_GEP_OLD           4
+#define FUNC_CODE_INST_RET              10
+#define FUNC_CODE_INST_BR               11
+#define FUNC_CODE_INST_SWITCH           12
+#define FUNC_CODE_INST_UNREACHABLE      15
+#define FUNC_CODE_INST_PHI              16
+#define FUNC_CODE_INST_ALLOCA           19
+#define FUNC_CODE_INST_LOAD             20
+#define FUNC_CODE_INST_VAARG            23
+#define FUNC_CODE_INST_STORE_OLD        24
+#define FUNC_CODE_INST_EXTRACTVAL       26
+#define FUNC_CODE_INST_CMP2             28
+#define FUNC_CODE_INST_VSELECT          29
+#define FUNC_CODE_INST_INBOUNDS_GEP_OLD 30
+#define FUNC_CODE_INST_CALL             34
+#define FUNC_CODE_INST_LOADATOMIC       41
+#define FUNC_CODE_INST_STOREATOMIC_OLD  42
+#define FUNC_CODE_INST_GEP              43
+#define FUNC_CODE_INST_STORE            44
+#define FUNC_CODE_INST_STOREATOMIC      45
+
+
+#define FCMP_FALSE  0
+#define FCMP_OEQ    1
+#define FCMP_OGT    2
+#define FCMP_OGE    3
+#define FCMP_OLT    4
+#define FCMP_OLE    5
+#define FCMP_ONE    6
+#define FCMP_ORD    7
+#define FCMP_UNO    8
+#define FCMP_UEQ    9
+#define FCMP_UGT   10
+#define FCMP_UGE   11
+#define FCMP_ULT   12
+#define FCMP_ULE   13
+#define FCMP_UNE   14
+#define FCMP_TRUE  15
+
+#define MODULE_CODE_VERSION    1
+#define MODULE_CODE_TRIPLE     2
+#define MODULE_CODE_DATALAYOUT 3
+#define MODULE_CODE_GLOBALVAR  7
+#define MODULE_CODE_FUNCTION   8
+#define MODULE_CODE_ALIAS      9
+#define MODULE_CODE_COMDAT     12
 
 
 
-enum FunctionCodes {
-  FUNC_CODE_DECLAREBLOCKS    =  1, // DECLAREBLOCKS: [n]
-
-  FUNC_CODE_INST_BINOP       =  2, // BINOP:      [opcode, ty, opval, opval]
-  FUNC_CODE_INST_CAST        =  3, // CAST:       [opcode, ty, opty, opval]
-  FUNC_CODE_INST_GEP_OLD     =  4, // GEP:        [n x operands]
-  FUNC_CODE_INST_SELECT      =  5, // SELECT:     [ty, opval, opval, opval]
-  FUNC_CODE_INST_EXTRACTELT  =  6, // EXTRACTELT: [opty, opval, opval]
-  FUNC_CODE_INST_INSERTELT   =  7, // INSERTELT:  [ty, opval, opval, opval]
-  FUNC_CODE_INST_SHUFFLEVEC  =  8, // SHUFFLEVEC: [ty, opval, opval, opval]
-  FUNC_CODE_INST_CMP         =  9, // CMP:        [opty, opval, opval, pred]
-
-  FUNC_CODE_INST_RET         = 10, // RET:        [opty,opval<both optional>]
-  FUNC_CODE_INST_BR          = 11, // BR:         [bb#, bb#, cond] or [bb#]
-  FUNC_CODE_INST_SWITCH      = 12, // SWITCH:     [opty, op0, op1, ...]
-  FUNC_CODE_INST_INVOKE      = 13, // INVOKE:     [attr, fnty, op0,op1, ...]
-  // 14 is unused.
-  FUNC_CODE_INST_UNREACHABLE = 15, // UNREACHABLE
-
-  FUNC_CODE_INST_PHI         = 16, // PHI:        [ty, val0,bb0, ...]
-  // 17 is unused.
-  // 18 is unused.
-  FUNC_CODE_INST_ALLOCA      = 19, // ALLOCA:     [instty, opty, op, align]
-  FUNC_CODE_INST_LOAD        = 20, // LOAD:       [opty, op, align, vol]
-  // 21 is unused.
-  // 22 is unused.
-  FUNC_CODE_INST_VAARG       = 23, // VAARG:      [valistty, valist, instty]
-  // This store code encodes the pointer type, rather than the value type
-  // this is so information only available in the pointer type (e.g. address
-  // spaces) is retained.
-  FUNC_CODE_INST_STORE_OLD   = 24, // STORE:      [ptrty,ptr,val, align, vol]
-  // 25 is unused.
-  FUNC_CODE_INST_EXTRACTVAL  = 26, // EXTRACTVAL: [n x operands]
-  FUNC_CODE_INST_INSERTVAL   = 27, // INSERTVAL:  [n x operands]
-  // fcmp/icmp returning Int1TY or vector of Int1Ty. Same as CMP, exists to
-  // support legacy vicmp/vfcmp instructions.
-  FUNC_CODE_INST_CMP2        = 28, // CMP2:       [opty, opval, opval, pred]
-  // new select on i1 or [N x i1]
-  FUNC_CODE_INST_VSELECT     = 29, // VSELECT:    [ty,opval,opval,predty,pred]
-  FUNC_CODE_INST_INBOUNDS_GEP_OLD = 30, // INBOUNDS_GEP: [n x operands]
-  FUNC_CODE_INST_INDIRECTBR  = 31, // INDIRECTBR: [opty, op0, op1, ...]
-  // 32 is unused.
-  FUNC_CODE_DEBUG_LOC_AGAIN  = 33, // DEBUG_LOC_AGAIN
-
-  FUNC_CODE_INST_CALL        = 34, // CALL:    [attr, cc, fnty, fnid, args...]
-
-  FUNC_CODE_DEBUG_LOC        = 35, // DEBUG_LOC:  [Line,Col,ScopeVal, IAVal]
-  FUNC_CODE_INST_FENCE       = 36, // FENCE: [ordering, synchscope]
-  FUNC_CODE_INST_CMPXCHG_OLD = 37, // CMPXCHG: [ptrty,ptr,cmp,new, align, vol,
-  //           ordering, synchscope]
-  FUNC_CODE_INST_ATOMICRMW   = 38, // ATOMICRMW: [ptrty,ptr,val, operation,
-  //             align, vol,
-  //             ordering, synchscope]
-  FUNC_CODE_INST_RESUME      = 39, // RESUME:     [opval]
-  FUNC_CODE_INST_LANDINGPAD_OLD  = 40, // LANDINGPAD: [ty,val,val,num,id0,val0...]
-  FUNC_CODE_INST_LOADATOMIC  = 41, // LOAD: [opty, op, align, vol,
-  //        ordering, synchscope]
-  FUNC_CODE_INST_STOREATOMIC_OLD = 42, // STORE: [ptrty,ptr,val, align, vol
-  //         ordering, synchscope]
-  FUNC_CODE_INST_GEP         = 43, // GEP:  [inbounds, n x operands]
-  FUNC_CODE_INST_STORE       = 44, // STORE: [ptrty,ptr,valty,val, align, vol]
-  FUNC_CODE_INST_STOREATOMIC = 45, // STORE: [ptrty,ptr,val, align, vol
-  FUNC_CODE_INST_CMPXCHG     = 46, // CMPXCHG: [ptrty,ptr,valty,cmp,new, align,
-  //           vol,ordering,synchscope]
-  FUNC_CODE_INST_LANDINGPAD  = 47, // LANDINGPAD: [ty,val,num,id0,val0...]
-};
 
 
-/// TYPE blocks have codes for each type primitive they use.
-enum TypeCodes {
-  TYPE_CODE_NUMENTRY =  1,    // NUMENTRY: [numentries]
-
-  // Type Codes
-  TYPE_CODE_VOID     =  2,    // VOID
-  TYPE_CODE_FLOAT    =  3,    // FLOAT
-  TYPE_CODE_DOUBLE   =  4,    // DOUBLE
-  TYPE_CODE_LABEL    =  5,    // LABEL
-  TYPE_CODE_OPAQUE   =  6,    // OPAQUE
-  TYPE_CODE_INTEGER  =  7,    // INTEGER: [width]
-  TYPE_CODE_POINTER  =  8,    // POINTER: [pointee type]
-
-  TYPE_CODE_FUNCTION_OLD = 9, // FUNCTION: [vararg, attrid, retty,
-  //            paramty x N]
-
-  TYPE_CODE_HALF     =  10,   // HALF
-
-  TYPE_CODE_ARRAY    = 11,    // ARRAY: [numelts, eltty]
-  TYPE_CODE_VECTOR   = 12,    // VECTOR: [numelts, eltty]
-
-  // These are not with the other floating point types because they're
-  // a late addition, and putting them in the right place breaks
-  // binary compatibility.
-  TYPE_CODE_X86_FP80 = 13,    // X86 LONG DOUBLE
-  TYPE_CODE_FP128    = 14,    // LONG DOUBLE (112 bit mantissa)
-  TYPE_CODE_PPC_FP128= 15,    // PPC LONG DOUBLE (2 doubles)
-
-  TYPE_CODE_METADATA = 16,    // METADATA
-
-  TYPE_CODE_X86_MMX = 17,     // X86 MMX
-
-  TYPE_CODE_STRUCT_ANON = 18, // STRUCT_ANON: [ispacked, eltty x N]
-  TYPE_CODE_STRUCT_NAME = 19, // STRUCT_NAME: [strchr x N]
-  TYPE_CODE_STRUCT_NAMED = 20,// STRUCT_NAMED: [ispacked, eltty x N]
-
-  TYPE_CODE_FUNCTION = 21     // FUNCTION: [vararg, retty, paramty x N]
-};
-
-
-/// MODULE blocks have a number of optional fields and subblocks.
-enum ModuleCodes {
-  MODULE_CODE_VERSION     = 1,    // VERSION:     [version#]
-  MODULE_CODE_TRIPLE      = 2,    // TRIPLE:      [strchr x N]
-  MODULE_CODE_DATALAYOUT  = 3,    // DATALAYOUT:  [strchr x N]
-  MODULE_CODE_ASM         = 4,    // ASM:         [strchr x N]
-  MODULE_CODE_SECTIONNAME = 5,    // SECTIONNAME: [strchr x N]
-
-  // FIXME: Remove DEPLIB in 4.0.
-  MODULE_CODE_DEPLIB      = 6,    // DEPLIB:      [strchr x N]
-
-  // GLOBALVAR: [pointer type, isconst, initid,
-  //             linkage, alignment, section, visibility, threadlocal]
-  MODULE_CODE_GLOBALVAR   = 7,
-
-  // FUNCTION:  [type, callingconv, isproto, linkage, paramattrs, alignment,
-  //             section, visibility, gc, unnamed_addr]
-  MODULE_CODE_FUNCTION    = 8,
-
-  // ALIAS: [alias type, aliasee val#, linkage, visibility]
-  MODULE_CODE_ALIAS       = 9,
-
-  // MODULE_CODE_PURGEVALS: [numvals]
-  MODULE_CODE_PURGEVALS   = 10,
-
-  MODULE_CODE_GCNAME      = 11,  // GCNAME: [strchr x N]
-  MODULE_CODE_COMDAT      = 12,  // COMDAT: [selection_kind, name]
-};
-
-
-// The constants block (CONSTANTS_BLOCK_ID) describes emission for each
-// constant and maintains an implicit current type value.
-enum ConstantsCodes {
-  CST_CODE_SETTYPE       =  1,  // SETTYPE:       [typeid]
-  CST_CODE_NULL          =  2,  // NULL
-  CST_CODE_UNDEF         =  3,  // UNDEF
-  CST_CODE_INTEGER       =  4,  // INTEGER:       [intval]
-  CST_CODE_WIDE_INTEGER  =  5,  // WIDE_INTEGER:  [n x intval]
-  CST_CODE_FLOAT         =  6,  // FLOAT:         [fpval]
-  CST_CODE_AGGREGATE     =  7,  // AGGREGATE:     [n x value number]
-  CST_CODE_STRING        =  8,  // STRING:        [values]
-  CST_CODE_CSTRING       =  9,  // CSTRING:       [values]
-  CST_CODE_CE_BINOP      = 10,  // CE_BINOP:      [opcode, opval, opval]
-  CST_CODE_CE_CAST       = 11,  // CE_CAST:       [opcode, opty, opval]
-  CST_CODE_CE_GEP        = 12,  // CE_GEP:        [n x operands]
-  CST_CODE_CE_SELECT     = 13,  // CE_SELECT:     [opval, opval, opval]
-  CST_CODE_CE_EXTRACTELT = 14,  // CE_EXTRACTELT: [opty, opval, opval]
-  CST_CODE_CE_INSERTELT  = 15,  // CE_INSERTELT:  [opval, opval, opval]
-  CST_CODE_CE_SHUFFLEVEC = 16,  // CE_SHUFFLEVEC: [opval, opval, opval]
-  CST_CODE_CE_CMP        = 17,  // CE_CMP:        [opty, opval, opval, pred]
-  CST_CODE_INLINEASM_OLD = 18,  // INLINEASM:     [sideeffect|alignstack,
-                                //                 asmstr,conststr]
-  CST_CODE_CE_SHUFVEC_EX = 19,  // SHUFVEC_EX:    [opty, opval, opval, opval]
-  CST_CODE_CE_INBOUNDS_GEP = 20,// INBOUNDS_GEP:  [n x operands]
-  CST_CODE_BLOCKADDRESS  = 21,  // CST_CODE_BLOCKADDRESS [fnty, fnval, bb#]
-  CST_CODE_DATA          = 22,  // DATA:          [n x elements]
-  CST_CODE_INLINEASM     = 23   // INLINEASM:     [sideeffect|alignstack|
-                                //                 asmdialect,asmstr,conststr]
-  };
-
-
-enum BinaryOpcodes {
-  BINOP_ADD  =  0,
-  BINOP_SUB  =  1,
-  BINOP_MUL  =  2,
-  BINOP_UDIV =  3,
-  BINOP_SDIV =  4,    // overloaded for FP
-  BINOP_UREM =  5,
-  BINOP_SREM =  6,    // overloaded for FP
-  BINOP_SHL  =  7,
-  BINOP_LSHR =  8,
-  BINOP_ASHR =  9,
-  BINOP_AND  = 10,
-  BINOP_OR   = 11,
-  BINOP_XOR  = 12
-};
-
-
-enum CastOpcodes {
-  CAST_TRUNC    =  0,
-  CAST_ZEXT     =  1,
-  CAST_SEXT     =  2,
-  CAST_FPTOUI   =  3,
-  CAST_FPTOSI   =  4,
-  CAST_UITOFP   =  5,
-  CAST_SITOFP   =  6,
-  CAST_FPTRUNC  =  7,
-  CAST_FPEXT    =  8,
-  CAST_PTRTOINT =  9,
-  CAST_INTTOPTR = 10,
-  CAST_BITCAST  = 11,
-  CAST_ADDRSPACECAST = 12
-};
-
-
-enum Predicate {
-  // Opcode              U L G E    Intuitive operation
-  FCMP_FALSE =  0,  ///< 0 0 0 0    Always false (always folded)
-  FCMP_OEQ   =  1,  ///< 0 0 0 1    True if ordered and equal
-  FCMP_OGT   =  2,  ///< 0 0 1 0    True if ordered and greater than
-  FCMP_OGE   =  3,  ///< 0 0 1 1    True if ordered and greater than or equal
-  FCMP_OLT   =  4,  ///< 0 1 0 0    True if ordered and less than
-  FCMP_OLE   =  5,  ///< 0 1 0 1    True if ordered and less than or equal
-  FCMP_ONE   =  6,  ///< 0 1 1 0    True if ordered and operands are unequal
-  FCMP_ORD   =  7,  ///< 0 1 1 1    True if ordered (no nans)
-  FCMP_UNO   =  8,  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
-  FCMP_UEQ   =  9,  ///< 1 0 0 1    True if unordered or equal
-  FCMP_UGT   = 10,  ///< 1 0 1 0    True if unordered or greater than
-  FCMP_UGE   = 11,  ///< 1 0 1 1    True if unordered, greater than, or equal
-  FCMP_ULT   = 12,  ///< 1 1 0 0    True if unordered or less than
-  FCMP_ULE   = 13,  ///< 1 1 0 1    True if unordered, less than, or equal
-  FCMP_UNE   = 14,  ///< 1 1 1 0    True if unordered or not equal
-  FCMP_TRUE  = 15,  ///< 1 1 1 1    Always true (always folded)
-  FIRST_FCMP_PREDICATE = FCMP_FALSE,
-  LAST_FCMP_PREDICATE = FCMP_TRUE,
-  BAD_FCMP_PREDICATE = FCMP_TRUE + 1,
-  ICMP_EQ    = 32,  ///< equal
-  ICMP_NE    = 33,  ///< not equal
-  ICMP_UGT   = 34,  ///< unsigned greater than
-  ICMP_UGE   = 35,  ///< unsigned greater or equal
-  ICMP_ULT   = 36,  ///< unsigned less than
-  ICMP_ULE   = 37,  ///< unsigned less or equal
-  ICMP_SGT   = 38,  ///< signed greater than
-  ICMP_SGE   = 39,  ///< signed greater or equal
-  ICMP_SLT   = 40,  ///< signed less than
-  ICMP_SLE   = 41,  ///< signed less or equal
-  FIRST_ICMP_PREDICATE = ICMP_EQ,
-  LAST_ICMP_PREDICATE = ICMP_SLE,
-  BAD_ICMP_PREDICATE = ICMP_SLE + 1
-};

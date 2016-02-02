@@ -2016,8 +2016,7 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   if(iip == NULL || iip->ii_class != IR_IC_CMP2)
     return;
   ir_instr_binary_t *cmp = (ir_instr_binary_t *)iip;
-  if(!(cmp->op >= FIRST_ICMP_PREDICATE &&
-       cmp->op <=  LAST_ICMP_PREDICATE))
+  if(!(cmp->op >= ICMP_EQ && cmp->op <= ICMP_SLE))
     return;
 
   ir_value_t *lhs = value_get(iu, cmp->lhs_value);

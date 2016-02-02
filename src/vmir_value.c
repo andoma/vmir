@@ -40,11 +40,11 @@ typedef enum {
 
 
 typedef struct ir_constexpr {
-  enum ConstantsCodes ic_code;
+  int ic_code;
 
   union {
     struct {
-      enum CastOpcodes op;
+      int op;
       int src;
     } ic_cast;
 
