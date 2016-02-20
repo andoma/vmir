@@ -495,28 +495,28 @@ initialize_global(ir_unit_t *iu, void *addr,
   switch(dstty->it_code) {
   case IR_TYPE_INT1:
   case IR_TYPE_INT8:
-    *(uint8_t *)addr = value_get_const32(iu, c);
+    mem_wr8(addr, value_get_const32(iu, c));
     break;
   case IR_TYPE_INT16:
-    *(uint16_t *)addr = value_get_const32(iu, c);
+    mem_wr16(addr, value_get_const32(iu, c));
     break;
   case IR_TYPE_INT32:
   case IR_TYPE_FLOAT:
-    *(uint32_t *)addr = value_get_const32(iu, c);
+    mem_wr32(addr, value_get_const32(iu, c));
     break;
   case IR_TYPE_INT64:
   case IR_TYPE_DOUBLE:
-    *(uint64_t *)addr = value_get_const64(iu, c);
+    mem_wr64(addr, value_get_const64(iu, c));
     break;
 
   case IR_TYPE_POINTER:
     switch(c->iv_class) {
     case IR_VC_GLOBALVAR:
     case IR_VC_CONSTANT:
-      *(uint32_t *)addr = value_get_const32(iu, c);
+      mem_wr32(addr, value_get_const32(iu, c));
       break;
     case IR_VC_FUNCTION:
-      *(uint32_t *)addr = value_function_addr(c);
+      mem_wr32(addr, value_function_addr(c));
       break;
 
     default:
@@ -783,11 +783,12 @@ static uint32_t
 vmir_copy_argv(ir_unit_t *iu, int argc, char **argv)
 {
   uint32_t vm_argv = iu->iu_alloca_ptr;
-  uint32_t *vm_argv_host = iu->iu_mem + vm_argv;
+  void *vm_argv_host = iu->iu_mem + vm_argv;
   iu->iu_alloca_ptr += (argc + 1) * sizeof(uint32_t);
 
   for(int i = 0; i < argc; i++) {
-    vm_argv_host[i] = vmir_alloca_str(iu, argv[i]);
+    uint32_t str = vmir_alloca_str(iu, argv[i]);
+    mem_wr32(vm_argv_host + i * sizeof(uint32_t), str);
   }
   iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr, 8);
   return vm_argv;

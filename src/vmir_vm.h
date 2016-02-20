@@ -36,6 +36,8 @@ typedef enum {
   VM_RET_R16,
   VM_RET_R32,
   VM_RET_R64,
+  VM_RET_R8C,
+  VM_RET_R16C,
   VM_RET_R32C,
   VM_RET_R64C,
 

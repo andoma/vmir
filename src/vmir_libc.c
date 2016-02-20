@@ -1045,11 +1045,11 @@ initialize_libc(ir_unit_t *iu)
 
     const char *name = ig->ig_name;
     if(!strcmp(name, "stdin")) {
-      *(uint32_t *)(iu->iu_mem + ig->ig_addr) = vfile_alloc(iu, stdin);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vfile_alloc(iu, stdin));
     } else if(!strcmp(name, "stdout")) {
-      *(uint32_t *)(iu->iu_mem + ig->ig_addr) = vfile_alloc(iu, stdout);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vfile_alloc(iu, stdout));
     } else if(!strcmp(name, "stderr")) {
-      *(uint32_t *)(iu->iu_mem + ig->ig_addr) = vfile_alloc(iu, stderr);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vfile_alloc(iu, stderr));
     }
   }
 }

@@ -44,9 +44,6 @@
 #define vm_printf(fmt...)
 #endif
 
-#define IR_MEM_ADDR(iec, addr) ((iec)->memory + addr)
-
-
 static void __attribute__((noinline)) __attribute__((noreturn))
 vm_stop(ir_unit_t *iu, int reason, int code)
 {
@@ -238,7 +235,7 @@ vm_wr_dbl(void *rf, int16_t reg, double data, int line)
 static void __attribute__((noinline))
 vm_load_8(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint8_t data = *(uint8_t *)(mem + ea);
+  uint8_t data = mem_rd8(mem + ea);
   vm_printf("Reg 0x%x (u8) = Loaded 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint8_t *)(rf + reg) = data;
@@ -247,7 +244,7 @@ vm_load_8(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_8_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint8_t data = *(uint8_t *)(mem + ea);
+  uint8_t data = mem_rd8(mem + ea);
   vm_printf("Reg 0x%x (u32) = Loaded.u8 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint32_t *)(rf + reg) = data;
@@ -256,7 +253,7 @@ vm_load_8_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_8_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  int8_t data = *(int8_t *)(mem + ea);
+  int8_t data = mem_rd8(mem + ea);
   vm_printf("Reg 0x%x (u32) = Loaded.s8 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(int32_t *)(rf + reg) = data;
@@ -265,7 +262,7 @@ vm_load_8_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_16(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint16_t data = *(uint16_t *)(mem + ea);
+  uint16_t data = mem_rd16(mem + ea);
   vm_printf("Reg 0x%x (u16) = Loaded 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint16_t *)(rf + reg) = data;
@@ -274,7 +271,7 @@ vm_load_16(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_16_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint16_t data = *(uint16_t *)(mem + ea);
+  uint16_t data = mem_rd16(mem + ea);
   vm_printf("Reg 0x%x (u32) = Loaded.u16 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint32_t *)(rf + reg) = data;
@@ -283,7 +280,7 @@ vm_load_16_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_16_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  int16_t data = *(int16_t *)(mem + ea);
+  int16_t data = mem_rd16(mem + ea);
   vm_printf("Reg 0x%x (u32) = Loaded.s16 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(int32_t *)(rf + reg) = data;
@@ -292,7 +289,7 @@ vm_load_16_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint32_t data = *(uint32_t *)(mem + ea);
+  uint32_t data = mem_rd32(mem + ea);
   vm_printf("Reg 0x%x (u32) = Loaded 0x%x from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint32_t *)(rf + reg) = data;
@@ -301,7 +298,7 @@ vm_load_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 static void __attribute__((noinline))
 vm_load_64(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
 {
-  uint64_t data = *(uint64_t *)(mem + ea);
+  uint64_t data = mem_rd64(mem + ea);
   vm_printf("Reg 0x%x (u64) = Loaded 0x%"PRIx64" from 0x%08x by %d\n",
          reg, data, ea, line);
   *(uint64_t *)(rf + reg) = data;
@@ -312,28 +309,28 @@ static void __attribute__((noinline))
 vm_store_8(void *mem, uint32_t ea, uint8_t v, int line)
 {
   vm_printf("Store (u8) 0x%x to 0x%08x by %d\n", v, ea, line);
-  *(uint8_t *)(mem + ea) = v;
+  mem_wr8(mem + ea, v);
 }
 
 static void __attribute__((noinline))
 vm_store_16(void *mem, uint32_t ea, uint16_t v, int line)
 {
   vm_printf("Store (u16) 0x%x to 0x%08x by %d\n", v, ea, line);
-  *(uint16_t *)(mem + ea) = v;
+  mem_wr16(mem + ea, v);
 }
 
 static void __attribute__((noinline))
 vm_store_32(void *mem, uint32_t ea, uint32_t v, int line)
 {
   vm_printf("Store (u32) 0x%x to 0x%08x by %d\n", v, ea, line);
-  *(uint32_t *)(mem + ea) = v;
+  mem_wr32(mem + ea, v);
 }
 
 static void __attribute__((noinline))
 vm_store_64(void *mem, uint32_t ea, uint64_t v, int line)
 {
   vm_printf("Store (u64) 0x%"PRIx64" to 0x%08x by %d\n", v, ea, line);
-  *(uint64_t *)(mem + ea) = v;
+  mem_wr32(mem + ea, v);
 }
 
 
@@ -383,38 +380,38 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define AS32_ACC(src) vm_wr_s32(rf, ACCPOS, src, __LINE__)
 
 
-#define LOAD8(reg, ea)       vm_load_8(rf,  I[reg], mem, ea, __LINE__)
-#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(rf,  I[r], mem, ea, __LINE__)
-#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(rf,  I[r], mem, ea, __LINE__)
+#define LOAD8(reg, ea)       vm_load_8(rf,  I[reg], hostmem, ea, __LINE__)
+#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(rf,  I[r], hostmem, ea, __LINE__)
+#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(rf,  I[r], hostmem, ea, __LINE__)
 
-#define LOAD16(reg, ea)       vm_load_16(rf, I[reg], mem, ea, __LINE__)
-#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(rf,  I[r], mem, ea, __LINE__)
-#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(rf,  I[r], mem, ea, __LINE__)
+#define LOAD16(reg, ea)       vm_load_16(rf, I[reg], hostmem, ea, __LINE__)
+#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(rf,  I[r], hostmem, ea, __LINE__)
+#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(rf,  I[r], hostmem, ea, __LINE__)
 
 
-#define LOAD32(reg, ea)  vm_load_32(rf, I[reg], mem, ea, __LINE__)
-#define LOAD64(reg, ea)  vm_load_64(rf, I[reg], mem, ea, __LINE__)
+#define LOAD32(reg, ea)  vm_load_32(rf, I[reg], hostmem, ea, __LINE__)
+#define LOAD64(reg, ea)  vm_load_64(rf, I[reg], hostmem, ea, __LINE__)
 
-#define STORE8(ea, v)    vm_store_8(mem, ea, v, __LINE__)
-#define STORE16(ea, v)   vm_store_16(mem, ea, v, __LINE__)
-#define STORE32(ea, v)   vm_store_32(mem, ea, v, __LINE__)
-#define STORE64(ea, v)   vm_store_64(mem, ea, v, __LINE__)
+#define STORE8(ea, v)    vm_store_8(hostmem, ea, v, __LINE__)
+#define STORE16(ea, v)   vm_store_16(hostmem, ea, v, __LINE__)
+#define STORE32(ea, v)   vm_store_32(hostmem, ea, v, __LINE__)
+#define STORE64(ea, v)   vm_store_64(hostmem, ea, v, __LINE__)
 
 
 #else
 
-#define LOAD8(r, ea)   R8(r)  = *(uint8_t *)MEM(ea)
-#define LOAD8_ZEXT_32(r, ea)   R32(r)  = *(uint8_t *)MEM(ea)
-#define LOAD8_SEXT_32(r, ea)   S32(r)  = *(int8_t *)MEM(ea)
-#define LOAD16(r, ea)  R16(r) = *(uint16_t *)MEM(ea)
-#define LOAD16_ZEXT_32(r, ea)   R32(r)  = *(uint16_t *)MEM(ea)
-#define LOAD16_SEXT_32(r, ea)   S32(r)  = *(int16_t *)MEM(ea)
-#define LOAD32(r, ea)  R32(r) = *(uint32_t *)MEM(ea)
-#define LOAD64(r, ea)  R64(r) = *(uint64_t *)MEM(ea)
-#define STORE8(ea, v)   *(uint8_t *)MEM(ea) = v
-#define STORE16(ea, v)  *(uint16_t *)MEM(ea) = v
-#define STORE32(ea, v)  *(uint32_t *)MEM(ea) = v
-#define STORE64(ea, v)  *(uint64_t *)MEM(ea) = v
+#define LOAD8(r, ea)           R8(r) = mem_rd8(HOSTADDR(ea))
+#define LOAD8_ZEXT_32(r, ea)  R32(r) = mem_rd8(HOSTADDR(ea))
+#define LOAD8_SEXT_32(r, ea)  S32(r) = (int8_t)mem_rd8(HOSTADDR(ea))
+#define LOAD16(r, ea)         R16(r) = mem_rd16(HOSTADDR(ea))
+#define LOAD16_ZEXT_32(r, ea) R32(r) = mem_rd16(HOSTADDR(ea))
+#define LOAD16_SEXT_32(r, ea) S32(r) = (int16_t)mem_rd16(HOSTADDR(ea))
+#define LOAD32(r, ea)         R32(r) = mem_rd32(HOSTADDR(ea))
+#define LOAD64(r, ea)         R64(r) = mem_rd64(HOSTADDR(ea))
+#define STORE8(ea, v)                  mem_wr8(HOSTADDR(ea), v)
+#define STORE16(ea, v)                 mem_wr16(HOSTADDR(ea), v)
+#define STORE32(ea, v)                 mem_wr32(HOSTADDR(ea), v)
+#define STORE64(ea, v)                 mem_wr64(HOSTADDR(ea), v)
 
 #define AR8(r, src)  R8(r) = src
 #define AS8(r, src)  S8(r) = src
@@ -446,7 +443,7 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define IMMFLT(r) *(float *)(I + r)
 #define IMMDBL(r) *(double *)(I + r)
 
-#define MEM(x) ((mem) + (x))
+#define HOSTADDR(x) ((hostmem) + (x))
 
 
 static void * __attribute__((noinline))
@@ -477,7 +474,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #ifdef VM_USE_COMPUTED_GOTO
   if((int)op != -1)
     goto resolve;
-  void *mem = iu->iu_mem;
+  void *hostmem = iu->iu_mem;
 
 #define NEXT(skip) I+=skip; opc = *I++; goto *(&&opz + opc)
 #define VMOP(x) x:
@@ -492,7 +489,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
   if((int)op != -1)
     return op; // Resolve to itself when we use switch() { case ... }
-  void *mem = iu->iu_mem;
+  void *hostmem = iu->iu_mem;
 
 #define NEXT(skip) I+=skip; opc = *I++; goto reswitch
 
@@ -524,7 +521,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   }
 
   VMOP(RET_R8)
-    *(uint32_t *)ret = R8(0);
+    *(uint8_t *)ret = R8(0);
     return 0;
 
   VMOP(RET_R16)
@@ -539,6 +536,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     *(uint64_t *)ret = R64(0);
     return 0;
 
+  VMOP(RET_R8C)
+    *(uint8_t *)ret = UIMM8(0);
+    return 0;
+  VMOP(RET_R16C)
+    *(uint16_t *)ret = UIMM16(0);
+    return 0;
   VMOP(RET_R32C)
     *(uint32_t *)ret = UIMM32(0);
     return 0;
@@ -1091,7 +1094,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(5);
 
 
-  VMOP(STORE8_G)     STORE8(SIMM32(1), R32(0));             NEXT(3);
+  VMOP(STORE8_G)     STORE8(SIMM32(1), R8(0));              NEXT(3);
   VMOP(STORE8C_OFF)  STORE8(R32(0) + SIMM16(1), SIMM8(2));  NEXT(3);
   VMOP(STORE8_OFF)   STORE8(R32(0) + SIMM16(2), R8(1));     NEXT(3);
   VMOP(STORE8)       STORE8(R32(0),             R8(1));     NEXT(2);
@@ -1119,7 +1122,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(5);
   VMOP(LOAD16_G)     LOAD16(0, SIMM32(1));          NEXT(3);
 
-  VMOP(STORE16_G)    STORE16(SIMM32(1), R32(0));             NEXT(3);
+  VMOP(STORE16_G)    STORE16(SIMM32(1), R16(0));             NEXT(3);
   VMOP(STORE16C_OFF) STORE16(R32(0) + SIMM16(1), SIMM16(2)); NEXT(3);
   VMOP(STORE16_OFF)  STORE16(R32(0) + SIMM16(2), R16(1));    NEXT(3);
   VMOP(STORE16)      STORE16(R32(0),             R16(1));    NEXT(2);
@@ -1356,14 +1359,14 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(STACKCOPYR)
     allocaptr = VMIR_ALIGN(allocaptr, 4);
     AR32(0, allocaptr);
-    memcpy(MEM(allocaptr), MEM(R32(1)), UIMM32(2));
+    memcpy(HOSTADDR(allocaptr), HOSTADDR(R32(1)), UIMM32(2));
     allocaptr += UIMM32(2);
     NEXT(4);
 
   VMOP(STACKCOPYC)
     allocaptr = VMIR_ALIGN(allocaptr, 4);
     AR32(0, allocaptr);
-    memcpy(MEM(allocaptr), MEM(UIMM32(1)), UIMM32(3));
+    memcpy(HOSTADDR(allocaptr), HOSTADDR(UIMM32(1)), UIMM32(3));
     allocaptr += UIMM32(3);
     NEXT(5);
 
@@ -1372,72 +1375,72 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
   VMOP(MEMCPY) {
       uint32_t r = R32(1);
-      memcpy(MEM(R32(1)), MEM(R32(2)), R32(3));
+      memcpy(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3));
       AR32(0, r);
       NEXT(4);
     }
 
   VMOP(MEMSET) {
       uint32_t r = R32(1);
-      memset(MEM(R32(1)), R32(2), R32(3));
+      memset(HOSTADDR(R32(1)), R32(2), R32(3));
       AR32(0, r);
       NEXT(4);
     }
 
   VMOP(MEMMOVE) {
       uint32_t r = R32(1);
-      memmove(MEM(R32(1)), MEM(R32(2)), R32(3));
+      memmove(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3));
       AR32(0, r);
       NEXT(4);
     }
 
   VMOP(LLVM_MEMCPY)
-    memcpy(MEM(R32(0)), MEM(R32(1)), R32(2)); NEXT(3);
+    memcpy(HOSTADDR(R32(0)), HOSTADDR(R32(1)), R32(2)); NEXT(3);
   VMOP(LLVM_MEMSET)
-    memset(MEM(R32(0)), R8(1), R32(2)); NEXT(3);
+    memset(HOSTADDR(R32(0)), R8(1), R32(2)); NEXT(3);
   VMOP(LLVM_MEMSET64)
-    memset(MEM(R32(0)), R8(1), R64(2)); NEXT(3);
+    memset(HOSTADDR(R32(0)), R8(1), R64(2)); NEXT(3);
 
   VMOP(MEMCMP)
-    AR32(0, memcmp(MEM(R32(1)), MEM(R32(2)), R32(3))); NEXT(4);
+    AR32(0, memcmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3))); NEXT(4);
 
   VMOP(STRCPY) {
       uint32_t r = R32(1);
-      strcpy(MEM(R32(1)), MEM(R32(2)));
+      strcpy(HOSTADDR(R32(1)), HOSTADDR(R32(2)));
       AR32(0, r);
       NEXT(3);
     }
 
   VMOP(STRNCPY) {
       uint32_t r = R32(1);
-      strncpy(MEM(R32(1)), MEM(R32(2)), R32(3));
+      strncpy(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3));
       AR32(0, r);
       NEXT(4);
     }
 
   VMOP(STRCMP)
-    AR32(0, strcmp(MEM(R32(1)), MEM(R32(2)))); NEXT(3);
+    AR32(0, strcmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)))); NEXT(3);
   VMOP(STRNCMP)
-    AR32(0, strncmp(MEM(R32(1)), MEM(R32(2)), R32(3))); NEXT(4);
+    AR32(0, strncmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3))); NEXT(4);
   VMOP(STRCHR)
-    AR32(0, vm_strchr(R32(1), R32(2), mem)); NEXT(3);
+    AR32(0, vm_strchr(R32(1), R32(2), hostmem)); NEXT(3);
   VMOP(STRRCHR)
-    AR32(0, vm_strrchr(R32(1), R32(2), mem)); NEXT(3);
+    AR32(0, vm_strrchr(R32(1), R32(2), hostmem)); NEXT(3);
   VMOP(STRLEN)
-    AR32(0, strlen(MEM(R32(1)))); NEXT(2);
+    AR32(0, strlen(HOSTADDR(R32(1)))); NEXT(2);
 
   VMOP(VAARG32)
-    AR32(0, vm_vaarg32(rf, MEM(R32(1)))); NEXT(2);
+    AR32(0, vm_vaarg32(rf, HOSTADDR(R32(1)))); NEXT(2);
 
   VMOP(VAARG64)
-    AR64(0, vm_vaarg64(rf, MEM(R32(1)))); NEXT(2);
+    AR64(0, vm_vaarg64(rf, HOSTADDR(R32(1)))); NEXT(2);
 
   VMOP(VASTART)
-    *(void **)MEM(R32(0)) = rf + S32(1);
+    *(void **)HOSTADDR(R32(0)) = rf + S32(1);
     NEXT(2);
 
   VMOP(VACOPY)
-    *(void **)MEM(R32(0)) = *(void **)MEM(R32(1));
+    *(void **)HOSTADDR(R32(0)) = *(void **)HOSTADDR(R32(1));
     NEXT(2);
 
   VMOP(CTZ32) AR32(0, __builtin_ctz(R32(1))); NEXT(2);
@@ -1486,6 +1489,8 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_RET_R16:   return &&RET_R16  - &&opz;     break;
   case VM_RET_R32:   return &&RET_R32  - &&opz;     break;
   case VM_RET_R64:   return &&RET_R64  - &&opz;     break;
+  case VM_RET_R8C:   return &&RET_R8C  - &&opz;     break;
+  case VM_RET_R16C:  return &&RET_R16C - &&opz;     break;
   case VM_RET_R32C:  return &&RET_R32C - &&opz;     break;
   case VM_RET_R64C:  return &&RET_R64C - &&opz;     break;
 
@@ -2304,9 +2309,15 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
 
   case IR_VC_CONSTANT:
     switch(it->it_code) {
-    case IR_TYPE_INT1:
     case IR_TYPE_INT8:
+      emit_op(iu, VM_RET_R8C);
+      emit_i8(iu, value_get_const32(iu, iv));
+      return;
     case IR_TYPE_INT16:
+      emit_op(iu, VM_RET_R16C);
+      emit_i16(iu, value_get_const32(iu, iv));
+      return;
+    case IR_TYPE_INT1:
     case IR_TYPE_INT32:
     case IR_TYPE_POINTER:
     case IR_TYPE_FLOAT:

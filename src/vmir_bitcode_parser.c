@@ -515,39 +515,27 @@ constants_rec_handler(ir_unit_t *iu, int op,
       switch(ty->it_code) {
       case IR_TYPE_ARRAY:
         switch(type_get(iu, ty->it_array.element_type)->it_code) {
+
         case IR_TYPE_INT64:
         case IR_TYPE_DOUBLE:
-          {
-            iv->iv_data = malloc(sizeof(uint64_t) * argc);
-            int64_t *p = iv->iv_data;
-            for(int i = 0; i < argc; i++)
-              p[i] = argv[i].i64;
-            return;
-          }
+          iv->iv_data = malloc(sizeof(uint64_t) * argc);
+          for(int i = 0; i < argc; i++)
+            mem_wr64(iv->iv_data + i * sizeof(uint64_t), argv[i].i64);
+          return;
+
         case IR_TYPE_INT32:
-          {
-            iv->iv_data = malloc(sizeof(uint32_t) * argc);
-            int32_t *p = iv->iv_data;
-            for(int i = 0; i < argc; i++)
-              p[i] = argv[i].i64;
-            return;
-          }
-        case IR_TYPE_INT16:
-          {
-            iv->iv_data = malloc(sizeof(uint16_t) * argc);
-            int16_t *p = iv->iv_data;
-            for(int i = 0; i < argc; i++)
-              p[i] = argv[i].i64;
-            return;
-          }
         case IR_TYPE_FLOAT:
-          {
-            iv->iv_data = malloc(sizeof(float) * argc);
-            uint32_t *p = iv->iv_data;
-            for(int i = 0; i < argc; i++)
-              p[i] = argv[i].i64;
-            return;
-          }
+          iv->iv_data = malloc(sizeof(uint32_t) * argc);
+          for(int i = 0; i < argc; i++)
+            mem_wr32(iv->iv_data + i * sizeof(uint32_t), argv[i].i64);
+          return;
+
+        case IR_TYPE_INT16:
+          iv->iv_data = malloc(sizeof(uint16_t) * argc);
+          for(int i = 0; i < argc; i++)
+            mem_wr16(iv->iv_data + i * sizeof(uint16_t), argv[i].i64);
+          return;
+
         default:
           break;
         }
