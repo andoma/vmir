@@ -988,8 +988,74 @@ jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
     VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr1);
   if(ptr2)
     VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr2);
-
 }
+
+
+
+/**
+ *
+ */
+static int
+jit_cast_check(ir_unit_t *iu, ir_instr_unary_t *ii)
+{
+  const ir_value_t *src = value_get(iu, ii->value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const int srccode = type_get(iu, src->iv_type)->it_code;
+  const int dstcode = type_get(iu, ret->iv_type)->it_code;
+  const int castop = ii->op;
+
+  switch(COMBINE3(dstcode, castop, srccode)) {
+  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT8):
+  case COMBINE3(IR_TYPE_INT16, CAST_ZEXT, IR_TYPE_INT8):
+
+  case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
+    return 1;
+
+  default:
+    return 0;
+  }
+}
+
+/**
+ *
+ */
+static void
+jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
+{
+  const ir_value_t *src = value_get(iu, ii->value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const int srccode = type_get(iu, src->iv_type)->it_code;
+  const int dstcode = type_get(iu, ret->iv_type)->it_code;
+  const int castop = ii->op;
+
+  int Rd = jit_storevalue_reg(iu, ret, R_TMPA);
+  int Rm = jit_loadvalue(iu, src, R_TMPA, jc);
+  switch(COMBINE3(dstcode, castop, srccode)) {
+  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT8):
+  case COMBINE3(IR_TYPE_INT16, CAST_ZEXT, IR_TYPE_INT8):
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) |
+             (1 << 23) | (1 << 22) | (1 << 21) | 0xf0070 |
+             (Rd << 12) | Rm);
+    break;
+    
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT8):
+
+
+  case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
+    jit_storevalue(iu, ret, Rm);
+    return;
+
+  default:
+    abort();
+  }
+
+  jit_storevalue(iu, ret, Rd);
+}
+
 
 /**
  *
@@ -1005,6 +1071,9 @@ jit_check(ir_unit_t *iu, ir_instr_t *ii)
   switch(ii->ii_class) {
   case IR_IC_BINOP:
     r = jit_binop_check(iu, (ir_instr_binary_t *)ii);
+    break;
+  case IR_IC_CAST:
+    r = jit_cast_check(iu, (ir_instr_unary_t *)ii);
     break;
   case IR_IC_MOVE:
     r = jit_move_check(iu, (ir_instr_move_t *)ii);
@@ -1139,6 +1208,9 @@ jit_emit(ir_unit_t *iu, ir_instr_t *ii, int *codeptr, int retvalue)
     switch(ii->ii_class) {
     case IR_IC_BINOP:
       jit_binop(iu, (ir_instr_binary_t *)ii, &jc);
+      break;
+    case IR_IC_CAST:
+      jit_cast(iu, (ir_instr_unary_t *)ii, &jc);
       break;
     case IR_IC_MOVE:
       jit_move(iu, (ir_instr_move_t *)ii, &jc);
