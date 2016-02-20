@@ -8,7 +8,7 @@ for a in build-O*/*.bc; do
     echo "------------------------------------------------------------"
     echo "--- Running test $a"
     set -e
-    ../../vmir $a
+    ${VMIR-../../vmir} $a
     set +e
     if [ $? -ne 0 ]; then
        echo "Test $a Failed"
