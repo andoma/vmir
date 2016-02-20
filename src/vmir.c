@@ -501,16 +501,12 @@ initialize_global(ir_unit_t *iu, void *addr,
     *(uint16_t *)addr = value_get_const32(iu, c);
     break;
   case IR_TYPE_INT32:
+  case IR_TYPE_FLOAT:
     *(uint32_t *)addr = value_get_const32(iu, c);
     break;
   case IR_TYPE_INT64:
-    *(uint64_t *)addr = value_get_const64(iu, c);
-    break;
-  case IR_TYPE_FLOAT:
-    *(float *)addr = value_get_float(c);
-    break;
   case IR_TYPE_DOUBLE:
-    *(double *)addr = value_get_double(c);
+    *(uint64_t *)addr = value_get_const64(iu, c);
     break;
 
   case IR_TYPE_POINTER:

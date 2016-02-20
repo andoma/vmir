@@ -458,28 +458,6 @@ value_get_const32(ir_unit_t *iu, const ir_value_t *iv)
 /**
  *
  */
-static float __attribute__((unused))
-value_get_float(const ir_value_t *iv)
-{
-  assert(iv->iv_class == IR_VC_CONSTANT);
-  return iv->iv_float;
-}
-
-
-/**
- *
- */
-static double __attribute__((unused))
-value_get_double(const ir_value_t *iv)
-{
-  assert(iv->iv_class == IR_VC_CONSTANT);
-  return iv->iv_double;
-}
-
-
-/**
- *
- */
 static uint64_t __attribute__((unused))
 value_get_const64(ir_unit_t *iu, const ir_value_t *iv)
 {
