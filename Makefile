@@ -1,4 +1,3 @@
-
 SRCS  = src/main.c \
 	src/vmir.c \
 	tlsf/tlsf.c \
@@ -23,7 +22,10 @@ CFLAGS = -std=gnu99 -Wall -Werror -Wmissing-prototypes -O2 \
 CFLAGS += -DVMIR_USE_TLSF -I${CURDIR}/tlsf
 
 vmir: ${DEPS}
-	$(CC)  ${CFLAGS} -g ${SRCS} -lm -o $@
+	$(CC) ${CFLAGS} -g ${SRCS} -lm -o $@
 
-vmir.arm: ${DEPS}
-	$(ARM_CC)  ${CFLAGS} -g ${SRCS} -lm -o $@
+vmir.armv7: ${DEPS}
+	arm-linux-gnueabihf-gcc -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
+
+vmir.ppc64: ${DEPS}
+	powerpc-linux-gnu-gcc -m64 -static ${CFLAGS} -g ${SRCS} -lm -o $@
