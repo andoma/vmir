@@ -30,8 +30,8 @@
 
 //#define VM_TRACE
 
-#ifndef VM_TRACE
-#define VM_USE_COMPUTED_GOTO
+#ifdef VM_TRACE
+#define VM_DONE_USE_COMPUTED_GOTO
 #endif
 
 #ifndef __has_builtin
@@ -471,7 +471,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 {
   int16_t opc;
 
-#ifdef VM_USE_COMPUTED_GOTO
+#ifndef VM_DONT_USE_COMPUTED_GOTO
   if((int)op != -1)
     goto resolve;
   void *hostmem = iu->iu_mem;
@@ -1477,7 +1477,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(2);
   }
 
-#ifdef VM_USE_COMPUTED_GOTO
+#ifndef VM_DONT_USE_COMPUTED_GOTO
 
  resolve:
   switch(op) {
@@ -2263,17 +2263,17 @@ vm_align32(ir_unit_t *iu, int imm_at_odd)
 static void
 emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
-  if(ii->value == -1) {
+  if(ii->value.value == -1) {
     emit_op(iu, VM_RET_VOID);
     return;
   }
-  ir_value_t *iv = value_get(iu, ii->value);
-  ir_type_t *it = type_get(iu, iv->iv_type);
+  ir_value_t *iv = value_get(iu, ii->value.value);
+  ir_type_t *it = type_get(iu, ii->value.type);
 
   switch(iv->iv_class) {
   case IR_VC_REGFRAME:
 
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
     case IR_TYPE_INT8:
       emit_op1(iu, VM_RET_R8, value_reg(iv));
       return;
@@ -2297,7 +2297,7 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
     }
 
   case IR_VC_GLOBALVAR:
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
     case IR_TYPE_POINTER:
       emit_op(iu, VM_RET_R32C);
       emit_i32(iu, value_get_const32(iu, iv));
@@ -2308,7 +2308,7 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
     }
 
   case IR_VC_CONSTANT:
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
     case IR_TYPE_INT8:
       emit_op(iu, VM_RET_R8C);
       emit_i8(iu, value_get_const32(iu, iv));
@@ -2354,11 +2354,11 @@ static void
 emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
   const int binop = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
   vm_op_t op;
-  const ir_type_t *it = type_get(iu, lhs->iv_type);
+  const ir_type_t *it = type_get(iu, ii->lhs_value.type);
 
   if(lhs->iv_class == IR_VC_REGFRAME &&
      rhs->iv_class == IR_VC_REGFRAME) {
@@ -2366,7 +2366,7 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
     int lhsreg = value_reg(lhs);
     int retreg = value_reg(ret);
 
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
 
     case IR_TYPE_INT1:
     case IR_TYPE_INT32:
@@ -2438,7 +2438,7 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
     int lhsreg = value_reg(lhs);
     int retreg = value_reg(ret);
 
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
     case IR_TYPE_INT8:
       op = VM_ADD_R8C + binop;
       emit_op2(iu, op, value_reg(ret), value_reg(lhs));
@@ -2537,18 +2537,19 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
 static void
 emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
 {
-  const ir_value_t *src = value_get(iu, ii->ptr);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const ir_value_t *src = value_get(iu, ii->ptr.value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
   const ir_value_t *roff =
-    ii->value_offset >= 0 ? value_get(iu, ii->value_offset) : NULL;
+    ii->value_offset.value >= 0 ? value_get(iu, ii->value_offset.value) : NULL;
 
   if(ii->cast != -1) {
     // Load + Cast
     ir_type_t *pointee = type_get(iu, ii->load_type);
-    ir_type_t *retty = type_get(iu, ret->iv_type);
     assert(src->iv_class == IR_VC_REGFRAME);
 
-    switch(COMBINE3(retty->it_code, pointee->it_code, ii->cast)) {
+    switch(COMBINE3(legalize_type(retty), legalize_type(pointee),
+                    ii->cast)) {
     case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT8, CAST_ZEXT):
       emit_op2(iu, roff ? VM_LOAD8_ZEXT_32_ROFF :
                VM_LOAD8_ZEXT_32_OFF, value_reg(ret), value_reg(src));
@@ -2582,10 +2583,9 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
     return;
   }
 
-  ir_type_t *pointee = type_get(iu, ret->iv_type);
   const int has_offset = ii->immediate_offset != 0 || roff != NULL;
 
-  switch(COMBINE3(src->iv_class, pointee->it_code, has_offset)) {
+  switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
 
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 0):
     emit_op2(iu, VM_LOAD8, value_reg(ret), value_reg(src));
@@ -2667,7 +2667,7 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
     instr_print(iu, &ii->super, 0);
     printf("\n");
     parser_error(iu, "Can't load from class %d %s immediate-offset:%d",
-                 src->iv_class, type_str(iu, pointee),
+                 src->iv_class, type_str(iu, retty),
                  has_offset);
   }
   if(roff != NULL) {
@@ -2683,11 +2683,11 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
 static void
 emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 {
-  const ir_value_t *ptr = value_get(iu, ii->ptr);
-  const ir_value_t *val = value_get(iu, ii->value);
+  const ir_value_t *ptr = value_get(iu, ii->ptr.value);
+  const ir_value_t *val = value_get(iu, ii->value.value);
   int has_offset = ii->offset != 0;
 
-  switch(COMBINE4(type_get(iu, val->iv_type)->it_code,
+  switch(COMBINE4(legalize_type(type_get(iu, ii->value.type)),
                   val->iv_class,
                   ptr->iv_class,
                   has_offset)) {
@@ -2887,7 +2887,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     instr_print(iu, &ii->super, 0);
     printf("\n");
     parser_error(iu, "Can't store (type %s class %d) ptr class %d off:%d",
-                 type_str_index(iu, val->iv_type),
+                 type_str_index(iu, ii->value.type),
                  val->iv_class,
                  ptr->iv_class, has_offset);
   }
@@ -2935,16 +2935,16 @@ static void
 emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
   int pred = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_type_t *it = type_get(iu, lhs->iv_type);
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *it = type_get(iu, ii->lhs_value.type);
 
   if(lhs->iv_class == IR_VC_REGFRAME &&
      rhs->iv_class == IR_VC_REGFRAME) {
 
     if(pred >= FCMP_OEQ && pred <= FCMP_UNE) {
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_FLOAT:
         emit_op3(iu, pred - FCMP_OEQ + VM_OEQ_FLT,
                  value_reg(ret), value_reg(lhs), value_reg(rhs));
@@ -2957,12 +2957,12 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
       default:
         parser_error(iu, "Can't fcmp type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
     } else if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_INT8:
         emit_op3(iu, pred - ICMP_EQ + VM_EQ8,
                  value_reg(ret), value_reg(lhs), value_reg(rhs));
@@ -2986,7 +2986,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
       default:
         parser_error(iu, "Can't icmp type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
     } else {
@@ -3008,7 +3008,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
     }
 
     if(pred >= FCMP_OEQ && pred <= FCMP_UNE) {
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
 
       case IR_TYPE_DOUBLE:
         if(__builtin_isnan(rhs->iv_double))
@@ -3031,13 +3031,13 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
       default:
         parser_error(iu, "Can't fcmp type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
 
     } else if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_INT8:
         emit_op2(iu, pred - ICMP_EQ + VM_EQ8_C,
                  value_reg(ret), value_reg(lhs));
@@ -3066,7 +3066,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
       default:
         parser_error(iu, "Can't icmp type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
     } else {
@@ -3090,7 +3090,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
     if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_POINTER:
         emit_op2(iu, pred - ICMP_EQ + VM_EQ32_C,
                  value_reg(ret), value_reg(lhs));
@@ -3099,7 +3099,7 @@ emit_cmp2(ir_unit_t *iu, ir_instr_binary_t *ii)
 
       default:
         parser_error(iu, "Can't icmp type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
     } else {
@@ -3122,10 +3122,9 @@ static void
 emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 {
   int pred = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
-
-  const ir_type_t *it = type_get(iu, lhs->iv_type);
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
+  const ir_type_t *it = type_get(iu, ii->lhs_value.type);
 
   int textpos = iu->iu_text_ptr - iu->iu_text_alloc;
   VECTOR_PUSH_BACK(&iu->iu_branch_fixups, textpos);
@@ -3135,7 +3134,7 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 
     if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_INT8:
         emit_i16(iu, pred - ICMP_EQ + VM_EQ8_BR);
         break;
@@ -3147,7 +3146,7 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 
       default:
         parser_error(iu, "Can't cmpbr type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
       emit_i16(iu, ii->true_branch);
@@ -3166,7 +3165,7 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 
     if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
-      switch(it->it_code) {
+      switch(legalize_type(it)) {
       case IR_TYPE_INT8:
         emit_i16(iu, pred - ICMP_EQ + VM_EQ8_C_BR);
         emit_i16(iu, ii->true_branch);
@@ -3186,7 +3185,7 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 
       default:
         parser_error(iu, "Can't cmpbr type %s class %d/%d op %d",
-                     type_str_index(iu, lhs->iv_type),
+                     type_str(iu, it),
                      lhs->iv_class, rhs->iv_class, pred);
       }
     } else {
@@ -3219,14 +3218,14 @@ emit_br(ir_unit_t *iu, ir_instr_br_t *ii)
   VECTOR_PUSH_BACK(&iu->iu_branch_fixups, textpos);
 
   // We can't emit code yet cause we don't know the final destination
-  if(ii->condition == -1) {
+  if(ii->condition.value == -1) {
     // Unconditional branch
     emit_i16(iu, VM_B);
     emit_i16(iu, ii->true_branch);
   } else {
     // Conditional branch
 
-    ir_value_t *iv = value_get(iu, ii->condition);
+    ir_value_t *iv = value_get(iu, ii->condition.value);
     switch(iv->iv_class) {
     case IR_VC_REGFRAME:
       emit_i16(iu, VM_BCOND);
@@ -3255,23 +3254,23 @@ emit_br(ir_unit_t *iu, ir_instr_br_t *ii)
 static void
 emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 {
-  const ir_value_t *c = value_get(iu, ii->value);
-  const ir_type_t *cty = type_get(iu, c->iv_type);
+  const ir_value_t *c = value_get(iu, ii->value.value);
+  const ir_type_t *cty = type_get(iu, ii->value.type);
 
   uint32_t mask32 = 0xffffffff;
   int jumptable_size = 0;
-
+  int width;
   assert(c->iv_class == IR_VC_REGFRAME);
   int reg = value_reg(c);
 
-  switch(cty->it_code) {
+  switch(legalize_type(cty)) {
 
   case IR_TYPE_INT8:
 
-    assert(type_get(iu, c->iv_type)->it_code == IR_TYPE_INT8);
+    width = type_bitwidth(iu, cty);
 
-    if(cty->it_bits <= 4) {
-      jumptable_size = 1 << ii->width;
+    if(width <= 4) {
+      jumptable_size = 1 << width;
       goto jumptable;
     }
 
@@ -3297,7 +3296,6 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 
   case IR_TYPE_INT16:
     assert(c->iv_class == IR_VC_REGFRAME);
-    assert(type_get(iu, c->iv_type)->it_code == IR_TYPE_INT16);
     emit_op2(iu, VM_CAST_16_TRUNC_32, 0, reg);
     reg = 0;
     mask32 = 0xffff;
@@ -3326,7 +3324,6 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 
   case IR_TYPE_INT64:
     assert(c->iv_class == IR_VC_REGFRAME);
-    assert(type_get(iu, c->iv_type)->it_code == IR_TYPE_INT64);
 
     vm_align32(iu, 1);
 
@@ -3365,8 +3362,8 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
     break;
 
   default:
-    parser_error(iu, "Bad type %s, in switch (%d paths)",
-                 ii->typecode, ii->num_paths);
+    parser_error(iu, "Bad type in switch (%d paths)",
+                 ii->num_paths);
   }
 }
 
@@ -3377,11 +3374,11 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 static void
 emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_value_t *src = value_get(iu, ii->value);
-  ir_type_t *ty = type_get(iu, src->iv_type);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_value_t *src = value_get(iu, ii->value.value);
+  const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
 
-  switch(COMBINE2(src->iv_class, ty->it_code)) {
+  switch(COMBINE2(src->iv_class, legalize_type(ty))) {
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT8):
     emit_op1(iu, VM_MOV8_C, value_reg(ret));
     emit_i8(iu, value_get_const32(iu, src));
@@ -3425,12 +3422,14 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
     return;
 
   case COMBINE2(IR_VC_FUNCTION, IR_TYPE_FUNCTION):
+  case COMBINE2(IR_VC_FUNCTION, IR_TYPE_POINTER):
     emit_op1(iu, VM_MOV32_C, value_reg(ret));
     emit_i32(iu, value_function_addr(src));
     break;
   default:
-    parser_error(iu, "Can't move from %s class %d",
-                 type_str(iu, ty), src->iv_class);
+    parser_error(iu, "Can't move from %s (code:%d) class %d  srcvalue=%s",
+                 type_str(iu, ty), legalize_type(ty), src->iv_class,
+                 value_str(iu, src));
   }
 }
 
@@ -3441,11 +3440,11 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
 static void
 emit_stackcopy(ir_unit_t *iu, ir_instr_stackcopy_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_value_t *src = value_get(iu, ii->value);
-  ir_type_t *ty = type_get(iu, src->iv_type);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_value_t *src = value_get(iu, ii->value.value);
+  const ir_type_t *ty = type_get(iu, ii->value.type);
 
-  switch(COMBINE2(src->iv_class, ty->it_code)) {
+  switch(COMBINE2(src->iv_class, legalize_type(ty))) {
 
   case COMBINE2(IR_VC_GLOBALVAR, IR_TYPE_POINTER):
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_POINTER):
@@ -3482,21 +3481,21 @@ emit_stackshrink(ir_unit_t *iu, ir_instr_stackshrink_t *ii)
 static void
 emit_lea(ir_unit_t *iu, ir_instr_lea_t *ii)
 {
-  const ir_value_t *    ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_value_t *baseptr = value_get(iu, ii->baseptr);
+  const ir_value_t *    ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_value_t *baseptr = value_get(iu, ii->baseptr.value);
 
-  if(ii->value_offset == -1) {
+  if(ii->value_offset.value == -1) {
 
     // Lea with immediate offset is same as add32 with constant
     emit_op2(iu, VM_ADD_R32C, value_reg(ret), value_reg(baseptr));
     emit_i32(iu, ii->immediate_offset);
 
   } else {
-    const ir_value_t *off = value_get(iu, ii->value_offset);
+    const ir_value_t *off = value_get(iu, ii->value_offset.value);
 
-    if(type_get(iu, off->iv_type)->it_code != IR_TYPE_INT32) {
+    if(legalize_type(type_get(iu, ii->value_offset.type)) != IR_TYPE_INT32) {
       parser_error(iu, "LEA: Can't handle %s as offset register",
-                   type_str_index(iu, off->iv_type));
+                   type_str_index(iu, ii->value_offset.type));
     }
 
     assert(ii->value_offset_multiply != 0);
@@ -3535,11 +3534,13 @@ emit_lea(ir_unit_t *iu, ir_instr_lea_t *ii)
 static void
 emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
-  const ir_value_t *src = value_get(iu, ii->value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_type_t *it;
-  const int srccode = type_get(iu, src->iv_type)->it_code;
-  const int dstcode = type_get(iu, ret->iv_type)->it_code;
+  const ir_value_t *src = value_get(iu, ii->value.value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+
+  const ir_type_t *srcty = type_get(iu, ii->value.type);
+  const ir_type_t *dstty = type_get(iu, ii->super.ii_ret.type);
+  const int srccode = legalize_type(srcty);
+  const int dstcode = legalize_type(dstty);
   const int castop = ii->op;
 
   vm_op_t op;
@@ -3728,6 +3729,7 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
   case COMBINE3(IR_TYPE_POINTER, CAST_BITCAST, IR_TYPE_POINTER):
   case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
   case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
+  case COMBINE3(IR_TYPE_INT32, CAST_TRUNC, IR_TYPE_INT32):
     emit_op2(iu, VM_MOV32, value_reg(ret), value_reg(src));
     return;
 
@@ -3740,23 +3742,14 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
     op = VM_CAST_64_ZEXT_32;
     return;
 
-  case COMBINE3(IR_TYPE_INTx, CAST_TRUNC, IR_TYPE_INT32):
-    it = type_get(iu, ret->iv_type);
-    if(it->it_bits <= 8) {
-      op = VM_CAST_8_TRUNC_32;
-      break;
-    }
-    emit_op2(iu, VM_MOV32, value_reg(ret), value_reg(src));
-    return;
-
-  case COMBINE3(IR_TYPE_INTx, CAST_TRUNC, IR_TYPE_INT8):
+  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT8):
     emit_op2(iu, VM_MOV8, value_reg(ret), value_reg(src));
     return;
 
   default:
     parser_error(iu, "Unable to convert to %s from %s using castop %d",
-                 type_str_index(iu, ret->iv_type),
-                 type_str_index(iu, src->iv_type),
+                 type_str(iu, dstty),
+                 type_str(iu, srcty),
                  castop);
   }
   emit_op2(iu, op, value_reg(ret), value_reg(src));
@@ -3772,13 +3765,13 @@ emit_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
   int rf_offset = f->if_regframe_size;
   int return_reg;
 
-  if(ii->super.ii_ret_value != -1) {
-    const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  if(ii->super.ii_ret.value != -1) {
+    const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
     return_reg = value_reg(ret);
   } else {
     return_reg = 0;
   }
-  ir_function_t *callee = value_function(iu, ii->callee);
+  ir_function_t *callee = value_function(iu, ii->callee.value);
   if(callee != NULL) {
     vm_op_t op;
 
@@ -3791,7 +3784,7 @@ emit_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
 
   } else {
 
-    const ir_value_t *iv = value_get(iu, ii->callee);
+    const ir_value_t *iv = value_get(iu, ii->callee.value);
 
     if(iv->iv_class != IR_VC_REGFRAME)
       parser_error(iu, "Call via incompatible value class %d",
@@ -3807,8 +3800,8 @@ emit_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
 static void
 emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  ir_value_t *iv = value_get(iu, ii->num_items_value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  ir_value_t *iv = value_get(iu, ii->num_items_value.value);
 
   switch(iv->iv_class) {
   case IR_VC_CONSTANT:
@@ -3817,7 +3810,7 @@ emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
     break;
 
   case IR_VC_REGFRAME:
-    switch(type_get(iu, iv->iv_type)->it_code) {
+    switch(legalize_type(type_get(iu, ii->num_items_value.type))) {
     case IR_TYPE_INT32:
       emit_op3(iu, VM_ALLOCAD, value_reg(ret), ii->alignment, value_reg(iv));
       emit_i32(iu, ii->size);
@@ -3825,7 +3818,7 @@ emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
 
     default:
       parser_error(iu, "Unable to alloca num_elements as %s",
-                   type_str_index(iu, iv->iv_type));
+                   type_str_index(iu, ii->num_items_value.type));
     }
     return;
 
@@ -3843,14 +3836,14 @@ emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
 static void
 emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
 {
-  const ir_value_t *p  = value_get(iu, ii->pred);
-  const ir_value_t *tv = value_get(iu, ii->true_value);
-  const ir_value_t *fv = value_get(iu, ii->false_value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const ir_value_t *p  = value_get(iu, ii->pred.value);
+  const ir_value_t *tv = value_get(iu, ii->true_value.value);
+  const ir_value_t *fv = value_get(iu, ii->false_value.value);
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
   //  assert(tv->iv_type == fv->iv_type);
 
-  switch(COMBINE3(tv->iv_class, fv->iv_class,
-                  type_get(iu, tv->iv_type)->it_code)) {
+  switch(COMBINE3(tv->iv_class, fv->iv_class, legalize_type(ty))) {
 
   case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT32):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_POINTER):
@@ -3961,8 +3954,7 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
 
   default:
     parser_error(iu, "Unable to emit select for %s class %d,%d",
-                 type_str_index(iu, tv->iv_type),
-                 tv->iv_class, fv->iv_class);
+                 type_str(iu, ty), tv->iv_class, fv->iv_class);
   }
 }
 
@@ -3973,23 +3965,23 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
 static void
 emit_vmop(ir_unit_t *iu, ir_instr_call_t *ii)
 {
-  ir_function_t *f = value_function(iu, ii->callee);
+  ir_function_t *f = value_function(iu, ii->callee.value);
   int vmop = f->if_vmop;
   assert(vmop != 0);
   emit_op(iu, vmop);
 
-  if(ii->super.ii_ret_value < -1) {
-    for(int i = 0; i < -ii->super.ii_ret_value; i++) {
-      const ir_value_t *ret = value_get(iu, ii->super.ii_ret_values[i]);
+  if(ii->super.ii_ret.value < -1) {
+    for(int i = 0; i < -ii->super.ii_ret.value; i++) {
+      const ir_value_t *ret = value_get(iu, ii->super.ii_rets[i].value);
       emit_i16(iu, value_reg(ret));
     }
-  } else if(ii->super.ii_ret_value != -1) {
-    const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  } else if(ii->super.ii_ret.value != -1) {
+    const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
     emit_i16(iu, value_reg(ret));
   }
 
   for(int i = 0 ; i < ii->argc; i++) {
-    const ir_value_t *iv = value_get(iu, ii->argv[i].value);
+    const ir_value_t *iv = value_get(iu, ii->argv[i].value.value);
     emit_i16(iu, value_reg(iv));
   }
 }
@@ -4001,7 +3993,7 @@ emit_vmop(ir_unit_t *iu, ir_instr_call_t *ii)
 static void
 emit_vaarg(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
-  const ir_value_t *val = value_get(iu, ii->value);
+  const ir_value_t *val = value_get(iu, ii->value.value);
   int valreg;
   switch(val->iv_class) {
   case IR_VC_REGFRAME:
@@ -4018,9 +4010,9 @@ emit_vaarg(ir_unit_t *iu, ir_instr_unary_t *ii)
     parser_error(iu, "bad vaarg class");
   }
 
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_type_t *ty = type_get(iu, ret->iv_type);
-  switch(ty->it_code) {
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
+  switch(legalize_type(ty)) {
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
   case IR_TYPE_INT1:
@@ -4046,12 +4038,12 @@ emit_vaarg(ir_unit_t *iu, ir_instr_unary_t *ii)
 static void
 emit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_type_t *ty = type_get(iu, ret->iv_type);
-  const ir_value_t *a1 = value_get(iu, ii->arg1);
-  const ir_value_t *a2 = value_get(iu, ii->arg2);
-  const ir_value_t *a3 = value_get(iu, ii->arg3);
-  switch(ty->it_code) {
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
+  const ir_value_t *a1 = value_get(iu, ii->arg1.value);
+  const ir_value_t *a2 = value_get(iu, ii->arg2.value);
+  const ir_value_t *a3 = value_get(iu, ii->arg3.value);
+  switch(legalize_type(ty)) {
 
   case IR_TYPE_INT32:
     emit_op4(iu, VM_MLA32, value_reg(ret),
@@ -4285,7 +4277,6 @@ vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
 {
   va_list ap;
   const ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, f->if_type);
-  assert(it->it_code == IR_TYPE_FUNCTION);
   uint32_t u32;
   int argpos = 0;
   void *rf = iu->iu_mem;
@@ -4298,7 +4289,7 @@ vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   for(int i = 0; i < it->it_function.num_parameters; i++) {
     const ir_type_t *arg = &VECTOR_ITEM(&iu->iu_types,
                                         it->it_function.parameters[i]);
-    switch(arg->it_code) {
+    switch(legalize_type(arg)) {
     case IR_TYPE_INT8:
     case IR_TYPE_INT16:
     case IR_TYPE_INT32:

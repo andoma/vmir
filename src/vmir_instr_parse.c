@@ -44,42 +44,45 @@ bb_add(ir_function_t *f, ir_bb_t *after)
 /**
  *
  */
-static int
+static ir_valuetype_t
 instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
 {
   const ir_arg_t *argv = *argvp;
   int argc = *argcp;
-
   if(argc < 1)
     parser_error(iu, "Missing value code");
 
   unsigned int val = iu->iu_next_value - argv[0].i64;
+  int type;
 
   if(val < iu->iu_next_value) {
     *argvp = argv + 1;
     *argcp = argc - 1;
-    return val;
+    type = VECTOR_ITEM(&iu->iu_values, val)->iv_type;
+  } else {
+
+    if(val >= VECTOR_LEN(&iu->iu_values))
+      VECTOR_RESIZE(&iu->iu_values, val + 1);
+
+    ir_value_t *iv = calloc(1, sizeof(ir_value_t));
+    VECTOR_ITEM(&iu->iu_values, val) = iv;
+    iv->iv_class = IR_VC_UNDEF;
+    type = iv->iv_type = argv[1].i64;
+
+    *argvp = argv + 2;
+    *argcp = argc - 2;
   }
-
-  if(val >= VECTOR_LEN(&iu->iu_values))
-    VECTOR_RESIZE(&iu->iu_values, val + 1);
-
-  ir_value_t *iv = calloc(1, sizeof(ir_value_t));
-  VECTOR_ITEM(&iu->iu_values, val) = iv;
-  iv->iv_class = IR_VC_UNDEF;
-  iv->iv_type = argv[1].i64;
-
-  *argvp = argv + 2;
-  *argcp = argc - 2;
-  return val;
+  ir_valuetype_t r = {.type = type, .value = val};
+  return r;
 }
 
 
 /**
  *
  */
-static unsigned int
-instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
+static ir_valuetype_t
+instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp,
+                int type)
 {
   const ir_arg_t *argv = *argvp;
   int argc = *argcp;
@@ -90,16 +93,19 @@ instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
   *argvp = argv + 1;
   *argcp = argc - 1;
 
-  return iu->iu_next_value - argv[0].i64;
+  int val = iu->iu_next_value - argv[0].i64;
+  ir_valuetype_t r = {.type = type, .value = val};
+  return r;
 }
 
 
 /**
  *
  */
-static unsigned int
+static ir_valuetype_t
 instr_get_value_signed(ir_unit_t *iu,
-                       unsigned int *argcp, const ir_arg_t **argvp)
+                       unsigned int *argcp, const ir_arg_t **argvp,
+                       int type)
 {
   const ir_arg_t *argv = *argvp;
   int argc = *argcp;
@@ -110,7 +116,10 @@ instr_get_value_signed(ir_unit_t *iu,
   *argvp = argv + 1;
   *argcp = argc - 1;
 
-  return iu->iu_next_value - read_sign_rotated(argv);
+  int val = iu->iu_next_value - read_sign_rotated(argv);
+
+  ir_valuetype_t r = {.type = type, .value = val};
+  return r;
 }
 
 
@@ -148,7 +157,7 @@ instr_isa(ir_instr_t *ii, instr_class_t c)
  */
 typedef struct ir_instr_unary {
   ir_instr_t super;
-  int value;  // Value must be first so we can alias on ir_instr_move
+  ir_valuetype_t value;  // Value must be first so we can alias on ir_instr_move
   int op;
 
 } ir_instr_unary_t;
@@ -159,8 +168,8 @@ typedef struct ir_instr_unary {
  */
 typedef struct ir_instr_store {
   ir_instr_t super;
-  int ptr;
-  int value;
+  ir_valuetype_t ptr;
+  ir_valuetype_t value;
   int offset;
 } ir_instr_store_t;
 
@@ -170,9 +179,9 @@ typedef struct ir_instr_store {
  */
 typedef struct ir_instr_load {
   ir_instr_t super;
-  int ptr;
+  ir_valuetype_t ptr;
   int immediate_offset;
-  int value_offset;
+  ir_valuetype_t value_offset;
   int value_offset_multiply;
   int8_t cast;
   uint8_t load_type; // Only valid when cast != -1
@@ -185,8 +194,8 @@ typedef struct ir_instr_load {
 typedef struct ir_instr_binary {
   ir_instr_t super;
   int op;
-  int lhs_value;
-  int rhs_value;
+  ir_valuetype_t lhs_value;
+  ir_valuetype_t rhs_value;
 
 } ir_instr_binary_t;
 
@@ -196,9 +205,9 @@ typedef struct ir_instr_binary {
  */
 typedef struct ir_instr_ternary {
   ir_instr_t super;
-  int arg1;
-  int arg2;
-  int arg3;
+  ir_valuetype_t arg1;
+  ir_valuetype_t arg2;
+  ir_valuetype_t arg3;
 } ir_instr_ternary_t;
 
 
@@ -206,7 +215,7 @@ typedef struct ir_instr_ternary {
  *
  */
 typedef struct ir_gep_index {
-  int value;
+  ir_valuetype_t value;
   int type;
 } ir_gep_index_t;
 
@@ -216,7 +225,7 @@ typedef struct ir_gep_index {
 typedef struct ir_instr_gep {
   ir_instr_t super;
   int num_indicies;
-  int baseptr;
+  ir_valuetype_t baseptr;
   ir_gep_index_t indicies[0];
 } ir_instr_gep_t;
 
@@ -226,9 +235,9 @@ typedef struct ir_instr_gep {
  */
 typedef struct ir_instr_lea {
   ir_instr_t super;
-  int baseptr;
+  ir_valuetype_t baseptr;
   int immediate_offset;
-  int value_offset;
+  ir_valuetype_t value_offset;
   int value_offset_multiply;
 } ir_instr_lea_t;
 
@@ -238,7 +247,7 @@ typedef struct ir_instr_lea {
  */
 typedef struct ir_instr_br {
   ir_instr_t super;
-  int condition;
+  ir_valuetype_t condition;
   int true_branch;
   int false_branch;
 } ir_instr_br_t;
@@ -246,7 +255,7 @@ typedef struct ir_instr_br {
 
 typedef struct ir_phi_node {
   int predecessor;
-  int value;
+  ir_valuetype_t value;
 } ir_phi_node_t;
 
 /**
@@ -260,7 +269,7 @@ typedef struct ir_instr_phi {
 
 
 typedef struct ir_instr_arg {
-  int value;
+  ir_valuetype_t value;
   int copy_size;
 } ir_instr_arg_t;
 
@@ -269,7 +278,7 @@ typedef struct ir_instr_arg {
  */
 typedef struct ir_instr_call {
   ir_instr_t super;
-  int callee;
+  ir_valuetype_t callee;
   int argc;
   ir_instr_arg_t argv[0];
 } ir_instr_call_t;
@@ -298,13 +307,9 @@ typedef struct ir_instr_path {
  */
 typedef struct ir_instr_switch {
   ir_instr_t super;
-  int value;
+  ir_valuetype_t value;
   int defblock;
   int num_paths;
-  int width;  /* Width of 'value' in bits before converting all values
-               * to 8,16,32,64 widths.
-               */
-  ir_type_code_t typecode;
   ir_instr_path_t paths[0];
 } ir_instr_switch_t;
 
@@ -315,7 +320,7 @@ typedef struct ir_instr_switch {
 typedef struct ir_instr_alloca {
   ir_instr_t super;
   int size;
-  int num_items_value;
+  ir_valuetype_t num_items_value;
   int alignment;
 } ir_instr_alloca_t;
 
@@ -325,9 +330,9 @@ typedef struct ir_instr_alloca {
  */
 typedef struct ir_instr_select {
   ir_instr_t super;
-  int true_value;
-  int false_value;
-  int pred;
+  ir_valuetype_t  true_value;
+  ir_valuetype_t  false_value;
+  ir_valuetype_t  pred;
 } ir_instr_select_t;
 
 
@@ -337,13 +342,13 @@ typedef struct ir_instr_select {
  */
 typedef struct ir_instr_move {
   ir_instr_t super;
-  int value;
+  ir_valuetype_t  value;
 } ir_instr_move_t;
 
 
 typedef struct ir_instr_stackcopy {
   ir_instr_t super;
-  int value;
+  ir_valuetype_t value;
   int size;
 } ir_instr_stackcopy_t;
 
@@ -359,8 +364,8 @@ typedef struct ir_instr_stackshrink {
 typedef struct ir_instr_cmp_branch {
   ir_instr_t super;
   int op;
-  int lhs_value;
-  int rhs_value;
+  ir_valuetype_t lhs_value;
+  ir_valuetype_t rhs_value;
   int true_branch;
   int false_branch;
 } ir_instr_cmp_branch_t;
@@ -368,7 +373,7 @@ typedef struct ir_instr_cmp_branch {
 
 typedef struct ir_instr_extractval {
   ir_instr_t super;
-  int value;
+  ir_valuetype_t  value;
   int num_indicies;
   int indicies[0];
 } ir_instr_extractval_t;
@@ -382,7 +387,8 @@ instr_create(size_t size, instr_class_t ic)
   ir_instr_t *ii = calloc(1, size);
   LIST_INIT(&ii->ii_values);
   ii->ii_class = ic;
-  ii->ii_ret_value = -1;
+  ii->ii_ret.value = -1;
+  ii->ii_ret.type = -1;
   return ii;
 }
 
@@ -435,7 +441,7 @@ static void
 instr_destroy(ir_instr_t *ii)
 {
   instr_bind_clear(ii);
-  free(ii->ii_ret_values);
+  free(ii->ii_rets);
   free(ii->ii_succ);
   free(ii->ii_liveness);
 
@@ -455,7 +461,7 @@ parse_ret(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_instr_unary_t *i = instr_add(ib, sizeof(ir_instr_unary_t), IR_IC_RET);
 
   if(argc == 0) {
-    i->value = -1;
+    i->value.value = -1;
   } else {
     i->value = instr_get_vtp(iu, &argc, &argv);
   }
@@ -484,11 +490,10 @@ parse_binop(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   ir_instr_binary_t *i = instr_add(ib, sizeof(ir_instr_binary_t), IR_IC_BINOP);
   i->lhs_value = instr_get_vtp(iu, &argc, &argv);
-  i->rhs_value = instr_get_value(iu, &argc, &argv);
+  i->rhs_value = instr_get_value(iu, &argc, &argv, i->lhs_value.type);
   i->op        = instr_get_uint(iu, &argc, &argv);
 
-  value_alloc_instr_ret(iu, value_get_type(iu, i->lhs_value),
-                        &i->super);
+  value_alloc_instr_ret(iu, i->lhs_value.type, &i->super);
 }
 
 
@@ -519,17 +524,14 @@ parse_load(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_instr_load_t *i = instr_add(ib, sizeof(ir_instr_load_t), IR_IC_LOAD);
   i->immediate_offset = 0;
   i->ptr = instr_get_vtp(iu, &argc, &argv);
-  i->value_offset = -1;
+  i->value_offset.value = -1;
   i->value_offset_multiply = 0;
   i->cast = -1;
   if(argc == 3) {
     // Explicit type
     value_alloc_instr_ret(iu, argv[0].i64, &i->super);
   } else {
-    value_alloc_instr_ret(iu,
-                          type_get_pointee(iu,
-                                           value_get_type(iu, i->ptr)),
-                          &i->super);
+    value_alloc_instr_ret(iu, type_get_pointee(iu, i->ptr.type), &i->super);
   }
 }
 
@@ -547,7 +549,8 @@ parse_store(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
   i->offset = 0;
   i->ptr   = instr_get_vtp(iu, &argc, &argv);
   if(old)
-    i->value = instr_get_value(iu, &argc, &argv);
+    i->value = instr_get_value(iu, &argc, &argv,
+                               type_get_pointee(iu, i->ptr.type));
   else
     i->value = instr_get_vtp(iu, &argc, &argv);
 
@@ -567,9 +570,9 @@ parse_gep(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv, int op)
     argc-=2;
   }
 
-  int baseptr = instr_get_vtp(iu, &argc, &argv);
+  ir_valuetype_t baseptr = instr_get_vtp(iu, &argc, &argv);
 
-  int *values = alloca(argc * sizeof(int));
+  ir_valuetype_t *values = alloca(argc * sizeof(ir_valuetype_t));
 
   int num_indicies = 0;
   while(argc > 0)
@@ -582,12 +585,12 @@ parse_gep(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv, int op)
 
   i->num_indicies = num_indicies;
   i->baseptr = baseptr;
-  int current_type_index = value_get_type(iu, baseptr);
+  int current_type_index = baseptr.type;
 
   for(int n = 0; n < num_indicies; n++) {
     i->indicies[n].value = values[n];
     i->indicies[n].type = current_type_index;
-    ir_value_t *index_value = value_get(iu, values[n]);
+    ir_value_t *index_value = value_get(iu, values[n].value);
     int element;
     int inner_type_index;
     ir_type_t *ct = type_get(iu, current_type_index);
@@ -638,7 +641,7 @@ parse_cmp2(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   ir_instr_binary_t *i = instr_add(ib, sizeof(ir_instr_binary_t), IR_IC_CMP2);
   i->lhs_value = instr_get_vtp(iu, &argc, &argv);
-  i->rhs_value = instr_get_value(iu, &argc, &argv);
+  i->rhs_value = instr_get_value(iu, &argc, &argv, i->lhs_value.type);
   i->op    = instr_get_uint(iu, &argc, &argv);
   value_alloc_instr_ret(iu, type_find_by_code(iu, IR_TYPE_INT1), &i->super);
 }
@@ -657,10 +660,11 @@ parse_br(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   i->true_branch = instr_get_uint(iu, &argc, &argv);
 
   if(argc == 0) {
-    i->condition = -1;
+    i->condition.value = -1;
   } else {
     i->false_branch = instr_get_uint(iu, &argc, &argv);
-    i->condition = instr_get_value(iu, &argc, &argv);
+    i->condition = instr_get_value(iu, &argc, &argv,
+                                   type_make(iu, IR_TYPE_INT1));
   }
 }
 
@@ -695,7 +699,7 @@ parse_phi(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   i->num_nodes = num_nodes;
 
   for(int j = 0; j < num_nodes; j++) {
-    i->nodes[j].value       = instr_get_value_signed(iu, &argc, &argv);
+    i->nodes[j].value       = instr_get_value_signed(iu, &argc, &argv, type);
     i->nodes[j].predecessor = instr_get_uint(iu, &argc, &argv);
   }
   qsort(i->nodes, num_nodes, sizeof(ir_phi_node_t), phi_sort);
@@ -730,15 +734,15 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
     argv++;
   }
 
-  int fnidx         = instr_get_vtp(iu, &argc, &argv);
+  ir_valuetype_t fnidx = instr_get_vtp(iu, &argc, &argv);
 
   const ir_value_t *fn;
   const ir_type_t *fnty = NULL;
 
   while(1) {
-    fn = value_get(iu, fnidx);
+    fn = value_get(iu, fnidx.value);
     if(fn->iv_class == IR_VC_ALIAS) {
-      fnidx = fn->iv_reg;
+      fnidx.value = fn->iv_reg;
       continue;
     }
     break;
@@ -770,7 +774,6 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
     break;
   }
 
-
   if(fnty->it_code != IR_TYPE_FUNCTION)
     parser_error(iu, "Call to non-function type %s",
                  type_str(iu, fnty));
@@ -782,7 +785,7 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   int function_args = fnty->it_function.num_parameters;
 
-  int *args = alloca(argc * sizeof(int));
+  ir_valuetype_t *args = alloca(argc * sizeof(ir_valuetype_t));
   int n = 0;
 
   while(argc > 0) {
@@ -792,13 +795,15 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
       args[n] = instr_get_vtp(iu, &argc, &argv);
     } else {
       // Just the value
-      args[n] = instr_get_value(iu, &argc, &argv);
+      args[n] = instr_get_value(iu, &argc, &argv,
+                                fnty->it_function.parameters[n]);
     }
     n++;
   }
   ir_instr_call_t *i =
     instr_add(ib, sizeof(ir_instr_call_t) +
               sizeof(ir_instr_arg_t) * n, IR_IC_CALL);
+
   i->callee = fnidx;
   i->argc = n;
 
@@ -820,8 +825,7 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
         int arg = ia->ia_index - 1;
         if(arg < i->argc) {
           if(ia->ia_flags & (1ULL << ATTR_KIND_BY_VAL)) {
-            ir_value_t *val = value_get(iu, i->argv[arg].value);
-            ir_type_t *ty = type_get(iu, val->iv_type);
+            ir_type_t *ty = type_get(iu, i->argv[arg].value.type);
             if(ty->it_code != IR_TYPE_POINTER) {
               parser_error(iu, "Copy-by-value on non-pointer %s",
                            type_str(iu, ty));
@@ -866,22 +870,17 @@ parse_switch(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_bb_t *ib = iu->iu_current_bb;
 
   unsigned int typeid = instr_get_uint(iu, &argc, &argv);
-  ir_type_t *it = type_get(iu, typeid);
-
-  unsigned int valueid = instr_get_value(iu, &argc, &argv);
+  ir_valuetype_t value = instr_get_value(iu, &argc, &argv, typeid);
   unsigned int defblock = instr_get_uint(iu, &argc, &argv);
-  ir_value_t *iv = value_get(iu, valueid);
   int paths = argc / 2;
 
   ir_instr_switch_t *i =
     instr_add(ib, sizeof(ir_instr_switch_t) +
               sizeof(ir_instr_path_t) * paths, IR_IC_SWITCH);
 
-  i->value = valueid;
+  i->value = value;
   i->defblock = defblock;
   i->num_paths = paths;
-  i->typecode = it->it_code;
-  i->width = type_bitwidth(iu, iv->iv_type);
 
   for(int n = 0; n < paths; n++) {
     int val = instr_get_uint(iu, &argc, &argv);
@@ -927,8 +926,8 @@ parse_alloca(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   value_alloc_instr_ret(iu, rtype, &i->super);
 
   i->alignment = vmir_llvm_alignment(flags & 0x1f);
-  i->num_items_value = argv[2].i64;
-
+  i->num_items_value.value = argv[2].i64;
+  i->num_items_value.type = argv[1].i64;
 }
 
 
@@ -942,10 +941,10 @@ parse_vselect(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   ir_instr_select_t *i = instr_add(ib, sizeof(ir_instr_select_t), IR_IC_SELECT);
   i->true_value  = instr_get_vtp(iu, &argc, &argv);
-  i->false_value = instr_get_value(iu, &argc, &argv);
+  i->false_value = instr_get_value(iu, &argc, &argv, i->true_value.type);
   i->pred        = instr_get_vtp(iu, &argc, &argv);
 
-  value_alloc_instr_ret(iu, value_get_type(iu, i->true_value), &i->super);
+  value_alloc_instr_ret(iu, i->true_value.type, &i->super);
 }
 
 
@@ -958,11 +957,12 @@ parse_vaarg(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_bb_t *ib = iu->iu_current_bb;
 
   ir_instr_unary_t *i = instr_add(ib, sizeof(ir_instr_unary_t), IR_IC_VAARG);
+  int type = argv[0].i64;
   argc--;
   argv++;
-  i->value = instr_get_value(iu, &argc, &argv);
-  int type     = instr_get_uint(iu,  &argc, &argv);
-  value_alloc_instr_ret(iu, type, &i->super);
+  i->value = instr_get_value(iu, &argc, &argv, type);
+  int rtype = instr_get_uint(iu,  &argc, &argv);
+  value_alloc_instr_ret(iu, rtype, &i->super);
 }
 
 /**
@@ -973,9 +973,9 @@ parse_extractval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
-  int base = instr_get_vtp(iu, &argc, &argv);
+  ir_valuetype_t base = instr_get_vtp(iu, &argc, &argv);
   const int num_indicies = argc;
-  int current_type_index = value_get_type(iu, base);
+  int current_type_index = base.type;
 
   ir_instr_extractval_t *ii = instr_add(ib,
                                         sizeof(ir_instr_extractval_t) +
@@ -1116,15 +1116,15 @@ static void
 instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
 {
   printf("%c %p: ", ii->ii_jit ? 'J' : ' ', ii);
-  if(ii->ii_ret_value < - 1) {
-    int num_values = -ii->ii_ret_value;
+  if(ii->ii_ret.value < -1) {
+    int num_values = -ii->ii_ret.value;
     printf("{ ");
     for(int i = 0; i < num_values; i++) {
-      printf("%s%s", i ? ", " : "", value_str_id(iu, ii->ii_ret_values[i]));
+      printf("%s%s", i ? ", " : "", value_str_vt(iu, ii->ii_rets[i]));
     }
     printf(" } = ");
-  } else if(ii->ii_ret_value != -1) {
-    printf("%s = ", value_str_id(iu, ii->ii_ret_value));
+  } else if(ii->ii_ret.value != -1) {
+    printf("%s = ", value_str_vt(iu, ii->ii_ret));
   }
 
   switch(ii->ii_class) {
@@ -1139,8 +1139,8 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_unary_t *u = (ir_instr_unary_t *)ii;
       printf("ret ");
-      if(u->value != -1)
-        printf("%s", value_str_id(iu, u->value));
+      if(u->value.value != -1)
+        printf("%s", value_str_vt(iu, u->value));
     }
     break;
 
@@ -1178,8 +1178,8 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       }
 
       printf("%s %s, %s", op,
-             value_str_id(iu, b->lhs_value),
-             value_str_id(iu, b->rhs_value));
+             value_str_vt(iu, b->lhs_value),
+             value_str_vt(iu, b->rhs_value));
     }
     break;
   case IR_IC_CAST:
@@ -1200,7 +1200,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       case CAST_INTTOPTR: op = "inttoptr"; break;
       case CAST_BITCAST: op = "bitcast"; break;
       }
-      printf("cast.%s %s", op, value_str_id(iu, u->value));
+      printf("cast.%s %s", op, value_str_vt(iu, u->value));
     }
     break;
 
@@ -1216,11 +1216,11 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
         cast = ".sext";
         break;
       }
-      printf("load%s %s + #0x%x", cast, value_str_id(iu, u->ptr),
+      printf("load%s %s + #0x%x", cast, value_str_vt(iu, u->ptr),
              u->immediate_offset);
-      if(u->value_offset >= 0) {
+      if(u->value_offset.value >= 0) {
         printf(" + %s * #0x%x",
-               value_str_id(iu, u->value_offset),
+               value_str_vt(iu, u->value_offset),
                u->value_offset_multiply);
       }
     }
@@ -1230,7 +1230,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_store_t *s = (ir_instr_store_t *)ii;
       printf("store %s + #0x%x, %s",
-             value_str_id(iu, s->ptr), s->offset, value_str_id(iu, s->value));
+             value_str_vt(iu, s->ptr), s->offset, value_str_vt(iu, s->value));
     }
     break;
 
@@ -1238,12 +1238,12 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_gep_t *g = (ir_instr_gep_t *)ii;
       printf("gep ");
-      if(g->baseptr != -1)
-        printf("%s", value_str_id(iu, g->baseptr));
+      if(g->baseptr.value != -1)
+        printf("%s", value_str_vt(iu, g->baseptr));
 
       for(int i = 0; i < g->num_indicies; i++) {
         printf(" + %s[%s]", type_str_index(iu, g->indicies[i].type),
-               value_str_id(iu, g->indicies[i].value));
+               value_str_vt(iu, g->indicies[i].value));
       }
     }
     break;
@@ -1279,8 +1279,8 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       case ICMP_SLT: op = "icmp_slt"; break;
       case ICMP_SLE: op = "icmp_sle"; break;
       }
-      printf("%s %s, %s", op, value_str_id(iu, b->lhs_value),
-             value_str_id(iu, b->rhs_value));
+      printf("%s %s, %s", op, value_str_vt(iu, b->lhs_value),
+             value_str_vt(iu, b->rhs_value));
     }
     break;
 
@@ -1302,8 +1302,8 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       }
       printf("cmpbr.%s %s, %s true:.%d false:.%d",
              op,
-             value_str_id(iu, icb->lhs_value),
-             value_str_id(iu, icb->rhs_value),
+             value_str_vt(iu, icb->lhs_value),
+             value_str_vt(iu, icb->rhs_value),
              icb->true_branch,
              icb->false_branch);
     }
@@ -1312,11 +1312,11 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
   case IR_IC_BR:
     {
       ir_instr_br_t *br = (ir_instr_br_t *)ii;
-      if(br->condition == -1) {
+      if(br->condition.value == -1) {
         printf("b .%d", br->true_branch);
       } else {
         printf("bcond %s, true:.%d, false:.%d",
-               value_str_id(iu, br->condition),
+               value_str_vt(iu, br->condition),
                br->true_branch,
                br->false_branch);
       }
@@ -1328,7 +1328,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       printf("phi");
       for(int i = 0; i < p->num_nodes; i++) {
         printf(" [.%d %s]", p->nodes[i].predecessor,
-               value_str_id(iu, p->nodes[i].value));
+               value_str_vt(iu, p->nodes[i].value));
       }
     }
     break;
@@ -1336,22 +1336,22 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
   case IR_IC_VMOP:
     {
       ir_instr_call_t *p = (ir_instr_call_t *)ii;
-      ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, p->callee);
-      ir_function_t *f = value_function(iu, p->callee);
+      ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, p->callee.value);
+      ir_function_t *f = value_function(iu, p->callee.value);
 
       if(f != NULL) {
 
         printf("%s %s (%s) (",
                f->if_vmop ? "vmop" : "call",
                f->if_name,
-               type_str_index(iu, iv->iv_type));
+               type_str_index(iu, p->callee.type));
       } else {
-        printf("fptr in %s (%s) (", value_str_id(iu, p->callee),
-               type_str_index(iu, iv->iv_type));
+        printf("fptr in %s (%s) (", value_str(iu, iv),
+               type_str_index(iu, p->callee.type));
       }
       for(int i = 0; i < p->argc; i++) {
         if(i)printf(", ");
-        printf("%s", value_str_id(iu, p->argv[i].value));
+        printf("%s", value_str_vt(iu, p->argv[i].value));
         if(p->argv[i].copy_size) {
           printf(" (byval %d bytes)", p->argv[i].copy_size);
         }
@@ -1363,7 +1363,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
   case IR_IC_SWITCH:
     {
       ir_instr_switch_t *s = (ir_instr_switch_t *)ii;
-      printf("switch on %s ", value_str_id(iu, s->value));
+      printf("switch on %s ", value_str_vt(iu, s->value));
       for(int i = 0; i < s->num_paths; i++) {
         printf(" [#%"PRIx64, s->paths[i].v64);
         printf(" -> .%d]", s->paths[i].block);
@@ -1375,30 +1375,30 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_alloca_t *a = (ir_instr_alloca_t *)ii;
       printf("alloca [%d * %s], align: %d",
-             a->size, value_str_id(iu, a->num_items_value), a->alignment);
+             a->size, value_str_vt(iu, a->num_items_value), a->alignment);
     }
     break;
   case IR_IC_SELECT:
     {
       ir_instr_select_t *s = (ir_instr_select_t *)ii;
       printf("select %s, true: %s, false: %s",
-             value_str_id(iu, s->pred),
-             value_str_id(iu, s->true_value),
-             value_str_id(iu, s->false_value));
+             value_str_vt(iu, s->pred),
+             value_str_vt(iu, s->true_value),
+             value_str_vt(iu, s->false_value));
     }
     break;
   case IR_IC_VAARG:
     {
       ir_instr_unary_t *m = (ir_instr_unary_t *)ii;
 
-      printf("vaarg %s", value_str_id(iu, m->value));
+      printf("vaarg %s", value_str_vt(iu, m->value));
     }
     break;
   case IR_IC_EXTRACTVAL:
     {
       ir_instr_extractval_t *jj = (ir_instr_extractval_t *)ii;
 
-      printf("extractval %s [", value_str_id(iu, jj->value));
+      printf("extractval %s [", value_str_vt(iu, jj->value));
       for(int i = 0; i < jj->num_indicies; i++)
         printf("%s%d", i ? ",  " : "", jj->indicies[i]);
       printf("]");
@@ -1409,12 +1409,12 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       ir_instr_lea_t *l = (ir_instr_lea_t *)ii;
 
       printf("lea %s + #0x%x",
-             value_str_id(iu, l->baseptr),
+             value_str_vt(iu, l->baseptr),
              l->immediate_offset);
 
-      if(l->value_offset >= 0) {
+      if(l->value_offset.value >= 0) {
         printf(" + %s * #0x%x",
-               value_str_id(iu, l->value_offset),
+               value_str_vt(iu, l->value_offset),
                l->value_offset_multiply);
       }
     }
@@ -1423,7 +1423,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_move_t *m = (ir_instr_move_t *)ii;
 
-      printf("move %s", value_str_id(iu, m->value));
+      printf("move %s", value_str_vt(iu, m->value));
     }
     break;
   case IR_IC_STACKCOPY:
@@ -1431,7 +1431,7 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       ir_instr_stackcopy_t *sc = (ir_instr_stackcopy_t *)ii;
 
       printf("stackcopy %s size:#0x%x",
-             value_str_id(iu, sc->value),
+             value_str_vt(iu, sc->value),
              sc->size);
     }
     break;
@@ -1446,9 +1446,9 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       ir_instr_ternary_t *mla = (ir_instr_ternary_t *)ii;
 
       printf("mla %s, %s, %s",
-             value_str_id(iu, mla->arg1),
-             value_str_id(iu, mla->arg2),
-             value_str_id(iu, mla->arg3));
+             value_str_vt(iu, mla->arg1),
+             value_str_vt(iu, mla->arg2),
+             value_str_vt(iu, mla->arg3));
     }
     break;
   }

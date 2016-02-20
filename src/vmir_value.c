@@ -120,6 +120,7 @@ typedef struct ir_value {
 
 static const char *value_str(ir_unit_t *iu, const ir_value_t *iv);
 static const char *value_str_id(ir_unit_t *iu, int id);
+static const char *value_str_vt(ir_unit_t *iu, const ir_valuetype_t vt);
 
 
 /**
@@ -285,7 +286,7 @@ value_get(ir_unit_t *iu, unsigned int index)
 static void
 value_bind_return_value(ir_unit_t *iu, ir_instr_t *ii)
 {
-  value_bind_instr(value_get(iu, ii->ii_ret_value), ii, IVI_OUTPUT);
+  value_bind_instr(value_get(iu, ii->ii_ret.value), ii, IVI_OUTPUT);
 }
 
 
@@ -299,7 +300,8 @@ value_alloc_instr_ret(ir_unit_t *iu, int type, struct ir_instr *ii)
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
   iv->iv_class = IR_VC_TEMPORARY;
   iv->iv_type = type;
-  ii->ii_ret_value = val;
+  ii->ii_ret.value = val;
+  ii->ii_ret.type = type;
 
   value_bind_instr(iv, ii, IVI_OUTPUT);
 }
@@ -308,21 +310,21 @@ value_alloc_instr_ret(ir_unit_t *iu, int type, struct ir_instr *ii)
 /**
  *
  */
-static int __attribute__((unused))
+static ir_valuetype_t
 value_alloc_temporary(ir_unit_t *iu, int type)
 {
   int val = value_append(iu);
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
   iv->iv_class = IR_VC_TEMPORARY;
   iv->iv_type = type;
-  return val;
+  return (ir_valuetype_t) {.value = val, .type = type};
 }
 
 
 /**
  *
  */
-static int __attribute__((unused))
+static ir_valuetype_t
 value_alloc_call_arg(ir_unit_t *iu, int type, int position)
 {
   int val = value_append(iu);
@@ -330,7 +332,7 @@ value_alloc_call_arg(ir_unit_t *iu, int type, int position)
   iv->iv_class = IR_VC_CALL_ARGUMENT;
   iv->iv_type = type;
   iv->iv_reg = position;
-  return val;
+  return (ir_valuetype_t) {.value = val, .type = type};
 }
 
 
@@ -486,17 +488,7 @@ value_get_const64(ir_unit_t *iu, const ir_value_t *iv)
 /**
  *
  */
-static int
-value_get_type(ir_unit_t *iu, int vid)
-{
-  return value_get(iu, vid)->iv_type;
-}
-
-
-/**
- *
- */
-static int
+static ir_valuetype_t
 value_create_const32(ir_unit_t *iu, int v)
 {
   int type = type_find_by_code(iu, IR_TYPE_INT32);
@@ -506,7 +498,7 @@ value_create_const32(ir_unit_t *iu, int v)
   iv->iv_class = IR_VC_CONSTANT;
   iv->iv_type = type;
   iv->iv_u32 = v;
-  return ret;
+  return (ir_valuetype_t) {.value = ret, .type = type};
 }
 
 static int value_print_id(char **dstp, ir_unit_t *iu, int id);
@@ -515,15 +507,17 @@ static int value_print_id(char **dstp, ir_unit_t *iu, int id);
  *
  */
 static int
-value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv)
+value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
+            const ir_type_t *it)
 {
   int value = iv->iv_id;
-  const ir_type_t *it = NULL;
   int len = 0;
   char tmpbuf[64];
 
-  if(iv->iv_type < VECTOR_LEN(&iu->iu_types))
-    it = &VECTOR_ITEM(&iu->iu_types, iv->iv_type);
+  if(it == NULL) {
+    if(iv->iv_type < VECTOR_LEN(&iu->iu_types))
+      it = &VECTOR_ITEM(&iu->iu_types, iv->iv_type);
+  }
 
   switch(iv->iv_class) {
   case IR_VC_UNDEF:
@@ -535,7 +529,7 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv)
     break;
 
   case IR_VC_AGGREGATE:
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     len += addstr(dstp, " = {");
     const int *values = iv->iv_data;
     for(int i = 0; i < iv->iv_num_values; i++) {
@@ -571,21 +565,21 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv)
       len += addstr(dstp, iv->iv_gvar->ig_name);
       len += addstr(dstp, " ");
     }
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), " @ 0x%x", iv->iv_gvar->ig_addr);
     len += addstr(dstp, tmpbuf);
     break;
 
   case IR_VC_TEMPORARY:
     len += addstr(dstp, "(");
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d", value);
     len += addstr(dstp, tmpbuf);
     break;
 
   case IR_VC_CONSTANT:
     len += addstr(dstp, "(");
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d", value);
     len += addstr(dstp, tmpbuf);
     if(it == NULL) {
@@ -621,19 +615,19 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv)
 
   case IR_VC_REGFRAME:
     len += addstr(dstp, "(");
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{0x%x}", value, iv->iv_reg);
     len += addstr(dstp, tmpbuf);
     break;
   case IR_VC_MACHINEREG:
     len += addstr(dstp, "(");
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{r%d}", value, iv->iv_reg);
     len += addstr(dstp, tmpbuf);
     break;
   case IR_VC_CALL_ARGUMENT:
     len += addstr(dstp, "(");
-    len += type_print_id(dstp, iu, iv->iv_type);
+    len += type_print(dstp, iu, it);
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{argpos:%d}", value, iv->iv_reg);
     len += addstr(dstp, tmpbuf);
     break;
@@ -677,20 +671,50 @@ value_print_id(char **dstp, ir_unit_t *iu, int value)
     return addstr(dstp, tmpbuf);
   }
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, value);
-  return value_print(dstp, iu, iv);
+  return value_print(dstp, iu, iv, NULL);
+}
+
+/**
+ *
+ */
+static int
+value_print_vt(char **dstp, ir_unit_t *iu, ir_valuetype_t vt)
+{
+  if(vt.value >= VECTOR_LEN(&iu->iu_values)) {
+    char tmpbuf[64];
+    snprintf(tmpbuf, sizeof(tmpbuf), ">>BADVALUE:%d<<", vt.value);
+    return addstr(dstp, tmpbuf);
+  }
+
+  if(vt.type >= VECTOR_LEN(&iu->iu_types)) {
+    char tmpbuf[64];
+    snprintf(tmpbuf, sizeof(tmpbuf), ">>BADTYPE:%d<<", vt.type);
+    return addstr(dstp, tmpbuf);
+  }
+
+  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, vt.value);
+  const ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, vt.type);
+  return value_print(dstp, iu, iv, it);
 }
 
 
+/**
+ *
+ */
 static const char *
 value_str(ir_unit_t *iu, const ir_value_t *iv)
 {
-  int len = value_print(NULL, iu, iv);
+  int len = value_print(NULL, iu, iv, NULL);
   char *dst = tmpstr(iu, len);
   const char *ret = dst;
-  value_print(&dst, iu, iv);
+  value_print(&dst, iu, iv, NULL);
   return ret;
 }
 
+
+/**
+ *
+ */
 static const char *
 value_str_id(ir_unit_t *iu, int id)
 {
@@ -698,6 +722,20 @@ value_str_id(ir_unit_t *iu, int id)
   char *dst = tmpstr(iu, len);
   const char *ret = dst;
   value_print_id(&dst, iu, id);
+  return ret;
+}
+
+
+/**
+ *
+ */
+static const char *
+value_str_vt(ir_unit_t *iu, ir_valuetype_t vt)
+{
+  int len = value_print_vt(NULL, iu, vt);
+  char *dst = tmpstr(iu, len);
+  const char *ret = dst;
+  value_print_vt(&dst, iu, vt);
   return ret;
 }
 

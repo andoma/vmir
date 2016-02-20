@@ -16,16 +16,19 @@ DEPS = ${SRCS} \
 	src/vmir_support.c \
 	src/vmir_libc.c
 
-CFLAGS = -std=gnu99 -Wall -Werror -Wmissing-prototypes -O2 \
+CFLAGS = -std=gnu99 -Wall -Werror -Wmissing-prototypes \
 	-I${CURDIR}
 
 CFLAGS += -DVMIR_USE_TLSF -I${CURDIR}/tlsf
 
 vmir: ${DEPS}
-	$(CC) ${CFLAGS} -g ${SRCS} -lm -o $@
+	$(CC) -O2 ${CFLAGS} -g ${SRCS} -lm -o $@
+
+vmir.dbg: ${DEPS}
+	$(CC) -Og -DVM_DONE_USE_COMPUTED_GOTO ${CFLAGS} -g ${SRCS} -lm -o $@
 
 vmir.armv7: ${DEPS}
-	arm-linux-gnueabihf-gcc -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
+	arm-linux-gnueabihf-gcc -O2 -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
 
 vmir.ppc64: ${DEPS}
-	powerpc-linux-gnu-gcc -m64 -static ${CFLAGS} -g ${SRCS} -lm -o $@
+	powerpc-linux-gnu-gcc -O2 -m64 -static ${CFLAGS} -g ${SRCS} -lm -o $@

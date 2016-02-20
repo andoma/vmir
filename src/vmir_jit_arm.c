@@ -247,22 +247,22 @@ jit_offset_to_imm12_U(int off)
  * Load a value into a register
  *
  * If the value is a constant or stored on the regframe the register
- * passed in 'reg' is used
+ * passed in 'reg' is used as a temoprary
  *
  * If the value is stored in a machine register, that register is returned
  */
 static int __attribute__((warn_unused_result))
-jit_loadvalue(ir_unit_t *iu, const ir_value_t *iv, int reg, jitctx_t *jc)
+jit_loadvalue(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc)
 {
-  const ir_type_t *it;
+  const ir_value_t *iv = value_get(iu, vt.value);
+  const ir_type_t *it = type_get(iu, vt.type);
 
   switch(iv->iv_class) {
   case IR_VC_MACHINEREG:
     return iv->iv_reg + 4;
 
   case IR_VC_REGFRAME:
-    it = type_get(iu, iv->iv_type);
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
 #if 0
     case IR_TYPE_INT8:
       jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 24) | (1 << 22) | (1 << 20) |
@@ -299,8 +299,9 @@ jit_loadvalue(ir_unit_t *iu, const ir_value_t *iv, int reg, jitctx_t *jc)
  *
  */
 static int
-jit_storevalue_reg(ir_unit_t *iu, const ir_value_t *iv, int reg)
+jit_storevalue_reg(ir_unit_t *iu, ir_valuetype_t vt, int reg)
 {
+  const ir_value_t *iv = value_get(iu, vt.value);
   if(iv->iv_class == IR_VC_MACHINEREG)
     return iv->iv_reg + 4;
   return reg;
@@ -311,9 +312,10 @@ jit_storevalue_reg(ir_unit_t *iu, const ir_value_t *iv, int reg)
  *
  */
 static void
-jit_storevalue(ir_unit_t *iu, const ir_value_t *iv, int reg)
+jit_storevalue(ir_unit_t *iu, ir_valuetype_t vt, int reg)
 {
-  const ir_type_t *it;
+  const ir_value_t *iv = value_get(iu, vt.value);
+  const ir_type_t *it = type_get(iu, vt.type);
 
   switch(iv->iv_class) {
   case IR_VC_MACHINEREG:
@@ -326,9 +328,7 @@ jit_storevalue(ir_unit_t *iu, const ir_value_t *iv, int reg)
     return;
 
   case IR_VC_REGFRAME:
-    it = type_get(iu, iv->iv_type);
-
-    switch(it->it_code) {
+    switch(legalize_type(it)) {
 
 #if 0
     case IR_TYPE_INT8:
@@ -386,10 +386,10 @@ static int
 jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
   const int binop = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
 
-  int typecode = type_get(iu, lhs->iv_type)->it_code;
+  int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
 
   switch(binop) {
   case BINOP_SDIV:
@@ -405,11 +405,7 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
     break;
   }
 
-  if(typecode != type_get(iu, rhs->iv_type)->it_code)
-    return 0;
-
   switch(typecode) {
-  case IR_TYPE_INT8:
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
     break;
@@ -428,16 +424,14 @@ static void
 jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
 {
   const int binop = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
 
   int Rd = R_TMPA;
   int Rn = R_TMPA;
   int Rm = R_TMPB;
 
-  Rd = jit_storevalue_reg(iu, ret, Rd);
-  Rn = jit_loadvalue(iu, lhs, Rn, jc);
+  Rd = jit_storevalue_reg(iu, ii->super.ii_ret, Rd);
+  Rn = jit_loadvalue(iu, ii->lhs_value, Rn, jc);
 
   if(rhs->iv_class == IR_VC_CONSTANT) {
     int32_t rc = value_get_const32(iu, rhs);
@@ -503,7 +497,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
     }
   }
 
-  Rm = jit_loadvalue(iu, rhs, Rm, jc);
+  Rm = jit_loadvalue(iu, ii->rhs_value, Rm, jc);
 
   switch(binop) {
   case BINOP_ADD:
@@ -549,7 +543,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
     abort();
   }
  wb:
-  jit_storevalue(iu, ret, Rd);
+  jit_storevalue(iu, ii->super.ii_ret, Rd);
 }
 
 
@@ -559,9 +553,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
 static int
 jit_move_check(ir_unit_t *iu, ir_instr_move_t *ii)
 {
-  const ir_value_t *iv = value_get(iu, ii->value);
-
-  int typecode = type_get(iu, iv->iv_type)->it_code;
+  int typecode = legalize_type(type_get(iu, ii->value.type));
   switch(typecode) {
   case IR_TYPE_INT8:
   case IR_TYPE_INT16:
@@ -583,17 +575,9 @@ jit_move_check(ir_unit_t *iu, ir_instr_move_t *ii)
 static void
 jit_move(ir_unit_t *iu, ir_instr_move_t *ii, jitctx_t *jc)
 {
-  const ir_value_t *iv = value_get(iu, ii->value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-
-  if(iv->iv_class == IR_VC_MACHINEREG && ret->iv_class == IR_VC_MACHINEREG) {
-    printf("Machinereg -> Machinereg move not implmented yet\n");
-    abort();
-  } else {
-    int Rd = jit_storevalue_reg(iu, ret, R_TMPA);
-    int Rn = jit_loadvalue(iu, iv, Rd, jc);
-    jit_storevalue(iu, ret, Rn);
-  }
+  int Rd = jit_storevalue_reg(iu, ii->super.ii_ret, R_TMPA);
+  int Rn = jit_loadvalue(iu, ii->value, Rd, jc);
+  jit_storevalue(iu, ii->super.ii_ret, Rn);
 }
 
 
@@ -604,10 +588,9 @@ jit_move(ir_unit_t *iu, ir_instr_move_t *ii, jitctx_t *jc)
 static int
 jit_load_check(ir_unit_t *iu, ir_instr_load_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_type_t *retty = type_get(iu, ret->iv_type);
+  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
 
-  switch(retty->it_code) {
+  switch(legalize_type(retty)) {
   case IR_TYPE_INT8:
   case IR_TYPE_INT16:
   case IR_TYPE_INT32:
@@ -624,7 +607,8 @@ jit_load_check(ir_unit_t *iu, ir_instr_load_t *ii)
  *
  */
 static int
-jit_compute_ea(ir_unit_t *iu, int baseptr, int value_offset,
+jit_compute_ea(ir_unit_t *iu, ir_valuetype_t baseptr,
+               ir_valuetype_t value_offset,
                int value_offset_multiply, int immediate_offset,
                int preferred_reg,
                jitctx_t *jc)
@@ -632,9 +616,8 @@ jit_compute_ea(ir_unit_t *iu, int baseptr, int value_offset,
   assert(preferred_reg != R_TMPB);
 
   int regoff = -1, shift = 0;
-  if(value_offset >= 0) {
-    const ir_value_t *roff = value_get(iu, value_offset);
-    regoff = jit_loadvalue(iu, roff, R_TMPB, jc);
+  if(value_offset.value >= 0) {
+    regoff = jit_loadvalue(iu, value_offset, R_TMPB, jc);
     shift = ffs(value_offset_multiply) - 1;
 
     if((1 << shift) != value_offset_multiply) {
@@ -645,9 +628,7 @@ jit_compute_ea(ir_unit_t *iu, int baseptr, int value_offset,
       shift = 0;
     }
   }
-  const ir_value_t *src = value_get(iu, baseptr);
-
-  int ea = jit_loadvalue(iu, src, preferred_reg, jc);
+  int ea = jit_loadvalue(iu, baseptr, preferred_reg, jc);
 
   if(regoff != -1) {
     jit_pushal(iu, (1 << 23) | (ea << 16) | (preferred_reg << 12) |
@@ -669,12 +650,10 @@ jit_compute_ea(ir_unit_t *iu, int baseptr, int value_offset,
 static void
 jit_lea(ir_unit_t *iu, ir_instr_lea_t *ii, jitctx_t *jc)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-
-  int ea = jit_compute_ea(iu, ii->baseptr, ii->value_offset,
-                          ii->value_offset_multiply, ii->immediate_offset,
-                          R_TMPA, jc);
-  jit_storevalue(iu, ret, ea);
+  jit_storevalue(iu, ii->super.ii_ret,
+                 jit_compute_ea(iu, ii->baseptr, ii->value_offset,
+                                ii->value_offset_multiply, ii->immediate_offset,
+                                R_TMPA, jc));
 }
 
 
@@ -688,15 +667,14 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
                           ii->value_offset_multiply, ii->immediate_offset,
                           R_TMPA, jc);
 
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  int Rt = jit_storevalue_reg(iu, ret, R_TMPA);
+  int Rt = jit_storevalue_reg(iu, ii->super.ii_ret, R_TMPA);
 
   if(ii->cast != -1) {
     // Load + Cast
     ir_type_t *pointee = type_get(iu, ii->load_type);
-    ir_type_t *retty = type_get(iu, ret->iv_type);
+    ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
 
-    switch(COMBINE3(retty->it_code, pointee->it_code, ii->cast)) {
+    switch(COMBINE3(legalize_type(retty), legalize_type(pointee), ii->cast)) {
     case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT8, CAST_ZEXT):
       // LDRB
       jit_pushal(iu, (1 << 26) | (1 << 25) | (1 << 24) | (1 << 23) |
@@ -723,9 +701,9 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
     }
   } else {
 
-    ir_type_t *pointee = type_get(iu, ret->iv_type);
+    ir_type_t *pointee = type_get(iu,  ii->super.ii_ret.type);
 
-    switch(pointee->it_code) {
+    switch(legalize_type(pointee)) {
     default:
       abort();
     case IR_TYPE_INT32:
@@ -748,7 +726,7 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
       break;
     }
   }
-  jit_storevalue(iu, ret, Rt);
+  jit_storevalue(iu, ii->super.ii_ret, Rt);
 }
 
 
@@ -758,10 +736,9 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
 static int
 jit_store_check(ir_unit_t *iu, ir_instr_store_t *ii)
 {
-  const ir_value_t *iv = value_get(iu, ii->value);
-  const ir_type_t *ty = type_get(iu, iv->iv_type);
+  const ir_type_t *ty = type_get(iu, ii->value.type);
 
-  switch(ty->it_code) {
+  switch(legalize_type(ty)) {
   case IR_TYPE_INT8:
   case IR_TYPE_INT16:
   case IR_TYPE_INT32:
@@ -781,20 +758,16 @@ jit_store_check(ir_unit_t *iu, ir_instr_store_t *ii)
 static void
 jit_store(ir_unit_t *iu, ir_instr_store_t *ii, jitctx_t *jc)
 {
-  const ir_value_t *ptr = value_get(iu, ii->ptr);
-
-  int ea = jit_loadvalue(iu, ptr, R_TMPA, jc);
+  int ea = jit_loadvalue(iu, ii->ptr, R_TMPA, jc);
 
   if(ii->offset) {
     jit_push_add_imm(iu, R_TMPA, ea, ii->offset, R_TMPB, jc);
     ea = R_TMPA;
   }
 
-  const ir_value_t *val = value_get(iu, ii->value);
-  ir_type_t *ty = type_get(iu, val->iv_type);
-  int Rt = jit_loadvalue(iu, val, R_TMPB, jc);
+  int Rt = jit_loadvalue(iu, ii->value, R_TMPB, jc);
 
-  switch(ty->it_code) {
+  switch(legalize_type(type_get(iu, ii->value.type))) {
   default:
     abort();
   case IR_TYPE_INT32:
@@ -826,8 +799,7 @@ jit_store(ir_unit_t *iu, ir_instr_store_t *ii, jitctx_t *jc)
 static int
 jit_mla_check(ir_unit_t *iu, ir_instr_ternary_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  int typecode = type_get(iu, ret->iv_type)->it_code;
+  int typecode = legalize_type(type_get(iu, ii->super.ii_ret.type));
 
   switch(typecode) {
   case IR_TYPE_INT8:
@@ -848,25 +820,20 @@ jit_mla_check(ir_unit_t *iu, ir_instr_ternary_t *ii)
 static void
 jit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii, jitctx_t *jc)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const ir_value_t *a1 = value_get(iu, ii->arg1);
-  const ir_value_t *a2 = value_get(iu, ii->arg2);
-  const ir_value_t *a3 = value_get(iu, ii->arg3);
-
-  int Rd = jit_storevalue_reg(iu, ret, R_TMPA);
-  int Rn = jit_loadvalue(iu, a1, R_TMPA, jc);
-  int Rm = jit_loadvalue(iu, a2, R_TMPB, jc);
+  int Rd = jit_storevalue_reg(iu, ii->super.ii_ret, R_TMPA);
+  int Rn = jit_loadvalue(iu, ii->arg1, R_TMPA, jc);
+  int Rm = jit_loadvalue(iu, ii->arg2, R_TMPB, jc);
   int Ra;
   if(Rn != R_TMPA) {
-    Ra = jit_loadvalue(iu, a3, R_TMPA, jc);
+    Ra = jit_loadvalue(iu, ii->arg3, R_TMPA, jc);
   } else if(Rm != R_TMPB) {
-    Ra = jit_loadvalue(iu, a3, R_TMPB, jc);
+    Ra = jit_loadvalue(iu, ii->arg3, R_TMPB, jc);
   }else {
-    Ra = jit_loadvalue(iu, a3, R_TMPC, jc);
+    Ra = jit_loadvalue(iu, ii->arg3, R_TMPC, jc);
   }
 
   jit_pushal(iu, (1 << 21) | (Rd << 16) | (Ra << 12) | (Rm << 8) | 0x90 | Rn);
-  jit_storevalue(iu, ret, Rd);
+  jit_storevalue(iu, ii->super.ii_ret, Rd);
 }
 
 
@@ -877,7 +844,7 @@ static int
 jit_br_check(ir_unit_t *iu, ir_instr_br_t *ii)
 {
   // We can JIT unconditional branches
-  return ii->condition == -1;
+  return ii->condition.value == -1;
 }
 
 
@@ -910,12 +877,9 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
 static int
 jit_cmp_branch_check(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 {
-  const ir_value_t *iv = value_get(iu, ii->lhs_value);
-  int typecode = type_get(iu, iv->iv_type)->it_code;
+  int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
 
   switch(typecode) {
-    //  case IR_TYPE_INT8:
-    //  case IR_TYPE_INT16:
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
     break;
@@ -934,13 +898,11 @@ jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
 {
   int ptr1 = 0;
   int ptr2 = 0;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value);
   ir_bb_t *ib;
   ir_instr_t *tgt;
 
-  int Rn = jit_loadvalue(iu, lhs, R_TMPA, jc);
-  int Rm = jit_loadvalue(iu, rhs, R_TMPB, jc);
+  int Rn = jit_loadvalue(iu, ii->lhs_value, R_TMPA, jc);
+  int Rm = jit_loadvalue(iu, ii->rhs_value, R_TMPB, jc);
   jit_pushal(iu, (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | Rm);
 
   int cond;
@@ -998,10 +960,8 @@ jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
 static int
 jit_cast_check(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
-  const ir_value_t *src = value_get(iu, ii->value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const int srccode = type_get(iu, src->iv_type)->it_code;
-  const int dstcode = type_get(iu, ret->iv_type)->it_code;
+  const int srccode = legalize_type(type_get(iu, ii->value.type));
+  const int dstcode = legalize_type(type_get(iu, ii->super.ii_ret.type));
   const int castop = ii->op;
 
   switch(COMBINE3(dstcode, castop, srccode)) {
@@ -1024,14 +984,13 @@ jit_cast_check(ir_unit_t *iu, ir_instr_unary_t *ii)
 static void
 jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
 {
-  const ir_value_t *src = value_get(iu, ii->value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret_value);
-  const int srccode = type_get(iu, src->iv_type)->it_code;
-  const int dstcode = type_get(iu, ret->iv_type)->it_code;
+  const int srccode = legalize_type(type_get(iu, ii->value.type));
+  const int dstcode = legalize_type(type_get(iu, ii->super.ii_ret.type));
   const int castop = ii->op;
 
-  int Rd = jit_storevalue_reg(iu, ret, R_TMPA);
-  int Rm = jit_loadvalue(iu, src, R_TMPA, jc);
+  int Rd = jit_storevalue_reg(iu, ii->super.ii_ret, R_TMPA);
+  int Rm = jit_loadvalue(iu, ii->value, R_TMPA, jc);
+
   switch(COMBINE3(dstcode, castop, srccode)) {
   case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT32):
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT8):
@@ -1040,20 +999,18 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
              (1 << 23) | (1 << 22) | (1 << 21) | 0xf0070 |
              (Rd << 12) | Rm);
     break;
-    
+
   case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT8):
-
-
   case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
   case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
-    jit_storevalue(iu, ret, Rm);
+    jit_storevalue(iu, ii->super.ii_ret, Rm);
     return;
 
   default:
     abort();
   }
 
-  jit_storevalue(iu, ret, Rd);
+  jit_storevalue(iu, ii->super.ii_ret, Rd);
 }
 
 
@@ -1132,14 +1089,14 @@ jit_analyze_segment(ir_unit_t *iu, ir_instr_t *first, ir_instr_t *last)
   }
 #endif
   for(ii = first; ii != stop; ii = TAILQ_NEXT(ii, ii_link)) {
-    int r = ii->ii_ret_value;
+    int r = ii->ii_ret.value;
     if(r == -1)
       continue;
     r -= ffv;
     if(bitchk(liveout, r))
       continue; // Value is liveout
 
-    ir_value_t *iv = value_get(iu, ii->ii_ret_value);
+    ir_value_t *iv = value_get(iu, ii->ii_ret.value);
     assert(iv->iv_class == IR_VC_TEMPORARY);
     iv->iv_jit = 1;
 #if 0

@@ -374,6 +374,14 @@ typedef enum {
   IR_IC_MLA,
 } instr_class_t;
 
+/**
+ *
+ */
+typedef struct ir_valuetype {
+  int value;
+  int type;
+} ir_valuetype_t;
+
 
 /**
  *
@@ -381,11 +389,10 @@ typedef enum {
 typedef struct ir_instr {
   TAILQ_ENTRY(ir_instr) ii_link;
   struct ir_bb *ii_bb;
-  int *ii_ret_values;
+  ir_valuetype_t *ii_rets;
   struct ir_value_instr_list ii_values;
   instr_class_t ii_class;
-  int ii_ret_value;  // -1 if instruction does not emit a new value
-
+  ir_valuetype_t ii_ret;
 
   uint32_t *ii_liveness; /* Points to three consecutive bitfields used for
                           * during liveness analysis.

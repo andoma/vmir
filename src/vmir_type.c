@@ -384,9 +384,8 @@ type_sizeof(ir_unit_t *iu, int index)
  *
  */
 static unsigned int
-type_bitwidth(ir_unit_t *iu, int index)
+type_bitwidth(ir_unit_t *iu, const ir_type_t *it)
 {
-  ir_type_t *it = type_get(iu, index);
   switch(it->it_code) {
   case IR_TYPE_VOID:
     return 0;
@@ -610,4 +609,24 @@ type_print_list(ir_unit_t *iu)
   for(int i = 0; i < VECTOR_LEN(&iu->iu_types); i++) {
     printf("Type-%-5d  %s\n", i, type_str_index(iu, i));
   }
+}
+
+
+/**
+ *
+ */
+static int
+legalize_type(const ir_type_t *ty)
+{
+  if(ty->it_code == IR_TYPE_INTx) {
+    if(ty->it_bits <= 8)
+      return IR_TYPE_INT8;
+    else if(ty->it_bits <= 16)
+      return IR_TYPE_INT16;
+    else if(ty->it_bits <= 32)
+      return IR_TYPE_INT32;
+    else if(ty->it_bits <= 64)
+      return IR_TYPE_INT64;
+  }
+  return ty->it_code;
 }

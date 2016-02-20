@@ -29,9 +29,9 @@ static void liveness_set_succ(ir_function_t *f, ir_instr_t *ii);
  *
  */
 static void
-registerify(ir_unit_t *iu, ir_instr_t *ii, int *vp)
+registerify(ir_unit_t *iu, ir_instr_t *ii, ir_valuetype_t *vtp)
 {
-  ir_value_t *v = value_get(iu, *vp);
+  ir_value_t *v = value_get(iu, vtp->value);
   ir_instr_move_t *move;
 
   switch(v->iv_class) {
@@ -43,8 +43,8 @@ registerify(ir_unit_t *iu, ir_instr_t *ii, int *vp)
   case IR_VC_CONSTANT:
     move = instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, ii);
     value_alloc_instr_ret(iu, v->iv_type, &move->super);
-    move->value = *vp;
-    *vp = move->super.ii_ret_value;
+    move->value = *vtp;
+    *vtp = move->super.ii_ret;
     break;
 
   default:
@@ -57,9 +57,9 @@ registerify(ir_unit_t *iu, ir_instr_t *ii, int *vp)
 /**
  *
  */
-static int
-emit_interim_lea(ir_unit_t *iu, int baseptr,
-                 int value_offset, int value_offset_multiply,
+static ir_valuetype_t
+emit_interim_lea(ir_unit_t *iu, ir_valuetype_t baseptr,
+                 ir_valuetype_t value_offset, int value_offset_multiply,
                  ir_instr_gep_t *gep, int type)
 {
   type = type_make_pointer(iu, type, 1);
@@ -75,7 +75,7 @@ emit_interim_lea(ir_unit_t *iu, int baseptr,
   lea->immediate_offset = 0;
   lea->value_offset = value_offset;
   lea->value_offset_multiply = value_offset_multiply;
-  return lea->super.ii_ret_value;
+  return lea->super.ii_ret;
 }
 
 
@@ -86,15 +86,15 @@ static ir_instr_t *
 replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
 {
   int immediate_offset = 0;
-  int value_offset = -1;
+  ir_valuetype_t value_offset = {-1, -1};
   int value_offset_multiply = 0;
 
-  int baseptr = ii->baseptr;
+  ir_valuetype_t baseptr = ii->baseptr;
 
   for(int j = 0; j < ii->num_indicies; j++) {
     int curtype = ii->indicies[j].type;
     const ir_type_t *cur = type_get(iu, curtype);
-    const ir_value_t *op = value_get(iu, ii->indicies[j].value);
+    const ir_value_t *op = value_get(iu, ii->indicies[j].value.value);
     int x;
 
     switch(cur->it_code) {
@@ -109,7 +109,7 @@ replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
       case IR_VC_TEMPORARY:
       case IR_VC_REGFRAME:
 
-        if(value_offset != -1)
+        if(value_offset.value != -1)
           abort();
 
         value_offset = ii->indicies[j].value;
@@ -148,7 +148,7 @@ replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
       case IR_VC_TEMPORARY:
       case IR_VC_REGFRAME:
 
-        if(value_offset != -1) {
+        if(value_offset.value != -1) {
           baseptr = emit_interim_lea(iu, baseptr,
                                      value_offset, value_offset_multiply,
                                      ii, curtype);
@@ -174,7 +174,7 @@ replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
   ir_instr_lea_t *lea =
     instr_add_before(sizeof(ir_instr_lea_t), IR_IC_LEA, &ii->super);
 
-  lea->super.ii_ret_value = ii->super.ii_ret_value;
+  lea->super.ii_ret = ii->super.ii_ret;
   value_bind_return_value(iu, &lea->super);
 
   lea->baseptr = baseptr;
@@ -195,10 +195,10 @@ replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
 static void
 merge_lea_into_store(ir_unit_t *iu, ir_instr_store_t *ii)
 {
-  ir_value_t *ptr = value_get(iu, ii->ptr);
+  ir_value_t *ptr = value_get(iu, ii->ptr.value);
   ir_instr_t *a = value_get_assigning_instr(iu, ptr);
   ir_instr_lea_t *lea = instr_isa(a, IR_IC_LEA);
-  if(lea == NULL || lea->value_offset != -1)
+  if(lea == NULL || lea->value_offset.value != -1)
     return;
 
   ii->offset += lea->immediate_offset;
@@ -212,7 +212,7 @@ merge_lea_into_store(ir_unit_t *iu, ir_instr_store_t *ii)
 static void
 merge_lea_into_load(ir_unit_t *iu, ir_instr_load_t *ii)
 {
-  ir_value_t *ptr = value_get(iu, ii->ptr);
+  ir_value_t *ptr = value_get(iu, ii->ptr.value);
   ir_instr_t *a = value_get_assigning_instr(iu, ptr);
   ir_instr_lea_t *lea = instr_isa(a, IR_IC_LEA);
   if(lea == NULL)
@@ -226,7 +226,7 @@ merge_lea_into_load(ir_unit_t *iu, ir_instr_load_t *ii)
   }
 
   ii->immediate_offset += lea->immediate_offset;
-  assert(ii->value_offset < 0);
+  assert(ii->value_offset.value < 0);
   ii->value_offset = lea->value_offset;
   ii->value_offset_multiply = lea->value_offset_multiply;
   ii->ptr = lea->baseptr;
@@ -247,7 +247,7 @@ replace_single_path_phi(ir_unit_t *iu, ir_instr_phi_t *ii)
   ir_instr_move_t *move =
     instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, &ii->super);
 
-  move->super.ii_ret_value = ii->super.ii_ret_value;
+  move->super.ii_ret = ii->super.ii_ret;
   value_bind_return_value(iu, &move->super);
 
   move->value = ii->nodes[0].value;
@@ -264,7 +264,7 @@ static ir_instr_t *
 replace_call_with_intrinsic(ir_unit_t *iu, ir_instr_call_t *ii,
                             ir_function_t *self)
 {
-  ir_function_t *f = value_function(iu, ii->callee);
+  ir_function_t *f = value_function(iu, ii->callee.value);
   if(f == NULL)
     return &ii->super;
 
@@ -336,8 +336,8 @@ static void
 binop_transform_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
   if(ii->op == CAST_BITCAST) {
-    ir_type_t *srcty = type_get(iu, value_get_type(iu, ii->value));
-    ir_type_t *dstty = type_get(iu, value_get_type(iu, ii->super.ii_ret_value));
+    ir_type_t *srcty = type_get(iu, ii->value.type);
+    ir_type_t *dstty = type_get(iu, ii->super.ii_ret.type);
 
     if(srcty->it_code == IR_TYPE_POINTER && dstty->it_code == IR_TYPE_POINTER)
       ii->super.ii_class = IR_IC_MOVE;
@@ -381,7 +381,7 @@ instr_verify_output(ir_unit_t *iu, ir_instr_t *ii)
 {
   ir_value_instr_t *ivi = LIST_FIRST(&ii->ii_values);
 
-  if(ii->ii_ret_value != -1) {
+  if(ii->ii_ret.value != -1) {
     for(; ivi != NULL; ivi = LIST_NEXT(ivi, ivi_instr_link)) {
       if(ivi->ivi_relation == IVI_OUTPUT) {
         break;
@@ -409,11 +409,11 @@ instr_verify_output(ir_unit_t *iu, ir_instr_t *ii)
  *
  */
 static void
-instr_bind_input(ir_unit_t *iu, int value, ir_instr_t *ii)
+instr_bind_input(ir_unit_t *iu, ir_valuetype_t vt, ir_instr_t *ii)
 {
-  if(value == -1)
+  if(vt.value == -1)
     return;
-  ir_value_t *iv = value_get(iu, value);
+  ir_value_t *iv = value_get(iu, vt.value);
   if(iv->iv_class != IR_VC_TEMPORARY)
     return;
   value_bind_instr(iv, ii, IVI_INPUT);
@@ -443,7 +443,7 @@ function_bind_instr_inputs(ir_unit_t *iu, ir_function_t *f)
         break;
       case IR_IC_LOAD:
         instr_bind_input(iu, ((ir_instr_load_t *)ii)->ptr, ii);
-        if(((ir_instr_load_t *)ii)->value_offset >= 0)
+        if(((ir_instr_load_t *)ii)->value_offset.value >= 0)
           instr_bind_input(iu, ((ir_instr_load_t *)ii)->value_offset, ii);
         break;
 
@@ -527,13 +527,13 @@ eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
     ir_value_instr_t *ivi;
     for(ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue); ii != NULL; ii = iip) {
       iip = TAILQ_PREV(ii, ir_instr_queue, ii_link);
-      if(ii->ii_ret_value == -1 ||
+      if(ii->ii_ret.value == -1 ||
          ii->ii_class == IR_IC_VMOP ||
          ii->ii_class == IR_IC_VAARG ||
          ii->ii_class == IR_IC_CALL)
         continue;
 
-      ir_value_t *output = value_get(iu, ii->ii_ret_value);
+      ir_value_t *output = value_get(iu, ii->ii_ret.value);
 
       LIST_FOREACH(ivi, &output->iv_instructions, ivi_value_link) {
         if(ivi->ivi_relation == IVI_INPUT)
@@ -566,7 +566,7 @@ bb_change_branch(ir_bb_t *from, ir_bb_t *to, ir_bb_t *nb, ir_function_t *f)
       if(b->true_branch == to->ib_id)
         b->true_branch = nb->ib_id;
 
-      if(b->condition != -1) {
+      if(b->condition.value != -1) {
         if(b->false_branch == to->ib_id)
           b->false_branch = nb->ib_id;
       }
@@ -619,7 +619,7 @@ typedef struct phi_lift_node {
   LIST_ENTRY(phi_lift_node) pln_link;
   struct phi_lift_edge_list pln_src;
   struct phi_lift_edge *pln_dst;
-  int pln_value;
+  ir_valuetype_t pln_vt;
 } phi_lift_node_t;
 
 
@@ -640,7 +640,7 @@ phi_lift_node_find(struct phi_lift_node_list *nodes, int value)
 {
   phi_lift_node_t *pln;
   LIST_FOREACH(pln, nodes, pln_link)
-    if(pln->pln_value == value)
+    if(pln->pln_vt.value == value)
       return pln;
   return NULL;
 }
@@ -651,14 +651,29 @@ phi_lift_node_find(struct phi_lift_node_list *nodes, int value)
  */
 static void
 phi_lift_node_init(struct phi_lift_node_list *nodes, phi_lift_node_t *pln,
-                   int value)
+                   ir_valuetype_t vt)
 {
-  pln->pln_value = value;
+  pln->pln_vt = vt;
   LIST_INSERT_HEAD(nodes, pln, pln_link);
   LIST_INIT(&pln->pln_src);
   pln->pln_dst = NULL;
 }
 
+
+/**
+ *
+ */
+static void
+insert_move(ir_unit_t *iu, ir_valuetype_t to, ir_valuetype_t from,
+            ir_instr_t *before)
+{
+  ir_instr_move_t *m =
+    instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, before);
+  m->super.ii_ret = to;
+  m->value = from;
+  value_bind_return_value(iu, &m->super);
+  instr_bind_input(iu, m->value, &m->super);
+}
 
 /**
  *
@@ -687,16 +702,16 @@ exit_ssa_edge(ir_unit_t *iu, ir_function_t *f, ir_bb_t *bb,
       if(iip->nodes[i].predecessor != predecessor)
         continue;
 
-      if(iip->super.ii_ret_value == iip->nodes[i].value)
+      if(iip->super.ii_ret.value == iip->nodes[i].value.value)
         continue;
 
-      dst = phi_lift_node_find(&nodes, iip->super.ii_ret_value);
+      dst = phi_lift_node_find(&nodes, iip->super.ii_ret.value);
       if(dst == NULL) {
         dst = alloca(sizeof(phi_lift_node_t));
-        phi_lift_node_init(&nodes, dst, iip->super.ii_ret_value);
+        phi_lift_node_init(&nodes, dst, iip->super.ii_ret);
       }
 
-      src = phi_lift_node_find(&nodes, iip->nodes[i].value);
+      src = phi_lift_node_find(&nodes, iip->nodes[i].value.value);
       if(src == NULL) {
         src = alloca(sizeof(phi_lift_node_t));
         phi_lift_node_init(&nodes, src, iip->nodes[i].value);
@@ -728,14 +743,7 @@ exit_ssa_edge(ir_unit_t *iu, ir_function_t *f, ir_bb_t *bb,
       if(LIST_FIRST(&ple->ple_dst->pln_src) != NULL)
         continue;
 
-      ir_instr_move_t *m =
-        instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, last);
-      m->super.ii_ret_value = ple->ple_dst->pln_value;
-      m->value = ple->ple_src->pln_value;
-
-      value_bind_return_value(iu, &m->super);
-      instr_bind_input(iu, m->value, &m->super);
-
+      insert_move(iu, ple->ple_dst->pln_vt, ple->ple_src->pln_vt, last);
 
       progress = 1;
       LIST_REMOVE(ple, ple_link);
@@ -760,13 +768,8 @@ exit_ssa_edge(ir_unit_t *iu, ir_function_t *f, ir_bb_t *bb,
       break;
     // Add a move to temporary register to resolve cycle
 
-    ir_value_t *b = value_get(iu, start->pln_value);
-    ir_instr_move_t *tmp_move =
-      instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, last);
-    tmp_move->super.ii_ret_value = value_alloc_temporary(iu, b->iv_type);
-    tmp_move->value = start->pln_value;
-    value_bind_return_value(iu, &tmp_move->super);
-    instr_bind_input(iu, tmp_move->value, &tmp_move->super);
+    ir_valuetype_t tmpreg = value_alloc_temporary(iu, start->pln_vt.type);
+    insert_move(iu, tmpreg, start->pln_vt, last);
 
     phi_lift_node_t *cur = start;
     while(1) {
@@ -774,23 +777,12 @@ exit_ssa_edge(ir_unit_t *iu, ir_function_t *f, ir_bb_t *bb,
       if(src == start)
         break;
 
-      ir_instr_move_t *m =
-        instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, last);
-      m->super.ii_ret_value = cur->pln_value;
-      m->value = src->pln_value;
-      value_bind_return_value(iu, &m->super);
-      instr_bind_input(iu, m->value, &m->super);
-
+      insert_move(iu, cur->pln_vt, src->pln_vt, last);
       LIST_REMOVE(cur, pln_link);
       cur = src;
     }
 
-    ir_instr_move_t *m =
-      instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, last);
-    m->super.ii_ret_value = cur->pln_value;
-    m->value = tmp_move->super.ii_ret_value;
-    value_bind_return_value(iu, &m->super);
-    instr_bind_input(iu, m->value, &m->super);
+    insert_move(iu, cur->pln_vt, tmpreg, last);
     LIST_REMOVE(cur, pln_link);
   }
 }
@@ -843,7 +835,7 @@ remove_empty_bb(ir_unit_t *iu, ir_function_t *f)
 
     ir_instr_br_t *b = (ir_instr_br_t *)ii;
     ir_bb_edge_t *ibe, *n;
-    if(b->condition != -1)
+    if(b->condition.value != -1)
       continue;
 
     nb = bb_find(f, b->true_branch);
@@ -919,7 +911,7 @@ construct_cfg(ir_function_t *f)
       {
         ir_instr_br_t *b = (ir_instr_br_t *)ii;
         cfg_add_edge(f, bb, b->true_branch, 1);
-        if(b->condition != -1)
+        if(b->condition.value != -1)
           cfg_add_edge(f, bb, b->false_branch, 1);
       }
       break;
@@ -955,7 +947,7 @@ break_critical_edge(ir_function_t *f, ir_bb_edge_t *ibe)
 
   // Add a single branch instruction to new basic block
   ir_instr_br_t *br = instr_add(nb, sizeof(ir_instr_br_t), IR_IC_BR);
-  br->condition = -1;
+  br->condition.value = -1;
   br->true_branch = to->ib_id;
 
   // Hook up existing edge to new bb
@@ -1065,12 +1057,12 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
       ir_instr_br_t *b = (ir_instr_br_t *)ii;
 
       ii->ii_num_succ = 1;
-      if(b->condition != -1)
+      if(b->condition.value != -1)
         ii->ii_num_succ = 2;
 
       ii->ii_succ = malloc(sizeof(ir_bb_t *) * ii->ii_num_succ);
       ii->ii_succ[0] = bb_find(f, b->true_branch);
-      if(b->condition != -1)
+      if(b->condition.value != -1)
         ii->ii_succ[1] = bb_find(f, b->false_branch);
     }
     break;
@@ -1093,8 +1085,9 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
 }
 
 static void
-liveness_set_value(uint32_t *bs, ir_unit_t *iu, int value)
+liveness_set_value(uint32_t *bs, ir_unit_t *iu, ir_valuetype_t vt)
 {
+  int value = vt.value;
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, value);
   if(iv->iv_class != IR_VC_TEMPORARY)
     return;
@@ -1114,7 +1107,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     break;
 
   case IR_IC_RET:
-    if(((ir_instr_unary_t *)ii)->value != -1)
+    if(((ir_instr_unary_t *)ii)->value.value != -1)
       liveness_set_value(bs, iu, ((ir_instr_unary_t *)ii)->value);
     break;
 
@@ -1124,7 +1117,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     break;
   case IR_IC_LOAD:
     liveness_set_value(bs, iu, ((ir_instr_load_t *)ii)->ptr);
-    if(((ir_instr_load_t *)ii)->value_offset >= 0)
+    if(((ir_instr_load_t *)ii)->value_offset.value >= 0)
       liveness_set_value(bs, iu, ((ir_instr_load_t *)ii)->value_offset);
     break;
 
@@ -1142,7 +1135,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     liveness_set_value(bs, iu, ((ir_instr_store_t *)ii)->ptr);
     break;
   case IR_IC_BR:
-    if(((ir_instr_br_t *)ii)->condition != -1)
+    if(((ir_instr_br_t *)ii)->condition.value != -1)
       liveness_set_value(bs, iu, ((ir_instr_br_t *)ii)->condition);
     break;
   case IR_IC_ALLOCA:
@@ -1157,7 +1150,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     {
       ir_instr_lea_t *lea = (ir_instr_lea_t *)ii;
       liveness_set_value(bs, iu, lea->baseptr);
-      if(lea->value_offset != -1)
+      if(lea->value_offset.value != -1)
         liveness_set_value(bs, iu, lea->value_offset);
     }
     break;
@@ -1207,10 +1200,10 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
  *
  */
 static void
-instr_replace_value(ir_unit_t *iu, int *p, int from, int to)
+instr_replace_value(ir_unit_t *iu, ir_valuetype_t *vtp, int from, int to)
 {
-  if(*p == from)
-    *p = to;
+  if(vtp->value == from)
+    vtp->value = to;
 }
 
 
@@ -1220,12 +1213,12 @@ instr_replace_value(ir_unit_t *iu, int *p, int from, int to)
 static void
 instr_replace_values(ir_instr_t *ii, ir_unit_t *iu, int from, int to)
 {
-  if(ii->ii_ret_value < -1) {
-    for(int i = 0; i < -ii->ii_ret_value; i++) {
-      instr_replace_value(iu, &ii->ii_ret_values[i], from, to);
+  if(ii->ii_ret.value < -1) {
+    for(int i = 0; i < -ii->ii_ret.value; i++) {
+      instr_replace_value(iu, &ii->ii_rets[i], from, to);
     }
   } else {
-    instr_replace_value(iu, &ii->ii_ret_value, from, to);
+    instr_replace_value(iu, &ii->ii_ret, from, to);
   }
 
   switch(ii->ii_class) {
@@ -1596,13 +1589,13 @@ liveness_update(ir_function_t *f, int setwords, int ffv)
         }
 
         memcpy(new_in, o, setwords * sizeof(uint32_t));
-        if(ii->ii_ret_value < -1) {
+        if(ii->ii_ret.value < -1) {
           // Multiple return values
-          for(int j = 0; j < -ii->ii_ret_value; j++) {
-            bitclr(new_in, ii->ii_ret_values[j] - ffv);
+          for(int j = 0; j < -ii->ii_ret.value; j++) {
+            bitclr(new_in, ii->ii_rets[j].value - ffv);
           }
-        } else if(ii->ii_ret_value >= 0) {
-          bitclr(new_in, ii->ii_ret_value - ffv);
+        } else if(ii->ii_ret.value >= 0) {
+          bitclr(new_in, ii->ii_ret.value - ffv);
         }
 
         uint32_t       *out = ii->ii_liveness;
@@ -1671,27 +1664,27 @@ coalesce(ir_unit_t *iu,
    */
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      if(ii->ii_ret_value == -1)
+      if(ii->ii_ret.value == -1)
         continue;
 
       int num_ret_values;
-      const int *ret_values;
-      if(ii->ii_ret_value < -1) {
-        ret_values = ii->ii_ret_values;
-        num_ret_values = -ii->ii_ret_value;
+      const ir_valuetype_t *ret_values;
+      if(ii->ii_ret.value < -1) {
+        ret_values = ii->ii_rets;
+        num_ret_values = -ii->ii_ret.value;
       } else {
-        ret_values = &ii->ii_ret_value;
+        ret_values = &ii->ii_ret;
         num_ret_values = 1;
       }
       int v = -1;
 
       if(ii->ii_class == IR_IC_MOVE)
-        v = ((ir_instr_move_t *)ii)->value - ffv;
+        v = ((ir_instr_move_t *)ii)->value.value - ffv;
 
       const uint32_t *out = ii->ii_liveness;
 
       for(int a = 0; a < num_ret_values; a++) {
-        int x = ret_values[a];
+        int x = ret_values[a].value;
         ir_value_t *xval = value_get(iu, x);
         x-= ffv;
         int edges = 0;
@@ -1727,14 +1720,14 @@ coalesce(ir_unit_t *iu,
       iin = TAILQ_NEXT(ii, ii_link);
 
       if(ii->ii_class == IR_IC_MOVE) {
-        unsigned int v = ((ir_instr_move_t *)ii)->value;
+        unsigned int v = ((ir_instr_move_t *)ii)->value.value;
         if(v < ffv)
           continue;
         ir_value_t *src = VECTOR_ITEM(&iu->iu_values, v);
         if(src->iv_class != IR_VC_TEMPORARY)
           continue;
-        assert(ii->ii_ret_value >= 0);
-        ir_value_t *dst = VECTOR_ITEM(&iu->iu_values, ii->ii_ret_value);
+        assert(ii->ii_ret.value >= 0);
+        ir_value_t *dst = VECTOR_ITEM(&iu->iu_values, ii->ii_ret.value);
 
         if(dst == src) {
           /*
@@ -1752,7 +1745,7 @@ coalesce(ir_unit_t *iu,
 
         assert(dst->iv_class == IR_VC_TEMPORARY);
 
-        if(!tribitmtx_get(mtx, ii->ii_ret_value - ffv, v - ffv)) {
+        if(!tribitmtx_get(mtx, ii->ii_ret.value - ffv, v - ffv)) {
           ir_value_t *killed = src;
           ir_value_t *saved = dst;
 
@@ -1879,18 +1872,17 @@ prepare_call(ir_unit_t *iu, ir_function_t *f, ir_instr_call_t *ii)
   int callpos = 0;
   int stackgrowth = 0;
   for(int i = 0; i < ii->argc; i++) {
-    ir_value_t *a = value_get(iu, ii->argv[i].value);
-    int size = value_regframe_size(iu, a->iv_type);
+    int size = value_regframe_size(iu, ii->argv[i].value.type);
 
     callpos += size;
-    int ca_index = value_alloc_call_arg(iu, a->iv_type, -callpos);
+    ir_valuetype_t carg = value_alloc_call_arg(iu, ii->argv[i].value.type,
+                                               -callpos);
 
     if(ii->argv[i].copy_size) {
-      a = value_get(iu, ii->argv[i].value);
       ir_instr_stackcopy_t *stackcopy =
         instr_add_before(sizeof(ir_instr_stackcopy_t), IR_IC_STACKCOPY,
                          &ii->super);
-      stackcopy->super.ii_ret_value = ca_index;
+      stackcopy->super.ii_ret = carg;
       stackcopy->value = ii->argv[i].value;
       stackcopy->size = ii->argv[i].copy_size;
       stackgrowth += stackcopy->size;
@@ -1898,14 +1890,14 @@ prepare_call(ir_unit_t *iu, ir_function_t *f, ir_instr_call_t *ii)
     } else {
       ir_instr_move_t *move =
         instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, &ii->super);
-      move->super.ii_ret_value = ca_index;
+      move->super.ii_ret = carg;
       move->value = ii->argv[i].value;
     }
 
-    ii->argv[i].value = ca_index;
+    ii->argv[i].value = carg;
   }
 
-  ir_function_t *callee = value_function(iu, ii->callee);
+  ir_function_t *callee = value_function(iu, ii->callee.value);
   if(callee != NULL)
     callee->if_used = 1;
 
@@ -1913,7 +1905,7 @@ prepare_call(ir_unit_t *iu, ir_function_t *f, ir_instr_call_t *ii)
     ir_instr_stackshrink_t *ss =
       instr_add_after(sizeof(ir_instr_stackshrink_t), IR_IC_STACKSHRINK,
                       &ii->super);
-      ss->super.ii_ret_value = -1;
+      ss->super.ii_ret.value = -1;
       ss->size = stackgrowth;
   }
   return callpos;
@@ -1976,9 +1968,10 @@ value_alloc_registers(ir_unit_t *iu, ir_function_t *f, int call_arg_size)
  *
  */
 static ir_instr_t *
-combine_get_upstream_instruction(ir_unit_t *iu, int value, ir_instr_t *target)
+combine_get_upstream_instruction(ir_unit_t *iu, ir_valuetype_t vt,
+                                 ir_instr_t *target)
 {
-  ir_value_t *iv = value_get(iu, value);
+  ir_value_t *iv = value_get(iu, vt.value);
   if(iv->iv_class != IR_VC_TEMPORARY)
     return NULL;
 
@@ -2009,7 +2002,7 @@ static void
 combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
 {
   ir_instr_t *iip;
-  if(br->condition == -1)
+  if(br->condition.value == -1)
     return;
 
   iip = combine_get_upstream_instruction(iu, br->condition, &br->super);
@@ -2019,18 +2012,18 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   if(!(cmp->op >= ICMP_EQ && cmp->op <= ICMP_SLE))
     return;
 
-  ir_value_t *lhs = value_get(iu, cmp->lhs_value);
+  ir_value_t *lhs = value_get(iu, cmp->lhs_value.value);
   // This check could be relaxed if we do swapPred() in vm
   if(lhs->iv_class != IR_VC_TEMPORARY &&
      lhs->iv_class != IR_VC_REGFRAME)
     return;
-  ir_type_t *ty = type_get(iu, lhs->iv_type);
+  ir_type_t *ty = type_get(iu, cmp->lhs_value.type);
   if(!(ty->it_code == IR_TYPE_INT8 ||
        ty->it_code == IR_TYPE_INT32 ||
        ty->it_code == IR_TYPE_POINTER))
     return;
 
-  assert(iip->ii_ret_value == br->condition);
+  assert(iip->ii_ret.value == br->condition.value);
 
   ir_instr_cmp_branch_t *icb =
     instr_add_after(sizeof(ir_instr_cmp_branch_t), IR_IC_CMP_BRANCH,
@@ -2045,7 +2038,7 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   instr_bind_input(iu, cmp->lhs_value, &icb->super);
   instr_bind_input(iu, cmp->rhs_value, &icb->super);
 
-  value_get(iu, br->condition)->iv_class = IR_VC_DEAD;
+  value_get(iu, br->condition.value)->iv_class = IR_VC_DEAD;
 
   instr_destroy(&br->super);
   instr_destroy(iip);
@@ -2061,13 +2054,13 @@ combine_binop_add_mul(ir_unit_t *iu, ir_instr_binary_t *add,
                       ir_instr_binary_t *mul, int side)
 {
 
-  const ir_value_t *a1 = value_get(iu, mul->lhs_value);
-  const ir_type_t *ty = type_get(iu, a1->iv_type);
+  const ir_value_t *a1 = value_get(iu, mul->lhs_value.value);
+  const ir_type_t *ty = type_get(iu, mul->lhs_value.type);
   if(ty->it_code != IR_TYPE_INT32)
     return;
 
-  ir_value_t *a2 = value_get(iu, mul->rhs_value);
-  const int arg3 = side ? add->lhs_value : add->rhs_value;
+  ir_value_t *a2 = value_get(iu, mul->rhs_value.value);
+  const int arg3 = side ? add->lhs_value.value : add->rhs_value.value;
   ir_value_t *a3 = value_get(iu, arg3);
 
   assert(a1->iv_type == a2->iv_type);
@@ -2084,17 +2077,18 @@ combine_binop_add_mul(ir_unit_t *iu, ir_instr_binary_t *add,
     instr_add_after(sizeof(ir_instr_ternary_t), IR_IC_MLA,
                     &add->super);
 
-  mla->super.ii_ret_value = add->super.ii_ret_value;
+  mla->super.ii_ret = add->super.ii_ret;
   mla->arg1 = mul->lhs_value;
   mla->arg2 = mul->rhs_value;
-  mla->arg3 = arg3;
+  mla->arg3.value = arg3;
+  mla->arg3.type = mla->arg2.type;
 
   instr_bind_input(iu, mla->arg1, &mla->super);
   instr_bind_input(iu, mla->arg2, &mla->super);
   instr_bind_input(iu, mla->arg3, &mla->super);
   value_bind_return_value(iu, &mla->super);
 
-  value_get(iu, mul->super.ii_ret_value)->iv_class = IR_VC_DEAD;
+  value_get(iu, mul->super.ii_ret.value)->iv_class = IR_VC_DEAD;
 
   instr_destroy(&add->super);
   instr_destroy(&mul->super);
@@ -2141,14 +2135,14 @@ combine_binop_load_cast(ir_unit_t *iu, ir_instr_unary_t *cast,
   instr_print(iu, &cast->super, 1);
   printf("\n");
 #endif
-  ir_value_t *kill = value_get(iu, load->super.ii_ret_value);
+  ir_value_t *kill = value_get(iu, load->super.ii_ret.value);
   load->cast = cast->op;
   load->load_type = kill->iv_type;
-  load->super.ii_ret_value = cast->super.ii_ret_value;
+  load->super.ii_ret = cast->super.ii_ret;
 
   instr_bind_clear(&load->super);
   instr_bind_input(iu, load->ptr, &load->super);
-  if(load->value_offset >= 0)
+  if(load->value_offset.value >= 0)
     instr_bind_input(iu, load->value_offset, &load->super);
   value_bind_return_value(iu, &load->super);
 
@@ -2168,7 +2162,7 @@ combine_binop_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 
   if(ii->op != CAST_ZEXT && ii->op != CAST_SEXT)
     return;
-  ir_value_t *v = value_get(iu, ii->super.ii_ret_value);
+  ir_value_t *v = value_get(iu, ii->super.ii_ret.value);
   ir_type_t *ty = type_get(iu, v->iv_type);
   if(ty->it_code != IR_TYPE_INT32)
     return;
@@ -2176,7 +2170,7 @@ combine_binop_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
   u = combine_get_upstream_instruction(iu, ii->value, &ii->super);
   if(u != NULL && u->ii_class == IR_IC_LOAD) {
     ir_instr_load_t *load = (ir_instr_load_t *)u;
-    ir_value_t *ptr = value_get(iu, load->ptr);
+    ir_value_t *ptr = value_get(iu, load->ptr.value);
     if(ptr->iv_class != IR_VC_TEMPORARY &&
        ptr->iv_class != IR_VC_REGFRAME)
       return;
@@ -2227,7 +2221,7 @@ combine_instructions(ir_unit_t *iu, ir_function_t *f)
 static void
 registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
 {
-  const int *values = iv->iv_data;
+  const ir_valuetype_t *values = iv->iv_data;
   assert(num_values > 1);
 
   ir_value_instr_t *ivi;
@@ -2239,12 +2233,12 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
     switch(rel) {
     case IVI_OUTPUT:
       // Instructions writing to this value get a multiple return value array
-      ii->ii_ret_values = malloc(sizeof(int) * num_values);
-      memcpy(ii->ii_ret_values, values, sizeof(int) * num_values);
-      ii->ii_ret_value = -num_values;
+      ii->ii_rets = malloc(sizeof(ir_valuetype_t) * num_values);
+      memcpy(ii->ii_rets, values, sizeof(ir_valuetype_t) * num_values);
+      ii->ii_ret.value = -num_values;
 
       for(int i = 0; i < num_values; i++)
-        value_bind_instr(value_get(iu, values[i]), ii, IVI_OUTPUT);
+        value_bind_instr(value_get(iu, values[i].value), ii, IVI_OUTPUT);
       break;
 
     case IVI_INPUT:
@@ -2263,9 +2257,9 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
           }
 
           ii->ii_class = IR_IC_MOVE;
-          int v = values[iie->indicies[0]];
+          ir_valuetype_t v = values[iie->indicies[0]];
           ((ir_instr_move_t *)ii)->value = v;
-          value_bind_instr(value_get(iu, v), ii, IVI_INPUT);
+          value_bind_instr(value_get(iu, v.value), ii, IVI_INPUT);
         }
         break;
 
@@ -2281,39 +2275,6 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
 }
 
 /**
- *
- */
-static void
-legalize_casts(ir_unit_t *iu, ir_value_t *iv)
-{
-  ir_value_instr_t *ivi;
-  LIST_FOREACH(ivi, &iv->iv_instructions, ivi_value_link) {
-    ir_instr_t *ii = ivi->ivi_instr;
-    switch(ivi->ivi_relation) {
-    case IVI_OUTPUT:
-      switch(ii->ii_class) {
-      default:
-        break;
-      case IR_IC_CAST:
-        {
-          ir_instr_unary_t *iiu = (ir_instr_unary_t *)ii;
-          if(iiu->op == CAST_TRUNC) {
-            ir_value_t *src = value_get(iu, iiu->value);
-            if(src->iv_type == iv->iv_type) {
-              ii->ii_class = IR_IC_MOVE;
-            }
-          }
-        }
-        break;
-      }
-      break;
-    default:
-      break;
-    }
-  }
-}
-
-/**
  * This function transforms temporary values which the VM does not support
  */
 static void
@@ -2324,30 +2285,15 @@ legalize_values(ir_unit_t *iu, ir_function_t *f)
     if(iv->iv_class != IR_VC_TEMPORARY)
       continue;
     ir_type_t *ty = type_get(iu, iv->iv_type);
-    int *values;
+    ir_valuetype_t *values;
     int num_values;
     switch(ty->it_code) {
     default:
       continue;
 
-    case IR_TYPE_INTx:
-      if(ty->it_bits <= 8)
-        iv->iv_type = type_make(iu, IR_TYPE_INT8);
-      else if(ty->it_bits <= 16)
-        iv->iv_type = type_make(iu, IR_TYPE_INT16);
-      else if(ty->it_bits <= 32)
-        iv->iv_type = type_make(iu, IR_TYPE_INT32);
-      else if(ty->it_bits <= 64)
-        iv->iv_type = type_make(iu, IR_TYPE_INT64);
-      else
-        parser_error(iu, "Unable to legalize int%d -- too wide",
-                     ty->it_bits);
-      legalize_casts(iu, iv);
-      break;
-
     case IR_TYPE_STRUCT:
       num_values = ty->it_struct.num_elements;
-      iv->iv_data = values = malloc(sizeof(int) * num_values);
+      iv->iv_data = values = malloc(sizeof(ir_valuetype_t) * num_values);
       for(int j = 0; j < num_values; j++) {
         values[j] = value_alloc_temporary(iu, ty->it_struct.elements[j].type);
       }
