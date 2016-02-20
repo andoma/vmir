@@ -49,7 +49,6 @@ VMIR currently passes the gcc torture test suite on optimization level 0, 1 and 
 
 ### Missing features, known bugs
 
-* It only work on little endian machines.
 * The built-in libc is lacking a lot of functions and features. This is where most work needs to be done.
 * No support for vector types (Ie, code must be compiled with `-fno-vectorize -fno-slp-vectorize`).
 * Not all instructions classes / value types are JITed.
