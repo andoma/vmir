@@ -37,6 +37,33 @@
 #define ARM_COND_AL  0xe0000000
 
 
+
+
+/**
+ * Convert LLVM pred to ARM cond
+ */
+static uint32_t
+armcond(int pred)
+{
+  uint32_t cond;
+  switch(pred) {
+  case ICMP_EQ:   cond = ARM_COND_EQ;  break;
+  case ICMP_NE:   cond = ARM_COND_NE;  break;
+  case ICMP_UGT:  cond = ARM_COND_UGT; break;
+  case ICMP_UGE:  cond = ARM_COND_UGE; break;
+  case ICMP_ULT:  cond = ARM_COND_ULT; break;
+  case ICMP_ULE:  cond = ARM_COND_ULE; break;
+  case ICMP_SGT:  cond = ARM_COND_SGT; break;
+  case ICMP_SGE:  cond = ARM_COND_SGE; break;
+  case ICMP_SLT:  cond = ARM_COND_SLT; break;
+  case ICMP_SLE:  cond = ARM_COND_SLE; break;
+  default:
+    abort();
+  }
+  return cond;
+}
+
+
 /**
  * Registers
  */
@@ -828,11 +855,57 @@ jit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii, jitctx_t *jc)
 /**
  *
  */
+static void
+jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
+                            jitctx_t *jc)
+{
+  int ptr1 = 0;
+  int ptr2 = 0;
+  ir_bb_t *ib;
+  ir_instr_t *tgt;
+
+  const int cond = armcond(pred);
+
+  ib = bb_find(iu->iu_current_function, true_bb);
+  tgt = TAILQ_FIRST(&ib->ib_instrs);
+  if(tgt->ii_jit) {
+    // Jumping to another JITen instruction, emit a branch
+    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
+    jit_push(iu, cond | (1 << 27) | (1 << 25) | true_bb);
+  } else {
+    // Jumping to non-JITed instruction, emit return + jump to VM location
+    jit_loadimm_from_literal_pool_cond(iu, true_bb, 0, &ptr1, jc, cond);
+    jit_push(iu, cond | (0x8bd << 16) | (0x8DF0));
+  }
+
+  ib = bb_find(iu->iu_current_function, false_bb);
+  tgt = TAILQ_FIRST(&ib->ib_instrs);
+  if(tgt->ii_jit) {
+    // Jumping to another JITen instruction, emit a branch
+    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
+    jit_pushal(iu, (1 << 27) | (1 << 25) | false_bb);
+  } else {
+    // Jumping to non-JITed instruction, emit return + jump to VM location
+    jit_loadimm_from_literal_pool(iu, false_bb, 0, &ptr2, jc);
+    jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+  }
+
+  jit_push_literal_pool(iu, jc);
+  if(ptr1)
+    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr1);
+  if(ptr2)
+    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr2);
+}
+
+
+
+/**
+ *
+ */
 static int
 jit_br_check(ir_unit_t *iu, ir_instr_br_t *ii)
 {
-  // We can JIT unconditional branches
-  return ii->condition.value == -1;
+  return 1;
 }
 
 
@@ -842,6 +915,16 @@ jit_br_check(ir_unit_t *iu, ir_instr_br_t *ii)
 static void
 jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
 {
+  if(ii->condition.value != -1) {
+    int Rn = jit_loadvalue(iu, ii->condition, R_TMPA, jc);
+    // CMP immediate (check if equal to zero)
+    jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | 0);
+    // Jump to true if condition is not true (makes sure 0 == false, all else is true)
+    jit_emit_conditional_branch(iu, ii->true_branch,
+                                ii->false_branch, ICMP_NE, jc);
+    return;
+  }
+  // Unconditional branch
   ir_bb_t *ib = bb_find(iu->iu_current_function, ii->true_branch);
   ir_instr_t *tgt = TAILQ_FIRST(&ib->ib_instrs);
   if(tgt->ii_jit) {
@@ -877,30 +960,6 @@ jit_cmp_branch_check(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
   return 1;
 }
 
-
-/**
- *
- */
-static uint32_t
-armcond(int pred)
-{
-  uint32_t cond;
-  switch(pred) {
-  case ICMP_EQ:   cond = ARM_COND_EQ;  break;
-  case ICMP_NE:   cond = ARM_COND_NE;  break;
-  case ICMP_UGT:  cond = ARM_COND_UGT; break;
-  case ICMP_UGE:  cond = ARM_COND_UGE; break;
-  case ICMP_ULT:  cond = ARM_COND_ULT; break;
-  case ICMP_ULE:  cond = ARM_COND_ULE; break;
-  case ICMP_SGT:  cond = ARM_COND_SGT; break;
-  case ICMP_SGE:  cond = ARM_COND_SGE; break;
-  case ICMP_SLT:  cond = ARM_COND_SLT; break;
-  case ICMP_SLE:  cond = ARM_COND_SLE; break;
-  default:
-    abort();
-  }
-  return cond;
-}
 
 /**
  *
@@ -941,42 +1000,8 @@ jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
 {
   jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
 
-  int ptr1 = 0;
-  int ptr2 = 0;
-  ir_bb_t *ib;
-  ir_instr_t *tgt;
-
-  const int cond = armcond(ii->op);
-
-  ib = bb_find(iu->iu_current_function, ii->true_branch);
-  tgt = TAILQ_FIRST(&ib->ib_instrs);
-  if(tgt->ii_jit) {
-    // Jumping to another JITen instruction, emit a branch
-    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
-    jit_push(iu, cond | (1 << 27) | (1 << 25) | ii->true_branch);
-  } else {
-    // Jumping to non-JITed instruction, emit return + jump to VM location
-    jit_loadimm_from_literal_pool_cond(iu, ii->true_branch, 0, &ptr1, jc, cond);
-    jit_push(iu, cond | (0x8bd << 16) | (0x8DF0));
-  }
-
-  ib = bb_find(iu->iu_current_function, ii->false_branch);
-  tgt = TAILQ_FIRST(&ib->ib_instrs);
-  if(tgt->ii_jit) {
-    // Jumping to another JITen instruction, emit a branch
-    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
-    jit_pushal(iu, (1 << 27) | (1 << 25) | ii->false_branch);
-  } else {
-    // Jumping to non-JITed instruction, emit return + jump to VM location
-    jit_loadimm_from_literal_pool(iu, ii->false_branch, 0, &ptr2, jc);
-    jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
-  }
-
-  jit_push_literal_pool(iu, jc);
-  if(ptr1)
-    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr1);
-  if(ptr2)
-    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr2);
+  jit_emit_conditional_branch(iu, ii->true_branch,
+                              ii->false_branch, ii->op, jc);
 }
 
 
