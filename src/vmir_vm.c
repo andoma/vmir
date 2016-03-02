@@ -173,34 +173,6 @@ vm_vaarg64(void *rf, void **ptr)
 
 #ifdef VM_TRACE
 static void __attribute__((noinline))
-vm_wr_u8(void *rf, int16_t reg, uint8_t data)
-{
-  vm_printf("Reg 0x%x (u8) = 0x%x\n", reg, data);
-  *(uint32_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
-vm_wr_s8(void *rf, int16_t reg, int8_t data)
-{
-  vm_printf("Reg 0x%x (s8) = 0x%x\n", reg, data);
-  *(int32_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
-vm_wr_u16(void *rf, int16_t reg, uint16_t data)
-{
-  vm_printf("Reg 0x%x (u16) = 0x%x\n", reg, data);
-  *(uint32_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
-vm_wr_s16(void *rf, int16_t reg, int16_t data)
-{
-  vm_printf("Reg 0x%x (s16) = 0x%x\n", reg, data);
-  *(int32_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
 vm_wr_u32(void *rf, int16_t reg, uint32_t data)
 {
   vm_printf("Reg 0x%x (u32) = 0x%x\n", reg, data);
@@ -208,24 +180,10 @@ vm_wr_u32(void *rf, int16_t reg, uint32_t data)
 }
 
 static void __attribute__((noinline))
-vm_wr_s32(void *rf, int16_t reg, int32_t data)
-{
-  vm_printf("Reg 0x%x (s32) = 0x%x\n", reg, data);
-  *(int32_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
 vm_wr_u64(void *rf, int16_t reg, uint64_t data)
 {
   vm_printf("Reg 0x%x (u64) = 0x%"PRIx64"\n", reg, data);
   *(uint64_t *)(rf + reg) = data;
-}
-
-static void __attribute__((noinline))
-vm_wr_s64(void *rf, int16_t reg, int64_t data)
-{
-  vm_printf("Reg 0x%x (s8) = 0x%"PRIx64"\n", reg, data);
-  *(int64_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
@@ -380,14 +338,8 @@ vm_funcname(int callee, ir_unit_t *iu)
 
 #ifdef VM_TRACE
 
-#define AR8(reg, src)  vm_wr_u8(rf, I[reg], src)
-#define AS8(reg, src)  vm_wr_s8(rf, I[reg], src)
-#define AR16(reg, src) vm_wr_u16(rf, I[reg], src)
-#define AS16(reg, src) vm_wr_s16(rf, I[reg], src)
 #define AR32(reg, src) vm_wr_u32(rf, I[reg], src)
-#define AS32(reg, src) vm_wr_s32(rf, I[reg], src)
 #define AR64(reg, src) vm_wr_u64(rf, I[reg], src)
-#define AS64(reg, src) vm_wr_s64(rf, I[reg], src)
 #define AFLT(reg, src) vm_wr_flt(rf, I[reg], src)
 #define ADBL(reg, src) vm_wr_dbl(rf, I[reg], src)
 
@@ -426,16 +378,8 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define STORE32(ea, v)                 mem_wr32(HOSTADDR(ea), v)
 #define STORE64(ea, v)                 mem_wr64(HOSTADDR(ea), v)
 
-#define AR8(r, src)  R32(r) = (uint8_t)src
-#define AS8(r, src)  R32(r) = (int8_t)src
-#define AR16(r, src) R32(r) = (uint16_t)src
-#define AS16(r, src) R32(r) = (int16_t)src
 #define AR32(r, src) R32(r) = src
-#define AS32(r, src) S32(r) = src
-#define AR32_ACC(src) R32_ACC = src
-#define AS32_ACC(src) S32_ACC = src
 #define AR64(r, src) R64(r) = src
-#define AS64(r, src) S64(r) = src
 #define AFLT(r, src) RFLT(r) = src
 #define ADBL(r, src) RDBL(r) = src
 
@@ -627,74 +571,74 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(3);
 
 
-  VMOP(ADD_R8)  AR8(0,  R8(1) +  R8(2)); NEXT(3);
-  VMOP(SUB_R8)  AR8(0,  R8(1) -  R8(2)); NEXT(3);
-  VMOP(MUL_R8)  AR8(0,  R8(1) *  R8(2)); NEXT(3);
-  VMOP(UDIV_R8) AR8(0,  R8(1) /  R8(2)); NEXT(3);
-  VMOP(SDIV_R8) AS8(0,  S8(1) /  S8(2)); NEXT(3);
-  VMOP(UREM_R8) AR8(0,  R8(1) %  R8(2)); NEXT(3);
-  VMOP(SREM_R8) AS8(0,  S8(1) %  S8(2)); NEXT(3);
-  VMOP(SHL_R8)  AR8(0,  R8(1) << R8(2)); NEXT(3);
-  VMOP(LSHR_R8) AR8(0,  R8(1) >> R8(2)); NEXT(3);
-  VMOP(ASHR_R8) AS8(0,  S8(1) >> R8(2)); NEXT(3);
-  VMOP(AND_R8)  AR8(0,  R8(1) &  R8(2)); NEXT(3);
-  VMOP(OR_R8)   AR8(0,  R8(1) |  R8(2)); NEXT(3);
-  VMOP(XOR_R8)  AR8(0,  R8(1) ^  R8(2)); NEXT(3);
+  VMOP(ADD_R8)  AR32(0,  R8(1) +  R8(2)); NEXT(3);
+  VMOP(SUB_R8)  AR32(0,  R8(1) -  R8(2)); NEXT(3);
+  VMOP(MUL_R8)  AR32(0,  R8(1) *  R8(2)); NEXT(3);
+  VMOP(UDIV_R8) AR32(0,  R8(1) /  R8(2)); NEXT(3);
+  VMOP(SDIV_R8) AR32(0,  S8(1) /  S8(2)); NEXT(3);
+  VMOP(UREM_R8) AR32(0,  R8(1) %  R8(2)); NEXT(3);
+  VMOP(SREM_R8) AR32(0,  S8(1) %  S8(2)); NEXT(3);
+  VMOP(SHL_R8)  AR32(0,  R8(1) << R8(2)); NEXT(3);
+  VMOP(LSHR_R8) AR32(0,  R8(1) >> R8(2)); NEXT(3);
+  VMOP(ASHR_R8) AR32(0,  S8(1) >> R8(2)); NEXT(3);
+  VMOP(AND_R8)  AR32(0,  R8(1) &  R8(2)); NEXT(3);
+  VMOP(OR_R8)   AR32(0,  R8(1) |  R8(2)); NEXT(3);
+  VMOP(XOR_R8)  AR32(0,  R8(1) ^  R8(2)); NEXT(3);
 
-  VMOP(ADD_R8C)  AR8(0, R8(1) +  UIMM8(2)); NEXT(3);
-  VMOP(SUB_R8C)  AR8(0, R8(1) -  UIMM8(2)); NEXT(3);
-  VMOP(MUL_R8C)  AR8(0, R8(1) *  UIMM8(2)); NEXT(3);
-  VMOP(UDIV_R8C) AR8(0, R8(1) /  UIMM8(2)); NEXT(3);
-  VMOP(SDIV_R8C) AS8(0, S8(1) /  SIMM8(2)); NEXT(3);
-  VMOP(UREM_R8C) AR8(0, R8(1) %  UIMM8(2)); NEXT(3);
-  VMOP(SREM_R8C) AS8(0, S8(1) %  SIMM8(2)); NEXT(3);
-  VMOP(SHL_R8C)  AR8(0, R8(1) << UIMM8(2)); NEXT(3);
-  VMOP(LSHR_R8C) AR8(0, R8(1) >> UIMM8(2)); NEXT(3);
-  VMOP(ASHR_R8C) AS8(0, S8(1) >> UIMM8(2)); NEXT(3);
-  VMOP(AND_R8C)  AR8(0, R8(1) &  UIMM8(2)); NEXT(3);
-  VMOP(OR_R8C)   AR8(0, R8(1) |  UIMM8(2)); NEXT(3);
-  VMOP(XOR_R8C)  AR8(0, R8(1) ^  UIMM8(2)); NEXT(3);
+  VMOP(ADD_R8C)  AR32(0, R8(1) +  UIMM8(2)); NEXT(3);
+  VMOP(SUB_R8C)  AR32(0, R8(1) -  UIMM8(2)); NEXT(3);
+  VMOP(MUL_R8C)  AR32(0, R8(1) *  UIMM8(2)); NEXT(3);
+  VMOP(UDIV_R8C) AR32(0, R8(1) /  UIMM8(2)); NEXT(3);
+  VMOP(SDIV_R8C) AR32(0, S8(1) /  SIMM8(2)); NEXT(3);
+  VMOP(UREM_R8C) AR32(0, R8(1) %  UIMM8(2)); NEXT(3);
+  VMOP(SREM_R8C) AR32(0, S8(1) %  SIMM8(2)); NEXT(3);
+  VMOP(SHL_R8C)  AR32(0, R8(1) << UIMM8(2)); NEXT(3);
+  VMOP(LSHR_R8C) AR32(0, R8(1) >> UIMM8(2)); NEXT(3);
+  VMOP(ASHR_R8C) AR32(0, S8(1) >> UIMM8(2)); NEXT(3);
+  VMOP(AND_R8C)  AR32(0, R8(1) &  UIMM8(2)); NEXT(3);
+  VMOP(OR_R8C)   AR32(0, R8(1) |  UIMM8(2)); NEXT(3);
+  VMOP(XOR_R8C)  AR32(0, R8(1) ^  UIMM8(2)); NEXT(3);
 
 
 
-  VMOP(ADD_R16)  AR16(0, R16(1) +  R16(2)); NEXT(3);
-  VMOP(SUB_R16)  AR16(0, R16(1) -  R16(2)); NEXT(3);
-  VMOP(MUL_R16)  AR16(0, R16(1) *  R16(2)); NEXT(3);
-  VMOP(UDIV_R16) AR16(0, R16(1) /  R16(2)); NEXT(3);
-  VMOP(SDIV_R16) AS16(0, S16(1) /  S16(2)); NEXT(3);
-  VMOP(UREM_R16) AR16(0, R16(1) %  R16(2)); NEXT(3);
-  VMOP(SREM_R16) AS16(0, S16(1) %  S16(2)); NEXT(3);
-  VMOP(SHL_R16)  AR16(0, R16(1) << R16(2)); NEXT(3);
-  VMOP(LSHR_R16) AR16(0, R16(1) >> R16(2)); NEXT(3);
-  VMOP(ASHR_R16) AS16(0, S16(1) >> R16(2)); NEXT(3);
-  VMOP(AND_R16)  AR16(0, R16(1) &  R16(2)); NEXT(3);
-  VMOP(OR_R16)   AR16(0, R16(1) |  R16(2)); NEXT(3);
-  VMOP(XOR_R16)  AR16(0, R16(1) ^  R16(2)); NEXT(3);
+  VMOP(ADD_R16)  AR32(0, R16(1) +  R16(2)); NEXT(3);
+  VMOP(SUB_R16)  AR32(0, R16(1) -  R16(2)); NEXT(3);
+  VMOP(MUL_R16)  AR32(0, R16(1) *  R16(2)); NEXT(3);
+  VMOP(UDIV_R16) AR32(0, R16(1) /  R16(2)); NEXT(3);
+  VMOP(SDIV_R16) AR32(0, S16(1) /  S16(2)); NEXT(3);
+  VMOP(UREM_R16) AR32(0, R16(1) %  R16(2)); NEXT(3);
+  VMOP(SREM_R16) AR32(0, S16(1) %  S16(2)); NEXT(3);
+  VMOP(SHL_R16)  AR32(0, R16(1) << R16(2)); NEXT(3);
+  VMOP(LSHR_R16) AR32(0, R16(1) >> R16(2)); NEXT(3);
+  VMOP(ASHR_R16) AR32(0, S16(1) >> R16(2)); NEXT(3);
+  VMOP(AND_R16)  AR32(0, R16(1) &  R16(2)); NEXT(3);
+  VMOP(OR_R16)   AR32(0, R16(1) |  R16(2)); NEXT(3);
+  VMOP(XOR_R16)  AR32(0, R16(1) ^  R16(2)); NEXT(3);
 
-  VMOP(ADD_R16C)  AR16(0, R16(1) +  UIMM16(2)); NEXT(3);
-  VMOP(SUB_R16C)  AR16(0, R16(1) -  UIMM16(2)); NEXT(3);
-  VMOP(MUL_R16C)  AR16(0, R16(1) *  UIMM16(2)); NEXT(3);
-  VMOP(UDIV_R16C) AR16(0, R16(1) /  UIMM16(2)); NEXT(3);
-  VMOP(SDIV_R16C) AS16(0, S16(1) /  SIMM16(2)); NEXT(3);
-  VMOP(UREM_R16C) AR16(0, R16(1) %  UIMM16(2)); NEXT(3);
-  VMOP(SREM_R16C) AS16(0, S16(1) %  SIMM16(2)); NEXT(3);
-  VMOP(SHL_R16C)  AR16(0, R16(1) << UIMM16(2)); NEXT(3);
-  VMOP(LSHR_R16C) AR16(0, R16(1) >> UIMM16(2)); NEXT(3);
-  VMOP(ASHR_R16C) AS16(0, S16(1) >> UIMM16(2)); NEXT(3);
-  VMOP(AND_R16C)  AR16(0, R16(1) &  UIMM16(2)); NEXT(3);
-  VMOP(OR_R16C)   AR16(0, R16(1) |  UIMM16(2)); NEXT(3);
-  VMOP(XOR_R16C)  AR16(0, R16(1) ^  UIMM16(2)); NEXT(3);
+  VMOP(ADD_R16C)  AR32(0, R16(1) +  UIMM16(2)); NEXT(3);
+  VMOP(SUB_R16C)  AR32(0, R16(1) -  UIMM16(2)); NEXT(3);
+  VMOP(MUL_R16C)  AR32(0, R16(1) *  UIMM16(2)); NEXT(3);
+  VMOP(UDIV_R16C) AR32(0, R16(1) /  UIMM16(2)); NEXT(3);
+  VMOP(SDIV_R16C) AR32(0, S16(1) /  SIMM16(2)); NEXT(3);
+  VMOP(UREM_R16C) AR32(0, R16(1) %  UIMM16(2)); NEXT(3);
+  VMOP(SREM_R16C) AR32(0, S16(1) %  SIMM16(2)); NEXT(3);
+  VMOP(SHL_R16C)  AR32(0, R16(1) << UIMM16(2)); NEXT(3);
+  VMOP(LSHR_R16C) AR32(0, R16(1) >> UIMM16(2)); NEXT(3);
+  VMOP(ASHR_R16C) AR32(0, S16(1) >> UIMM16(2)); NEXT(3);
+  VMOP(AND_R16C)  AR32(0, R16(1) &  UIMM16(2)); NEXT(3);
+  VMOP(OR_R16C)   AR32(0, R16(1) |  UIMM16(2)); NEXT(3);
+  VMOP(XOR_R16C)  AR32(0, R16(1) ^  UIMM16(2)); NEXT(3);
 
   VMOP(ADD_R32)  AR32(0, R32(1) +  R32(2)); NEXT(3);
   VMOP(SUB_R32)  AR32(0, R32(1) -  R32(2)); NEXT(3);
   VMOP(MUL_R32)  AR32(0, R32(1) *  R32(2)); NEXT(3);
   VMOP(UDIV_R32) AR32(0, R32(1) /  R32(2)); NEXT(3);
-  VMOP(SDIV_R32) AS32(0, S32(1) /  S32(2)); NEXT(3);
+  VMOP(SDIV_R32) AR32(0, S32(1) /  S32(2)); NEXT(3);
   VMOP(UREM_R32) AR32(0, R32(1) %  R32(2)); NEXT(3);
-  VMOP(SREM_R32) AS32(0, S32(1) %  S32(2)); NEXT(3);
+  VMOP(SREM_R32) AR32(0, S32(1) %  S32(2)); NEXT(3);
   VMOP(SHL_R32)  AR32(0, R32(1) << R32(2)); NEXT(3);
   VMOP(LSHR_R32) AR32(0, R32(1) >> R32(2)); NEXT(3);
-  VMOP(ASHR_R32) AS32(0, S32(1) >> R32(2)); NEXT(3);
+  VMOP(ASHR_R32) AR32(0, S32(1) >> R32(2)); NEXT(3);
   VMOP(AND_R32)  AR32(0, R32(1) &  R32(2)); NEXT(3);
   VMOP(OR_R32)   AR32(0, R32(1) |  R32(2)); NEXT(3);
   VMOP(XOR_R32)  AR32(0, R32(1) ^  R32(2)); NEXT(3);
@@ -706,12 +650,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(SUB_R32C)  AR32(0, R32(1) -  UIMM32(2)); NEXT(4);
   VMOP(MUL_R32C)  AR32(0, R32(1) *  UIMM32(2)); NEXT(4);
   VMOP(UDIV_R32C) AR32(0, R32(1) /  UIMM32(2)); NEXT(4);
-  VMOP(SDIV_R32C) AS32(0, S32(1) /  SIMM32(2)); NEXT(4);
+  VMOP(SDIV_R32C) AR32(0, S32(1) /  SIMM32(2)); NEXT(4);
   VMOP(UREM_R32C) AR32(0, R32(1) %  UIMM32(2)); NEXT(4);
-  VMOP(SREM_R32C) AS32(0, S32(1) %  SIMM32(2)); NEXT(4);
+  VMOP(SREM_R32C) AR32(0, S32(1) %  SIMM32(2)); NEXT(4);
   VMOP(SHL_R32C)  AR32(0, R32(1) << UIMM32(2)); NEXT(4);
   VMOP(LSHR_R32C) AR32(0, R32(1) >> UIMM32(2)); NEXT(4);
-  VMOP(ASHR_R32C) AS32(0, S32(1) >> UIMM32(2)); NEXT(4);
+  VMOP(ASHR_R32C) AR32(0, S32(1) >> UIMM32(2)); NEXT(4);
   VMOP(AND_R32C)  AR32(0, R32(1) &  UIMM32(2)); NEXT(4);
   VMOP(OR_R32C)   AR32(0, R32(1) |  UIMM32(2)); NEXT(4);
   VMOP(XOR_R32C)  AR32(0, R32(1) ^  UIMM32(2)); NEXT(4);
@@ -723,12 +667,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(SUB_R64)  AR64(0, R64(1) -  R64(2)); NEXT(3);
   VMOP(MUL_R64)  AR64(0, R64(1) *  R64(2)); NEXT(3);
   VMOP(UDIV_R64) AR64(0, R64(1) /  R64(2)); NEXT(3);
-  VMOP(SDIV_R64) AS64(0, S64(1) /  S64(2)); NEXT(3);
+  VMOP(SDIV_R64) AR64(0, S64(1) /  S64(2)); NEXT(3);
   VMOP(UREM_R64) AR64(0, R64(1) %  R64(2)); NEXT(3);
-  VMOP(SREM_R64) AS64(0, S64(1) %  S64(2)); NEXT(3);
+  VMOP(SREM_R64) AR64(0, S64(1) %  S64(2)); NEXT(3);
   VMOP(SHL_R64)  AR64(0, R64(1) << R64(2)); NEXT(3);
   VMOP(LSHR_R64) AR64(0, R64(1) >> R64(2)); NEXT(3);
-  VMOP(ASHR_R64) AS64(0, S64(1) >> R64(2)); NEXT(3);
+  VMOP(ASHR_R64) AR64(0, S64(1) >> R64(2)); NEXT(3);
   VMOP(AND_R64)  AR64(0, R64(1) &  R64(2)); NEXT(3);
   VMOP(OR_R64)   AR64(0, R64(1) |  R64(2)); NEXT(3);
   VMOP(XOR_R64)  AR64(0, R64(1) ^  R64(2)); NEXT(3);
@@ -737,12 +681,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(SUB_R64C)  AR64(0, R64(1) -  UIMM64(2)); NEXT(6);
   VMOP(MUL_R64C)  AR64(0, R64(1) *  UIMM64(2)); NEXT(6);
   VMOP(UDIV_R64C) AR64(0, R64(1) /  UIMM64(2)); NEXT(6);
-  VMOP(SDIV_R64C) AS64(0, S64(1) /  SIMM64(2)); NEXT(6);
+  VMOP(SDIV_R64C) AR64(0, S64(1) /  SIMM64(2)); NEXT(6);
   VMOP(UREM_R64C) AR64(0, R64(1) %  UIMM64(2)); NEXT(6);
-  VMOP(SREM_R64C) AS64(0, S64(1) %  SIMM64(2)); NEXT(6);
+  VMOP(SREM_R64C) AR64(0, S64(1) %  SIMM64(2)); NEXT(6);
   VMOP(SHL_R64C)  AR64(0, R64(1) << UIMM64(2)); NEXT(6);
   VMOP(LSHR_R64C) AR64(0, R64(1) >> UIMM64(2)); NEXT(6);
-  VMOP(ASHR_R64C) AS64(0, S64(1) >> UIMM64(2)); NEXT(6);
+  VMOP(ASHR_R64C) AR64(0, S64(1) >> UIMM64(2)); NEXT(6);
   VMOP(AND_R64C)  AR64(0, R64(1) &  UIMM64(2)); NEXT(6);
   VMOP(OR_R64C)   AR64(0, R64(1) |  UIMM64(2)); NEXT(6);
   VMOP(XOR_R64C)  AR64(0, R64(1) ^  UIMM64(2)); NEXT(6);
@@ -1142,12 +1086,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(STORE64)      STORE64(R32(0),             R64(1));    NEXT(2);
 
 
-  VMOP(MOV8)    AR8(0,  R8(1));   NEXT(2);
+  VMOP(MOV8)    AR32(0,  R8(1));   NEXT(2);
   VMOP(MOV32)   AR32(0, R32(1));   NEXT(2);
   VMOP(MOV64)   AR64(0, R64(1));   NEXT(2);
 
-  VMOP(MOV8_C)  AR8(0,  UIMM8(1)); NEXT(2);
-  VMOP(MOV16_C) AR16(0, UIMM16(1)); NEXT(2);
+  VMOP(MOV8_C)  AR32(0,  UIMM8(1)); NEXT(2);
+  VMOP(MOV16_C) AR32(0, UIMM16(1)); NEXT(2);
   VMOP(MOV32_C) AR32(0, UIMM32(1)); NEXT(3);
   VMOP(MOV64_C) AR64(0, UIMM64(1)); NEXT(5);
 
@@ -1159,46 +1103,46 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(CAST_1_TRUNC_8)   AR32(0, !!R8(1)); NEXT(2);
   VMOP(CAST_1_TRUNC_16)   AR32(0, !!R16(1)); NEXT(2);
 
-  VMOP(CAST_8_ZEXT_1)    AR8(0, R32(1)); NEXT(2);
-  VMOP(CAST_8_TRUNC_16)  AR8(0, R16(1)); NEXT(2);
-  VMOP(CAST_8_TRUNC_32)  AR8(0, R32(1)); NEXT(2);
-  VMOP(CAST_8_TRUNC_64)  AR8(0, R64(1)); NEXT(2);
+  VMOP(CAST_8_ZEXT_1)    AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_8_TRUNC_16)  AR32(0, R16(1)); NEXT(2);
+  VMOP(CAST_8_TRUNC_32)  AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_8_TRUNC_64)  AR32(0, R64(1)); NEXT(2);
 
-  VMOP(CAST_16_ZEXT_1)   AR16(0, R32(1)); NEXT(2);
-  VMOP(CAST_16_ZEXT_8)   AR16(0, R8(1)); NEXT(2);
-  VMOP(CAST_16_SEXT_8)   AS16(0, S8(1)); NEXT(2);
-  VMOP(CAST_16_TRUNC_32) AR16(0, R32(1)); NEXT(2);
-  VMOP(CAST_16_TRUNC_64) AR16(0, R64(1)); NEXT(2);
-  VMOP(CAST_16_FPTOSI_FLT) AS16(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_16_FPTOUI_FLT) AR16(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_16_FPTOSI_DBL) AS16(0, RDBL(1)); NEXT(2);
-  VMOP(CAST_16_FPTOUI_DBL) AR16(0, RDBL(1)); NEXT(2);
+  VMOP(CAST_16_ZEXT_1)   AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_16_ZEXT_8)   AR32(0, R8(1)); NEXT(2);
+  VMOP(CAST_16_SEXT_8)   AR32(0, S8(1)); NEXT(2);
+  VMOP(CAST_16_TRUNC_32) AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_16_TRUNC_64) AR32(0, R64(1)); NEXT(2);
+  VMOP(CAST_16_FPTOSI_FLT) AR32(0, (int32_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_16_FPTOUI_FLT) AR32(0, (uint32_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_16_FPTOSI_DBL) AR32(0, (int32_t)RDBL(1)); NEXT(2);
+  VMOP(CAST_16_FPTOUI_DBL) AR32(0, (uint32_t)RDBL(1)); NEXT(2);
 
   VMOP(CAST_32_SEXT_1)   AR32(0, R32(1) ? -1 : 0); NEXT(2);
   VMOP(CAST_32_ZEXT_8)   AR32(0, R8(1)); NEXT(2);
-  VMOP(CAST_32_SEXT_8)   AS32(0, S8(1)); NEXT(2);
+  VMOP(CAST_32_SEXT_8)   AR32(0, S8(1)); NEXT(2);
   VMOP(CAST_32_ZEXT_16)  AR32(0, R16(1)); NEXT(2);
-  VMOP(CAST_32_SEXT_16)  AS32(0, S16(1)); NEXT(2);
+  VMOP(CAST_32_SEXT_16)  AR32(0, S16(1)); NEXT(2);
   VMOP(CAST_32_TRUNC_64) AR32(0, R64(1)); NEXT(2);
 
-  VMOP(CAST_32_FPTOSI_FLT) AS32(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_32_FPTOUI_FLT) AR32(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_32_FPTOSI_DBL) AS32(0, RDBL(1)); NEXT(2);
-  VMOP(CAST_32_FPTOUI_DBL) AR32(0, RDBL(1)); NEXT(2);
+  VMOP(CAST_32_FPTOSI_FLT) AR32(0, (int32_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_32_FPTOUI_FLT) AR32(0, (uint32_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_32_FPTOSI_DBL) AR32(0, (int32_t)RDBL(1)); NEXT(2);
+  VMOP(CAST_32_FPTOUI_DBL) AR32(0, (uint32_t)RDBL(1)); NEXT(2);
 
 
   VMOP(CAST_64_ZEXT_1) AR64(0, R32(1)); NEXT(2);
-  VMOP(CAST_64_SEXT_1) AS64(0, R32(1) ? (int64_t)-1LL : 0); NEXT(2);
+  VMOP(CAST_64_SEXT_1) AR64(0, R32(1) ? (int64_t)-1LL : 0); NEXT(2);
   VMOP(CAST_64_ZEXT_8) AR64(0, R8(1)); NEXT(2);
-  VMOP(CAST_64_SEXT_8) AS64(0, S8(1)); NEXT(2);
+  VMOP(CAST_64_SEXT_8) AR64(0, S8(1)); NEXT(2);
   VMOP(CAST_64_ZEXT_16) AR64(0, R16(1)); NEXT(2);
-  VMOP(CAST_64_SEXT_16) AS64(0, S16(1)); NEXT(2);
+  VMOP(CAST_64_SEXT_16) AR64(0, S16(1)); NEXT(2);
   VMOP(CAST_64_ZEXT_32) AR64(0, R32(1)); NEXT(2);
-  VMOP(CAST_64_SEXT_32) AS64(0, S32(1)); NEXT(2);
-  VMOP(CAST_64_FPTOSI_FLT) AS64(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_64_FPTOUI_FLT) AR64(0, RFLT(1)); NEXT(2);
-  VMOP(CAST_64_FPTOSI_DBL) AS64(0, RDBL(1)); NEXT(2);
-  VMOP(CAST_64_FPTOUI_DBL) AR64(0, RDBL(1)); NEXT(2);
+  VMOP(CAST_64_SEXT_32) AR64(0, S32(1)); NEXT(2);
+  VMOP(CAST_64_FPTOSI_FLT) AR64(0, (int64_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_64_FPTOUI_FLT) AR64(0, (uint64_t)RFLT(1)); NEXT(2);
+  VMOP(CAST_64_FPTOSI_DBL) AR64(0, (int64_t)RDBL(1)); NEXT(2);
+  VMOP(CAST_64_FPTOUI_DBL) AR64(0, (uint64_t)RDBL(1)); NEXT(2);
 
   VMOP(CAST_DBL_FPEXT_FLT)   ADBL(0, RFLT(1)); NEXT(2);
 
@@ -1290,15 +1234,15 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     }
 
 
-  VMOP(SELECT8RR) AR8(0, R32(1) ? R8(2)    : R8(3));    NEXT(4);
-  VMOP(SELECT8RC) AR8(0, R32(1) ? R8(2)    : UIMM8(3)); NEXT(4);
-  VMOP(SELECT8CR) AR8(0, R32(1) ? UIMM8(3) : R8(2));    NEXT(4);
-  VMOP(SELECT8CC) AR8(0, R32(1) ? UIMM8(2) : UIMM8(4)); NEXT(4);
+  VMOP(SELECT8RR) AR32(0, R32(1) ? R8(2)    : R8(3));    NEXT(4);
+  VMOP(SELECT8RC) AR32(0, R32(1) ? R8(2)    : UIMM8(3)); NEXT(4);
+  VMOP(SELECT8CR) AR32(0, R32(1) ? UIMM8(3) : R8(2));    NEXT(4);
+  VMOP(SELECT8CC) AR32(0, R32(1) ? UIMM8(2) : UIMM8(4)); NEXT(4);
 
-  VMOP(SELECT16RR) AR16(0, R32(1) ? R16(2)    : R16(3));    NEXT(4);
-  VMOP(SELECT16RC) AR16(0, R32(1) ? R16(2)    : UIMM16(3)); NEXT(4);
-  VMOP(SELECT16CR) AR16(0, R32(1) ? UIMM16(3) : R16(2));    NEXT(4);
-  VMOP(SELECT16CC) AR16(0, R32(1) ? UIMM16(2) : UIMM16(4)); NEXT(4);
+  VMOP(SELECT16RR) AR32(0, R32(1) ? R16(2)    : R16(3));    NEXT(4);
+  VMOP(SELECT16RC) AR32(0, R32(1) ? R16(2)    : UIMM16(3)); NEXT(4);
+  VMOP(SELECT16CR) AR32(0, R32(1) ? UIMM16(3) : R16(2));    NEXT(4);
+  VMOP(SELECT16CC) AR32(0, R32(1) ? UIMM16(2) : UIMM16(4)); NEXT(4);
 
   VMOP(SELECT32RR) AR32(0, R32(1) ? R32(2)    : R32(3));    NEXT(4);
   VMOP(SELECT32RC) AR32(0, R32(1) ? R32(2)    : UIMM32(3)); NEXT(5);
