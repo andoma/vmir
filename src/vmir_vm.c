@@ -340,7 +340,7 @@ static void __attribute__((noinline))
 vm_store_64(void *mem, uint32_t ea, uint64_t v, int line)
 {
   vm_printf("Store (u64) 0x%"PRIx64" to 0x%08x by %d\n", v, ea, line);
-  mem_wr32(mem + ea, v);
+  mem_wr64(mem + ea, v);
 }
 
 
