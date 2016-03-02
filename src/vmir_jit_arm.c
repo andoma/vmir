@@ -159,10 +159,6 @@ jit_push_literal_pool(ir_unit_t *iu, jitctx_t *jc)
   for(int i = 0; i < jc->literal_pool_use; i++) {
     int imm12 = iu->iu_jit_ptr - jc->literal_pool[i].instr - 8;
     assert(imm12 < 4096);
-#if 0
-    printf("imm12=%d jitptr:%x instr:%x\n", imm12,
-           iu->iu_jit_ptr, jc->literal_pool[i].instr);
-#endif
     uint32_t *p = iu->iu_jit_mem + jc->literal_pool[i].instr;
     if(jc->literal_pool[i].addrp != NULL)
       *jc->literal_pool[i].addrp = iu->iu_jit_ptr;
@@ -280,6 +276,22 @@ jit_offset_to_imm12_U(int off)
 }
 
 
+static int
+jit_offset_to_imm8_U(int offset)
+{
+  if(offset < 256 && offset > -256) {
+    uint32_t U = 1 << 23;
+    if(offset < 0) {
+      offset = -offset;
+      U = 0;
+    }
+    return (offset & 0xf) | ((offset & 0xf0) << 4) | U;
+  }
+  return -1;
+
+}
+
+
 /**
  * Load a value into a register
  *
@@ -288,24 +300,122 @@ jit_offset_to_imm12_U(int off)
  *
  * If the value is stored in a machine register, that register is returned
  */
+#define JIT_LOAD_EXT_NONE     0
+#define JIT_LOAD_EXT_UNSIGNED 1
+#define JIT_LOAD_EXT_SIGNED   2
+
 static int __attribute__((warn_unused_result))
-jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc, uint32_t cond)
+jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc,
+                   uint32_t cond, int ext)
 {
   const ir_value_t *iv = value_get(iu, vt.value);
   const ir_type_t *it = type_get(iu, vt.type);
-
+  int mr;
+  int imm8;
   switch(iv->iv_class) {
   case IR_VC_MACHINEREG:
-    return iv->iv_reg + 4;
 
-  case IR_VC_REGFRAME:
+    mr = iv->iv_reg + 4;
+
     switch(legalize_type(it)) {
-    case IR_TYPE_INT1:
     case IR_TYPE_INT8:
+      if(ext == JIT_LOAD_EXT_SIGNED) {
+        // SXTB
+        jit_push(iu, cond | (1 << 26) | (1 << 25) |
+                 (1 << 23) | (1 << 21) | 0xf0070 |
+                 (reg << 12) | mr);
+        return reg;
+      }
+      if(ext == JIT_LOAD_EXT_UNSIGNED) {
+        // UXTB
+        jit_push(iu, cond | (1 << 26) | (1 << 25) |
+                 (1 << 23) | (1 << 22) | (1 << 21) | 0xf0070 |
+                 (reg << 12) | mr);
+        return reg;
+      }
+      break;
+
     case IR_TYPE_INT16:
+      if(ext == JIT_LOAD_EXT_SIGNED) {
+        // SXTH
+        jit_push(iu, cond | (1 << 26) | (1 << 25) |
+                 (1 << 23) | (1 << 21) | (1 << 20) | 0xf0070 |
+                 (reg << 12) | mr);
+        return reg;
+      }
+      if(ext == JIT_LOAD_EXT_UNSIGNED) {
+        // UXTH
+        jit_push(iu, cond | (1 << 26) | (1 << 25) |
+                 (1 << 23) | (1 << 22) | (1 << 21) | (1 << 20) | 0xf0070 |
+                 (reg << 12) | mr);
+        return reg;
+      }
+      break;
+
+    case IR_TYPE_INT1:
     case IR_TYPE_INT32:
     case IR_TYPE_FLOAT:
     case IR_TYPE_POINTER:
+      break;
+    }
+    return mr;
+
+  case IR_VC_REGFRAME:
+    switch(legalize_type(it)) {
+    case IR_TYPE_INT8:
+      if(ext == JIT_LOAD_EXT_UNSIGNED) {
+        // LDRB
+        jit_push(iu, cond | (1 << 26) | (1 << 24) | (1 << 22) | (1 << 20) |
+                 (R_VMSTACK << 16) | (reg << 12) |
+                 jit_offset_to_imm12_U(iv->iv_reg));
+        break;
+      }
+      if(ext == JIT_LOAD_EXT_SIGNED) {
+        imm8 = jit_offset_to_imm8_U(iv->iv_reg);
+        if(imm8 != -1) {
+          // LDRSB
+          jit_push(iu, cond | (1 << 24) | (1 << 22) | (1 << 20) |
+                   (R_VMSTACK << 16) | (reg << 12) | imm8 | 0xd0);
+          break;
+        }
+
+        printf("JIT_LOAD_EXT_SIGNED i8 from regframe not supported\n");
+        abort();
+      }
+      goto load32;
+
+    case IR_TYPE_INT16:
+      if(ext == JIT_LOAD_EXT_UNSIGNED) {
+        imm8 = jit_offset_to_imm8_U(iv->iv_reg);
+        if(imm8 != -1) {
+          // LDRH
+          jit_push(iu, cond | (1 << 24) | (1 << 22) | (1 << 20) |
+                   (R_VMSTACK << 16) | (reg << 12) | imm8 | 0xb0);
+          break;
+        }
+
+        printf("JIT_LOAD_EXT_UNSIGNED i16 from regframe not supported\n");
+        abort();
+      }
+      if(ext == JIT_LOAD_EXT_SIGNED) {
+        imm8 = jit_offset_to_imm8_U(iv->iv_reg);
+        if(imm8 != -1) {
+          // LDRSH
+          jit_push(iu, cond | (1 << 24) | (1 << 22) | (1 << 20) |
+                   (R_VMSTACK << 16) | (reg << 12) | imm8 | 0xf0);
+          break;
+        }
+
+        printf("JIT_LOAD_EXT_SIGNED i16 from regframe not supported\n");
+        abort();
+      }
+      goto load32;
+
+    case IR_TYPE_INT1:
+    case IR_TYPE_INT32:
+    case IR_TYPE_FLOAT:
+    case IR_TYPE_POINTER:
+    load32:
       jit_push(iu, cond | (1 << 26) | (1 << 24) | (1 << 20) |
                (R_VMSTACK << 16) | (reg << 12) |
                jit_offset_to_imm12_U(iv->iv_reg));
@@ -316,7 +426,9 @@ jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc, uint
     break;
   case IR_VC_CONSTANT:
   case IR_VC_GLOBALVAR:
-    jit_loadimm_cond(iu, value_get_const(iu, iv), reg, jc, cond);
+    jit_loadimm_cond(iu, ext == JIT_LOAD_EXT_SIGNED ?
+                     value_get_const32(iu, iv) : value_get_const(iu, iv),
+                     reg, jc, cond);
     break;
   default:
     parser_error(iu, "JIT: Can't load value-class %d", iv->iv_class);
@@ -331,7 +443,7 @@ jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc, uint
 static int __attribute__((warn_unused_result))
 jit_loadvalue(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc)
 {
-  return jit_loadvalue_cond(iu, vt, reg, jc, ARM_COND_AL);
+  return jit_loadvalue_cond(iu, vt, reg, jc, ARM_COND_AL, 0);
 }
 
 
@@ -945,33 +1057,31 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
 /**
  *
  */
-static int
-jit_cmp_branch_check(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
-{
-  int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
-
-  switch(typecode) {
-  case IR_TYPE_INT32:
-  case IR_TYPE_POINTER:
-    break;
-  default:
-    return 0;
-  }
-  return 1;
-}
-
-
-/**
- *
- */
 static void
-jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc)
+jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc,
+             int pred)
 {
-  int Rn = jit_loadvalue(iu, lhs, R_TMPA, jc);
+  int ext = JIT_LOAD_EXT_UNSIGNED;
+  switch(pred) {
+  case ICMP_SGT:
+  case ICMP_SLT:
+  case ICMP_SGE:
+  case ICMP_SLE:
+    ext = JIT_LOAD_EXT_SIGNED;
+    break;
+  }
+
+  int Rn = jit_loadvalue_cond(iu, lhs, R_TMPA, jc, ARM_COND_AL, ext);
 
   const ir_value_t *rhs_value = value_get(iu, rhs.value);
   if(rhs_value->iv_class == IR_VC_CONSTANT) {
-    int32_t rc = value_get_const(iu, rhs_value);
+    int32_t rc;
+
+    if(ext == JIT_LOAD_EXT_SIGNED)
+      rc = value_get_const32(iu, rhs_value);
+    else
+      rc = value_get_const(iu, rhs_value);
+
     int imm12 = make_imm12(rc);
     if(imm12 != -1) {
       // CMP immediate
@@ -986,9 +1096,30 @@ jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc
     }
   }
 
-  int Rm = jit_loadvalue(iu, rhs, R_TMPB, jc);
+  int Rm = jit_loadvalue_cond(iu, rhs, R_TMPB, jc, ARM_COND_AL, ext);
   // CMP register
   jit_pushal(iu, (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | Rm);
+}
+
+
+/**
+ *
+ */
+static int
+jit_cmp_br_check(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
+{
+  int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
+
+  switch(typecode) {
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
+  case IR_TYPE_INT32:
+  case IR_TYPE_POINTER:
+    break;
+  default:
+    return 0;
+  }
+  return 1;
 }
 
 
@@ -998,7 +1129,7 @@ jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc
 static void
 jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
 {
-  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc, ii->op);
 
   jit_emit_conditional_branch(iu, ii->true_branch,
                               ii->false_branch, ii->op, jc);
@@ -1014,6 +1145,8 @@ jit_cmp_select_check(ir_unit_t *iu, ir_instr_cmp_select_t *ii)
   int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
 
   switch(typecode) {
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
     break;
@@ -1030,7 +1163,7 @@ jit_cmp_select_check(ir_unit_t *iu, ir_instr_cmp_select_t *ii)
 static void
 jit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii, jitctx_t *jc)
 {
-  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc, ii->op);
 
   const uint32_t true_cond = armcond(ii->op);
   const uint32_t false_cond = armcond(invert_pred(ii->op));
@@ -1039,10 +1172,10 @@ jit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii, jitctx_t *jc)
 
   int Rx;
 
-  Rx = jit_loadvalue_cond(iu, ii->true_value, Rd, jc, true_cond);
+  Rx = jit_loadvalue_cond(iu, ii->true_value, Rd, jc, true_cond, 0);
   jit_storevalue_cond(iu, ii->super.ii_ret, Rx, true_cond);
 
-  Rx = jit_loadvalue_cond(iu, ii->false_value, Rd, jc, false_cond);
+  Rx = jit_loadvalue_cond(iu, ii->false_value, Rd, jc, false_cond, 0);
   jit_storevalue_cond(iu, ii->super.ii_ret, Rx, false_cond);
 }
 
@@ -1056,6 +1189,8 @@ jit_cmp_check(ir_unit_t *iu, ir_instr_binary_t *ii)
   int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
 
   switch(typecode) {
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
     break;
@@ -1072,7 +1207,7 @@ jit_cmp_check(ir_unit_t *iu, ir_instr_binary_t *ii)
 static void
 jit_cmp(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
 {
-  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc, ii->op);
 
   const uint32_t true_cond = armcond(ii->op);
   const uint32_t false_cond = armcond(invert_pred(ii->op));
@@ -1205,7 +1340,7 @@ jit_check(ir_unit_t *iu, ir_instr_t *ii)
     r = jit_br_check(iu, (ir_instr_br_t *)ii);
     break;
   case IR_IC_CMP_BRANCH:
-    r = jit_cmp_branch_check(iu, (ir_instr_cmp_branch_t *)ii);
+    r = jit_cmp_br_check(iu, (ir_instr_cmp_branch_t *)ii);
     break;
   case IR_IC_CMP_SELECT:
     r = jit_cmp_select_check(iu, (ir_instr_cmp_select_t *)ii);
