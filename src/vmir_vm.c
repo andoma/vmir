@@ -511,27 +511,11 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(0);
   }
 
-  VMOP(RET_R8)
-    *(uint32_t *)ret = R8(0);
-    return 0;
-
-  VMOP(RET_R16)
-    *(uint32_t *)ret = R16(0);
-    return 0;
-
   VMOP(RET_R32)
     *(uint32_t *)ret = R32(0);
     return 0;
-
   VMOP(RET_R64)
     *(uint64_t *)ret = R64(0);
-    return 0;
-
-  VMOP(RET_R8C)
-    *(uint32_t *)ret = UIMM8(0);
-    return 0;
-  VMOP(RET_R16C)
-    *(uint32_t *)ret = UIMM16(0);
     return 0;
   VMOP(RET_R32C)
     *(uint32_t *)ret = UIMM32(0);
@@ -1368,12 +1352,8 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
   case VM_JIT_CALL:  return &&JIT_CALL - &&opz;     break;
   case VM_RET_VOID:  return &&RET_VOID - &&opz;     break;
-  case VM_RET_R8:    return &&RET_R8   - &&opz;     break;
-  case VM_RET_R16:   return &&RET_R16  - &&opz;     break;
   case VM_RET_R32:   return &&RET_R32  - &&opz;     break;
   case VM_RET_R64:   return &&RET_R64  - &&opz;     break;
-  case VM_RET_R8C:   return &&RET_R8C  - &&opz;     break;
-  case VM_RET_R16C:  return &&RET_R16C - &&opz;     break;
   case VM_RET_R32C:  return &&RET_R32C - &&opz;     break;
   case VM_RET_R64C:  return &&RET_R64C - &&opz;     break;
 
@@ -2057,18 +2037,15 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
   }
   ir_value_t *iv = value_get(iu, ii->value.value);
   ir_type_t *it = type_get(iu, ii->value.type);
+  int code = legalize_type(it);
 
   switch(iv->iv_class) {
   case IR_VC_REGFRAME:
 
-    switch(legalize_type(it)) {
-    case IR_TYPE_INT8:
-      emit_op1(iu, VM_RET_R8, value_reg(iv));
-      return;
-    case IR_TYPE_INT16:
-      emit_op1(iu, VM_RET_R16, value_reg(iv));
-      return;
+    switch(code) {
     case IR_TYPE_INT1:
+    case IR_TYPE_INT8:
+    case IR_TYPE_INT16:
     case IR_TYPE_INT32:
     case IR_TYPE_POINTER:
     case IR_TYPE_FLOAT:
@@ -2085,7 +2062,7 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
     }
 
   case IR_VC_GLOBALVAR:
-    switch(legalize_type(it)) {
+    switch(code) {
     case IR_TYPE_POINTER:
       emit_op(iu, VM_RET_R32C);
       emit_i32(iu, value_get_const32(iu, iv));
@@ -2096,16 +2073,10 @@ emit_ret(ir_unit_t *iu, ir_instr_unary_t *ii)
     }
 
   case IR_VC_CONSTANT:
-    switch(legalize_type(it)) {
-    case IR_TYPE_INT8:
-      emit_op(iu, VM_RET_R8C);
-      emit_i8(iu, value_get_const32(iu, iv));
-      return;
-    case IR_TYPE_INT16:
-      emit_op(iu, VM_RET_R16C);
-      emit_i16(iu, value_get_const32(iu, iv));
-      return;
+    switch(code) {
     case IR_TYPE_INT1:
+    case IR_TYPE_INT8:
+    case IR_TYPE_INT16:
     case IR_TYPE_INT32:
     case IR_TYPE_POINTER:
     case IR_TYPE_FLOAT:

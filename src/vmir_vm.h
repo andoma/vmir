@@ -32,12 +32,8 @@
 typedef enum {
   VM_JIT_CALL,
   VM_RET_VOID,
-  VM_RET_R8,
-  VM_RET_R16,
   VM_RET_R32,
   VM_RET_R64,
-  VM_RET_R8C,
-  VM_RET_R16C,
   VM_RET_R32C,
   VM_RET_R64C,
 
