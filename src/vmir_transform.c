@@ -1046,6 +1046,7 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
   case IR_IC_STORE:
   case IR_IC_ALLOCA:
   case IR_IC_SELECT:
+  case IR_IC_CMP_SELECT:
   case IR_IC_LEA:
   case IR_IC_MOVE:
   case IR_IC_VMOP:
@@ -1166,6 +1167,12 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     liveness_set_value(bs, iu, ((ir_instr_select_t *)ii)->pred);
     liveness_set_value(bs, iu, ((ir_instr_select_t *)ii)->true_value);
     liveness_set_value(bs, iu, ((ir_instr_select_t *)ii)->false_value);
+    break;
+  case IR_IC_CMP_SELECT:
+    liveness_set_value(bs, iu, ((ir_instr_cmp_select_t *)ii)->lhs_value);
+    liveness_set_value(bs, iu, ((ir_instr_cmp_select_t *)ii)->rhs_value);
+    liveness_set_value(bs, iu, ((ir_instr_cmp_select_t *)ii)->true_value);
+    liveness_set_value(bs, iu, ((ir_instr_cmp_select_t *)ii)->false_value);
     break;
   case IR_IC_LEA:
     {
@@ -1317,7 +1324,15 @@ instr_replace_values(ir_instr_t *ii, ir_unit_t *iu, int from, int to)
     instr_replace_value(iu, &((ir_instr_ternary_t *)ii)->arg2, from, to);
     instr_replace_value(iu, &((ir_instr_ternary_t *)ii)->arg3, from, to);
     break;
+  case IR_IC_CMP_SELECT:
+    instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->true_value, from, to);
+    instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->false_value, from, to);
+    instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->lhs_value, from, to);
+    instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->rhs_value, from, to);
+    break;
   default:
+    printf("liveness_replace_values: can't handle instruction class %d\n",
+           ii->ii_class);
     abort();
   }
 }
@@ -2040,8 +2055,8 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   icb->true_branch = br->true_branch;
   icb->false_branch = br->false_branch;
 
-  instr_bind_input(iu, cmp->lhs_value, &icb->super);
-  instr_bind_input(iu, cmp->rhs_value, &icb->super);
+  instr_bind_input(iu, icb->lhs_value, &icb->super);
+  instr_bind_input(iu, icb->rhs_value, &icb->super);
 
   value_get(iu, br->condition.value)->iv_class = IR_VC_DEAD;
 
@@ -2049,6 +2064,60 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   instr_destroy(iip);
 
   iu->iu_stats.cmp_branch_combine++;
+}
+
+/**
+ *
+ */
+static void
+combine_select_with_compare(ir_unit_t *iu, ir_instr_select_t *sel)
+{
+  ir_instr_t *iip;
+
+  iip = combine_get_upstream_instruction(iu, sel->pred, &sel->super);
+  if(iip == NULL || iip->ii_class != IR_IC_CMP2)
+    return;
+  ir_instr_binary_t *cmp = (ir_instr_binary_t *)iip;
+  if(!(cmp->op >= ICMP_EQ && cmp->op <= ICMP_SLE))
+    return;
+
+  ir_type_t *cmpty = type_get(iu, cmp->lhs_value.type);
+  if(!(cmpty->it_code == IR_TYPE_INT32 ||
+       cmpty->it_code == IR_TYPE_POINTER))
+    return;
+
+  ir_type_t *opty = type_get(iu, sel->super.ii_ret.type);
+  if(!(opty->it_code == IR_TYPE_INT8 ||
+       opty->it_code == IR_TYPE_INT16 ||
+       opty->it_code == IR_TYPE_INT32 ||
+       opty->it_code == IR_TYPE_POINTER))
+    return;
+
+  assert(iip->ii_ret.value == sel->pred.value);
+
+  ir_instr_cmp_select_t *ics =
+    instr_add_after(sizeof(ir_instr_cmp_select_t), IR_IC_CMP_SELECT,
+                    &sel->super);
+
+  ics->op = cmp->op;
+  ics->lhs_value = cmp->lhs_value;
+  ics->rhs_value = cmp->rhs_value;
+  ics->true_value = sel->true_value;
+  ics->false_value = sel->false_value;
+  ics->super.ii_ret = sel->super.ii_ret;
+
+  instr_bind_input(iu, ics->lhs_value, &ics->super);
+  instr_bind_input(iu, ics->rhs_value, &ics->super);
+  instr_bind_input(iu, ics->true_value, &ics->super);
+  instr_bind_input(iu, ics->false_value, &ics->super);
+  value_bind_return_value(iu, &ics->super);
+
+  value_get(iu, sel->pred.value)->iv_class = IR_VC_DEAD;
+
+  instr_destroy(&sel->super);
+  instr_destroy(iip);
+
+  iu->iu_stats.cmp_select_combine++;
 }
 
 /**
@@ -2212,8 +2281,10 @@ combine_instructions(ir_unit_t *iu, ir_function_t *f)
       iin = TAILQ_NEXT(ii, ii_link);
       if(ii->ii_class == IR_IC_BINOP)
         combine_binop(iu, (ir_instr_binary_t *)ii);
-      if(ii->ii_class == IR_IC_CAST)
+      else if(ii->ii_class == IR_IC_CAST)
         combine_binop_cast(iu, (ir_instr_unary_t *)ii);
+      else if(ii->ii_class == IR_IC_SELECT)
+        combine_select_with_compare(iu, (ir_instr_select_t *)ii);
     }
   }
 }

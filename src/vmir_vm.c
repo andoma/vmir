@@ -927,6 +927,28 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(SLT32_C_BR) I = (void *)I + (int16_t)(S32(2) <  SIMM32(3) ? I[0] : I[1]); NEXT(0);
   VMOP(SLE32_C_BR) I = (void *)I + (int16_t)(S32(2) <= SIMM32(3) ? I[0] : I[1]); NEXT(0);
 
+  VMOP(EQ32_SEL)    AR32(0, R32(3) == R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(NE32_SEL)    AR32(0, R32(3) != R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(UGT32_SEL)   AR32(0, R32(3) >  R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(UGE32_SEL)   AR32(0, R32(3) >= R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(ULT32_SEL)   AR32(0, R32(3) <  R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(ULE32_SEL)   AR32(0, R32(3) <= R32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(SGT32_SEL)   AR32(0, S32(3) >  S32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(SGE32_SEL)   AR32(0, S32(3) >= S32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(SLT32_SEL)   AR32(0, S32(3) <  S32(4) ? R32(1) : R32(2)); NEXT(5);
+  VMOP(SLE32_SEL)   AR32(0, S32(3) <= S32(4) ? R32(1) : R32(2)); NEXT(5);
+
+  VMOP(EQ32_C_SEL)  AR32(0, R32(3) == UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(NE32_C_SEL)  AR32(0, R32(3) != UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(UGT32_C_SEL) AR32(0, R32(3) >  UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(UGE32_C_SEL) AR32(0, R32(3) >= UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(ULT32_C_SEL) AR32(0, R32(3) <  UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(ULE32_C_SEL) AR32(0, R32(3) <= UIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(SGT32_C_SEL) AR32(0, S32(3) >  SIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(SGE32_C_SEL) AR32(0, S32(3) >= SIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(SLT32_C_SEL) AR32(0, S32(3) <  SIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+  VMOP(SLE32_C_SEL) AR32(0, S32(3) <= SIMM32(4) ? R32(1) : R32(2)); NEXT(6);
+
 
   VMOP(ABS)       AR32(0, abs(S32(1)));  NEXT(2);
 
@@ -1726,6 +1748,28 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_UGE32_C_BR:     return &&UGE32_C_BR    - &&opz;     break;
   case VM_ULT32_C_BR:     return &&ULT32_C_BR    - &&opz;     break;
   case VM_ULE32_C_BR:     return &&ULE32_C_BR    - &&opz;     break;
+
+  case VM_EQ32_SEL:          return &&EQ32_SEL - &&opz; break;
+  case VM_NE32_SEL:          return &&NE32_SEL - &&opz; break;
+  case VM_UGT32_SEL:          return &&UGT32_SEL - &&opz; break;
+  case VM_UGE32_SEL:          return &&UGE32_SEL - &&opz; break;
+  case VM_ULT32_SEL:          return &&ULT32_SEL - &&opz; break;
+  case VM_ULE32_SEL:          return &&ULE32_SEL - &&opz; break;
+  case VM_SGT32_SEL:          return &&SGT32_SEL - &&opz; break;
+  case VM_SGE32_SEL:          return &&SGE32_SEL - &&opz; break;
+  case VM_SLT32_SEL:          return &&SLT32_SEL - &&opz; break;
+  case VM_SLE32_SEL:          return &&SLE32_SEL - &&opz; break;
+  case VM_EQ32_C_SEL:          return &&EQ32_C_SEL - &&opz; break;
+  case VM_NE32_C_SEL:          return &&NE32_C_SEL - &&opz; break;
+  case VM_UGT32_C_SEL:          return &&UGT32_C_SEL - &&opz; break;
+  case VM_UGE32_C_SEL:          return &&UGE32_C_SEL - &&opz; break;
+  case VM_ULT32_C_SEL:          return &&ULT32_C_SEL - &&opz; break;
+  case VM_ULE32_C_SEL:          return &&ULE32_C_SEL - &&opz; break;
+  case VM_SGT32_C_SEL:          return &&SGT32_C_SEL - &&opz; break;
+  case VM_SGE32_C_SEL:          return &&SGE32_C_SEL - &&opz; break;
+  case VM_SLT32_C_SEL:          return &&SLT32_C_SEL - &&opz; break;
+  case VM_SLE32_C_SEL:          return &&SLE32_C_SEL - &&opz; break;
+
 
   case VM_SELECT32RR: return &&SELECT32RR - &&opz;     break;
   case VM_SELECT32RC: return &&SELECT32RC - &&opz;     break;
@@ -2655,37 +2699,6 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 }
 
 
-static int
-swap_pred(int pred)
-{
-  switch(pred) {
-  default:
-    abort();
-  case ICMP_EQ: case ICMP_NE:
-    return pred;
-  case ICMP_SGT: return ICMP_SLT;
-    case ICMP_SLT: return ICMP_SGT;
-    case ICMP_SGE: return ICMP_SLE;
-    case ICMP_SLE: return ICMP_SGE;
-    case ICMP_UGT: return ICMP_ULT;
-    case ICMP_ULT: return ICMP_UGT;
-    case ICMP_UGE: return ICMP_ULE;
-    case ICMP_ULE: return ICMP_UGE;
-    case FCMP_FALSE: case FCMP_TRUE:
-    case FCMP_OEQ: case FCMP_ONE:
-    case FCMP_UEQ: case FCMP_UNE:
-    case FCMP_ORD: case FCMP_UNO:
-      return pred;
-    case FCMP_OGT: return FCMP_OLT;
-    case FCMP_OLT: return FCMP_OGT;
-    case FCMP_OGE: return FCMP_OLE;
-    case FCMP_OLE: return FCMP_OGE;
-    case FCMP_UGT: return FCMP_ULT;
-    case FCMP_ULT: return FCMP_UGT;
-    case FCMP_UGE: return FCMP_ULE;
-    case FCMP_ULE: return FCMP_UGE;
-  }
-}
 
 
 
@@ -2974,6 +2987,124 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
 
   } else {
     parser_error(iu, "Can't brcmp value class %d and %d",
+                 lhs->iv_class, rhs->iv_class);
+  }
+}
+
+
+/**
+ *
+ */
+static void
+emit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii)
+{
+  int pred = ii->op;
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
+  const ir_value_t *trueval = value_get(iu, ii->true_value.value);
+  const ir_value_t *falseval = value_get(iu, ii->false_value.value);
+  const ir_type_t *it = type_get(iu, ii->lhs_value.type);
+
+  int truereg;
+  int falsereg;
+
+
+  if(rhs->iv_class == IR_VC_REGFRAME && lhs->iv_class != IR_VC_REGFRAME) {
+    // Swap LHS RHS
+    const ir_value_t *tmp = rhs;
+    rhs = lhs;
+    lhs = tmp;
+    pred = swap_pred(pred);
+  }
+
+
+  switch(trueval->iv_class) {
+  case IR_VC_REGFRAME:
+    truereg = value_reg(trueval);
+    break;
+  case IR_VC_CONSTANT:
+  case IR_VC_GLOBALVAR:
+    emit_op1(iu, VM_MOV32_C, 0);
+    emit_i32(iu, value_get_const32(iu, trueval));
+    truereg = 0;
+    break;
+  default:
+    parser_error(iu, "Can't cmpselect value %s", value_str(iu, trueval));
+  }
+
+  switch(falseval->iv_class) {
+  case IR_VC_REGFRAME:
+    falsereg = value_reg(falseval);
+    break;
+  case IR_VC_CONSTANT:
+  case IR_VC_GLOBALVAR:
+    emit_op1(iu, VM_MOV32_C, 4);
+    emit_i32(iu, value_get_const32(iu, falseval));
+    falsereg = 4;
+    break;
+  default:
+    parser_error(iu, "Can't cmpselect value %s", value_str(iu, falseval));
+  }
+
+
+
+  if(lhs->iv_class == IR_VC_REGFRAME &&
+     rhs->iv_class == IR_VC_REGFRAME) {
+
+    if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
+
+      switch(legalize_type(it)) {
+      case IR_TYPE_INT32:
+      case IR_TYPE_POINTER:
+        emit_op(iu, pred - ICMP_EQ + VM_EQ32_SEL);
+        break;
+
+      default:
+        parser_error(iu, "Can't cmpselect type %s class %d/%d op %d",
+                     type_str(iu, it),
+                     lhs->iv_class, rhs->iv_class, pred);
+      }
+      emit_i16(iu, value_reg(ret));
+      emit_i16(iu, truereg);
+      emit_i16(iu, falsereg);
+      emit_i16(iu, value_reg(lhs));
+      emit_i16(iu, value_reg(rhs));
+
+
+    } else {
+      parser_error(iu, "Can't compare pred %d", pred);
+    }
+    return;
+  }
+
+  if(lhs->iv_class == IR_VC_REGFRAME &&
+     (rhs->iv_class == IR_VC_CONSTANT ||
+      rhs->iv_class == IR_VC_GLOBALVAR)) {
+
+    if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
+
+      switch(legalize_type(it)) {
+      case IR_TYPE_INT32:
+      case IR_TYPE_POINTER:
+        emit_op(iu, pred - ICMP_EQ + VM_EQ32_C_SEL);
+        emit_i16(iu, value_reg(ret));
+        emit_i16(iu, truereg);
+        emit_i16(iu, falsereg);
+        emit_i16(iu, value_reg(lhs));
+        emit_i32(iu, value_get_const32(iu, rhs));
+        break;
+
+      default:
+        parser_error(iu, "Can't cmpsel type %s class %d/%d op %d",
+                     type_str(iu, it),
+                     lhs->iv_class, rhs->iv_class, pred);
+      }
+    } else {
+      parser_error(iu, "Can't cmpsel pred %d (const)", pred);
+    }
+  } else {
+    parser_error(iu, "Can't cmpsel value class %d and %d",
                  lhs->iv_class, rhs->iv_class);
   }
 }
@@ -3791,7 +3922,7 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
   //  printf("=========== BB %s.%d\n", f->if_name, bb->ib_id);
   TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
 
-    //    printf("EMIT INSTR: ");  instr_print(iu, ii, 1);  printf("\n");
+    //    printf("EMIT INSTR: %s\n", instr_str(iu, ii, 1));
 
 #ifdef VMIR_VM_JIT
     if(ii->ii_jit) {
@@ -3873,6 +4004,9 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
       break;
     case IR_IC_CMP_BRANCH:
       emit_cmp_branch(iu, (ir_instr_cmp_branch_t *)ii);
+      break;
+    case IR_IC_CMP_SELECT:
+      emit_cmp_select(iu, (ir_instr_cmp_select_t *)ii);
       break;
     case IR_IC_MLA:
       emit_mla(iu, (ir_instr_ternary_t *)ii);

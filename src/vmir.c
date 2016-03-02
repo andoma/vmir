@@ -125,6 +125,7 @@ typedef void (vm_ext_function_t)(void *ret, const void *regs,
 typedef struct vmir_stats {
 
   int cmp_branch_combine;
+  int cmp_select_combine;
   int mla_combine;
   int load_cast_combine;
   int moves_killed;
@@ -369,6 +370,7 @@ typedef enum {
   IR_IC_STACKCOPY,
   IR_IC_STACKSHRINK,
   IR_IC_CMP_BRANCH,
+  IR_IC_CMP_SELECT,
   IR_IC_MLA,
 } instr_class_t;
 
@@ -883,6 +885,7 @@ vmir_print_stats(ir_unit_t *iu)
   printf("  Lea+Load combined: %d\n", iu->iu_stats.lea_load_combined);
   printf(" Lea+Load comb-fail: %d\n", iu->iu_stats.lea_load_combined_failed);
   printf("Cmp+Branch combined: %d\n", iu->iu_stats.cmp_branch_combine);
+  printf("Cmp+Select combined: %d\n", iu->iu_stats.cmp_select_combine);
   printf("   Mul+Add combined: %d\n", iu->iu_stats.mla_combine);
   printf(" Load+Cast combined: %d\n", iu->iu_stats.load_cast_combine);
 

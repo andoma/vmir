@@ -371,6 +371,19 @@ typedef struct ir_instr_cmp_branch {
 } ir_instr_cmp_branch_t;
 
 
+/**
+ *
+ */
+typedef struct ir_instr_cmp_select {
+  ir_instr_t super;
+  int op;
+  ir_valuetype_t lhs_value;
+  ir_valuetype_t rhs_value;
+  ir_valuetype_t true_value;
+  ir_valuetype_t false_value;
+} ir_instr_cmp_select_t;
+
+
 typedef struct ir_instr_extractval {
   ir_instr_t super;
   ir_valuetype_t  value;
@@ -1315,6 +1328,36 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
     }
     break;
 
+  case IR_IC_CMP_SELECT:
+    {
+      ir_instr_cmp_select_t *ics = (ir_instr_cmp_select_t *)ii;
+      const char *op = "???";
+      switch(ics->op) {
+      case ICMP_EQ: op = "eq"; break;
+      case ICMP_NE: op = "ne"; break;
+      case ICMP_UGT: op = "ugt"; break;
+      case ICMP_UGE: op = "uge"; break;
+      case ICMP_ULT: op = "ult"; break;
+      case ICMP_ULE: op = "ule"; break;
+      case ICMP_SGT: op = "sgt"; break;
+      case ICMP_SGE: op = "sge"; break;
+      case ICMP_SLT: op = "slt"; break;
+      case ICMP_SLE: op = "sle"; break;
+      }
+
+      len += addstr(dstp, "cmpselect.");
+      len += addstr(dstp, op);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, ics->lhs_value);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, ics->rhs_value);
+      len += addstr(dstp, " true:");
+      len += value_print_vt(dstp, iu, ics->true_value);
+      len += addstr(dstp, " false:");
+      len += value_print_vt(dstp, iu, ics->false_value);
+    }
+    break;
+
   case IR_IC_BR:
     {
       ir_instr_br_t *br = (ir_instr_br_t *)ii;
@@ -1507,4 +1550,72 @@ instr_stra(ir_unit_t *iu, const ir_instr_t *ii, int flags)
   dst[len] = 0;
   instr_print(&dst, iu, ii, flags);
   return ret;
+}
+
+
+__attribute__((unused)) static int
+invert_pred(int pred)
+{
+  switch(pred) {
+  default:
+    abort();
+  case ICMP_EQ: return ICMP_NE;
+  case ICMP_NE: return ICMP_EQ;
+  case ICMP_UGT: return ICMP_ULE;
+  case ICMP_ULT: return ICMP_UGE;
+  case ICMP_UGE: return ICMP_ULT;
+  case ICMP_ULE: return ICMP_UGT;
+  case ICMP_SGT: return ICMP_SLE;
+  case ICMP_SLT: return ICMP_SGE;
+  case ICMP_SGE: return ICMP_SLT;
+  case ICMP_SLE: return ICMP_SGT;
+  case FCMP_OEQ: return FCMP_UNE;
+  case FCMP_ONE: return FCMP_UEQ;
+  case FCMP_OGT: return FCMP_ULE;
+  case FCMP_OLT: return FCMP_UGE;
+  case FCMP_OGE: return FCMP_ULT;
+  case FCMP_OLE: return FCMP_UGT;
+  case FCMP_UEQ: return FCMP_ONE;
+  case FCMP_UNE: return FCMP_OEQ;
+  case FCMP_UGT: return FCMP_OLE;
+  case FCMP_ULT: return FCMP_OGE;
+  case FCMP_UGE: return FCMP_OLT;
+  case FCMP_ULE: return FCMP_OGT;
+  case FCMP_ORD: return FCMP_UNO;
+  case FCMP_UNO: return FCMP_ORD;
+  case FCMP_TRUE: return FCMP_FALSE;
+  case FCMP_FALSE: return FCMP_TRUE;
+  }
+}
+
+static int
+swap_pred(int pred)
+{
+  switch(pred) {
+  default:
+    abort();
+  case ICMP_EQ: case ICMP_NE:
+    return pred;
+  case ICMP_SGT: return ICMP_SLT;
+    case ICMP_SLT: return ICMP_SGT;
+    case ICMP_SGE: return ICMP_SLE;
+    case ICMP_SLE: return ICMP_SGE;
+    case ICMP_UGT: return ICMP_ULT;
+    case ICMP_ULT: return ICMP_UGT;
+    case ICMP_UGE: return ICMP_ULE;
+    case ICMP_ULE: return ICMP_UGE;
+    case FCMP_FALSE: case FCMP_TRUE:
+    case FCMP_OEQ: case FCMP_ONE:
+    case FCMP_UEQ: case FCMP_UNE:
+    case FCMP_ORD: case FCMP_UNO:
+      return pred;
+    case FCMP_OGT: return FCMP_OLT;
+    case FCMP_OLT: return FCMP_OGT;
+    case FCMP_OGE: return FCMP_OLE;
+    case FCMP_OLE: return FCMP_OGE;
+    case FCMP_UGT: return FCMP_ULT;
+    case FCMP_ULT: return FCMP_UGT;
+    case FCMP_UGE: return FCMP_ULE;
+    case FCMP_ULE: return FCMP_UGE;
+  }
 }
