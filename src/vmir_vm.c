@@ -1234,16 +1234,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     }
 
 
-  VMOP(SELECT8RR) AR32(0, R32(1) ? R8(2)    : R8(3));    NEXT(4);
-  VMOP(SELECT8RC) AR32(0, R32(1) ? R8(2)    : UIMM8(3)); NEXT(4);
-  VMOP(SELECT8CR) AR32(0, R32(1) ? UIMM8(3) : R8(2));    NEXT(4);
-  VMOP(SELECT8CC) AR32(0, R32(1) ? UIMM8(2) : UIMM8(4)); NEXT(4);
-
-  VMOP(SELECT16RR) AR32(0, R32(1) ? R16(2)    : R16(3));    NEXT(4);
-  VMOP(SELECT16RC) AR32(0, R32(1) ? R16(2)    : UIMM16(3)); NEXT(4);
-  VMOP(SELECT16CR) AR32(0, R32(1) ? UIMM16(3) : R16(2));    NEXT(4);
-  VMOP(SELECT16CC) AR32(0, R32(1) ? UIMM16(2) : UIMM16(4)); NEXT(4);
-
   VMOP(SELECT32RR) AR32(0, R32(1) ? R32(2)    : R32(3));    NEXT(4);
   VMOP(SELECT32RC) AR32(0, R32(1) ? R32(2)    : UIMM32(3)); NEXT(5);
   VMOP(SELECT32CR) AR32(0, R32(1) ? UIMM32(3) : R32(2));    NEXT(5);
@@ -1819,17 +1809,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_UGE32_C_BR:     return &&UGE32_C_BR    - &&opz;     break;
   case VM_ULT32_C_BR:     return &&ULT32_C_BR    - &&opz;     break;
   case VM_ULE32_C_BR:     return &&ULE32_C_BR    - &&opz;     break;
-
-
-  case VM_SELECT8RR: return &&SELECT8RR - &&opz;     break;
-  case VM_SELECT8RC: return &&SELECT8RC - &&opz;     break;
-  case VM_SELECT8CR: return &&SELECT8CR - &&opz;     break;
-  case VM_SELECT8CC: return &&SELECT8CC - &&opz;     break;
-
-  case VM_SELECT16RR: return &&SELECT16RR - &&opz;     break;
-  case VM_SELECT16RC: return &&SELECT16RC - &&opz;     break;
-  case VM_SELECT16CR: return &&SELECT16CR - &&opz;     break;
-  case VM_SELECT16CC: return &&SELECT16CC - &&opz;     break;
 
   case VM_SELECT32RR: return &&SELECT32RR - &&opz;     break;
   case VM_SELECT32RC: return &&SELECT32RC - &&opz;     break;
@@ -3676,7 +3655,6 @@ emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
     parser_error(iu, "Bad class %d for alloca elements",
                  iv->iv_class);
   }
-
 }
 
 
@@ -3692,9 +3670,11 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
   const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
   const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
   //  assert(tv->iv_type == fv->iv_type);
+  const int code = legalize_type(ty);
+  switch(COMBINE3(tv->iv_class, fv->iv_class, code)) {
 
-  switch(COMBINE3(tv->iv_class, fv->iv_class, legalize_type(ty))) {
-
+  case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT8):
+  case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT16):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT32):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_POINTER):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_FLOAT):
@@ -3702,22 +3682,28 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
              value_reg(tv), value_reg(fv));
     break;
 
+  case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT8):
+  case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT16):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT32):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_FLOAT):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_POINTER):
   case COMBINE3(IR_VC_REGFRAME, IR_VC_GLOBALVAR, IR_TYPE_POINTER):
     emit_op3(iu, VM_SELECT32RC, value_reg(ret), value_reg(p),
              value_reg(tv));
-    emit_i32(iu, value_get_const32(iu, fv));
+    emit_i32(iu, value_get_const32(iu, fv) & type_code_mask(code));
     break;
+  case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT8):
+  case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT16):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT32):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_FLOAT):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_POINTER):
   case COMBINE3(IR_VC_GLOBALVAR, IR_VC_REGFRAME, IR_TYPE_POINTER):
     emit_op3(iu, VM_SELECT32CR, value_reg(ret), value_reg(p),
              value_reg(fv));
-    emit_i32(iu, value_get_const32(iu, tv));
+    emit_i32(iu, value_get_const32(iu, tv) & type_code_mask(code));
     break;
+  case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT8):
+  case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT16):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT32):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_FLOAT):
   case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_POINTER):
@@ -3725,52 +3711,8 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
   case COMBINE3(IR_VC_CONSTANT, IR_VC_GLOBALVAR, IR_TYPE_POINTER):
   case COMBINE3(IR_VC_GLOBALVAR, IR_VC_GLOBALVAR, IR_TYPE_POINTER):
     emit_op2(iu, VM_SELECT32CC, value_reg(ret), value_reg(p));
-    emit_i32(iu, value_get_const32(iu, tv));
-    emit_i32(iu, value_get_const32(iu, fv));
-    break;
-
-
-
-  case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT16):
-    emit_op4(iu, VM_SELECT16RR, value_reg(ret), value_reg(p),
-             value_reg(tv), value_reg(fv));
-    break;
-  case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT16):
-    emit_op3(iu, VM_SELECT16RC, value_reg(ret), value_reg(p),
-             value_reg(tv));
-    emit_i16(iu, value_get_const32(iu, fv));
-    break;
-  case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT16):
-    emit_op3(iu, VM_SELECT16CR, value_reg(ret), value_reg(p),
-             value_reg(fv));
-    emit_i16(iu, value_get_const32(iu, tv));
-    break;
-  case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT16):
-    emit_op2(iu, VM_SELECT16CC, value_reg(ret), value_reg(p));
-    emit_i16(iu, value_get_const32(iu, tv));
-    emit_i16(iu, value_get_const32(iu, fv));
-    break;
-
-
-
-  case COMBINE3(IR_VC_REGFRAME, IR_VC_REGFRAME, IR_TYPE_INT8):
-    emit_op4(iu, VM_SELECT8RR, value_reg(ret), value_reg(p),
-             value_reg(tv), value_reg(fv));
-    break;
-  case COMBINE3(IR_VC_REGFRAME, IR_VC_CONSTANT, IR_TYPE_INT8):
-    emit_op3(iu, VM_SELECT8RC, value_reg(ret), value_reg(p),
-             value_reg(tv));
-    emit_i8(iu, value_get_const32(iu, fv));
-    break;
-  case COMBINE3(IR_VC_CONSTANT, IR_VC_REGFRAME, IR_TYPE_INT8):
-    emit_op3(iu, VM_SELECT8CR, value_reg(ret), value_reg(p),
-             value_reg(fv));
-    emit_i8(iu, value_get_const32(iu, tv));
-    break;
-  case COMBINE3(IR_VC_CONSTANT, IR_VC_CONSTANT, IR_TYPE_INT8):
-    emit_op2(iu, VM_SELECT8CC, value_reg(ret), value_reg(p));
-    emit_i8(iu, value_get_const32(iu, tv));
-    emit_i8(iu, value_get_const32(iu, fv));
+    emit_i32(iu, value_get_const32(iu, tv) & type_code_mask(code));
+    emit_i32(iu, value_get_const32(iu, fv) & type_code_mask(code));
     break;
 
 

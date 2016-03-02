@@ -380,6 +380,24 @@ type_sizeof(ir_unit_t *iu, int index)
   }
 }
 
+/**
+ *
+ */
+static uint32_t
+type_code_mask(ir_type_code_t code)
+{
+  switch(code) {
+  case IR_TYPE_INT1:
+    return 0xff;
+  case IR_TYPE_INT8:
+    return 0xff;
+  case IR_TYPE_INT16:
+    return 0xffff;
+  default:
+    return 0xffffffff;
+  }
+}
+
 
 /**
  *
