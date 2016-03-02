@@ -902,6 +902,36 @@ armcond(int pred)
   return cond;
 }
 
+/**
+ *
+ */
+static void
+jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc)
+{
+  int Rn = jit_loadvalue(iu, lhs, R_TMPA, jc);
+
+  const ir_value_t *rhs_value = value_get(iu, rhs.value);
+  if(rhs_value->iv_class == IR_VC_CONSTANT) {
+    int32_t rc = value_get_const(iu, rhs_value);
+    int imm12 = make_imm12(rc);
+    if(imm12 != -1) {
+      // CMP immediate
+      jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | imm12);
+      return;
+    }
+    imm12 = make_imm12(-rc);
+    if(imm12 != -1) {
+      // CMN immediate
+      jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 22) | (1 << 21) | (1 << 20) | (Rn << 16) | imm12);
+      return;
+    }
+  }
+
+  int Rm = jit_loadvalue(iu, rhs, R_TMPB, jc);
+  // CMP register
+  jit_pushal(iu, (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | Rm);
+}
+
 
 /**
  *
@@ -909,14 +939,12 @@ armcond(int pred)
 static void
 jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
 {
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
+
   int ptr1 = 0;
   int ptr2 = 0;
   ir_bb_t *ib;
   ir_instr_t *tgt;
-
-  int Rn = jit_loadvalue(iu, ii->lhs_value, R_TMPA, jc);
-  int Rm = jit_loadvalue(iu, ii->rhs_value, R_TMPB, jc);
-  jit_pushal(iu, (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | Rm);
 
   const int cond = armcond(ii->op);
 
@@ -977,9 +1005,7 @@ jit_cmp_select_check(ir_unit_t *iu, ir_instr_cmp_select_t *ii)
 static void
 jit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii, jitctx_t *jc)
 {
-  int Rn = jit_loadvalue(iu, ii->lhs_value, R_TMPA, jc);
-  int Rm = jit_loadvalue(iu, ii->rhs_value, R_TMPB, jc);
-  jit_pushal(iu, (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16) | Rm);
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
 
   const uint32_t true_cond = armcond(ii->op);
   const uint32_t false_cond = armcond(invert_pred(ii->op));
@@ -993,6 +1019,46 @@ jit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii, jitctx_t *jc)
 
   Rx = jit_loadvalue_cond(iu, ii->false_value, Rd, jc, false_cond);
   jit_storevalue_cond(iu, ii->super.ii_ret, Rx, false_cond);
+}
+
+
+/**
+ *
+ */
+static int
+jit_cmp_check(ir_unit_t *iu, ir_instr_binary_t *ii)
+{
+  int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
+
+  switch(typecode) {
+  case IR_TYPE_INT32:
+  case IR_TYPE_POINTER:
+    break;
+  default:
+    return 0;
+  }
+  return 1;
+}
+
+
+/**
+ *
+ */
+static void
+jit_cmp(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
+{
+  jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc);
+
+  const uint32_t true_cond = armcond(ii->op);
+  const uint32_t false_cond = armcond(invert_pred(ii->op));
+
+  int Rd = jit_storevalue_reg(iu, ii->super.ii_ret, R_TMPA);
+
+  jit_loadimm_cond(iu, 1, Rd, jc, true_cond);
+  jit_storevalue_cond(iu, ii->super.ii_ret, Rd, true_cond);
+
+  jit_loadimm_cond(iu, 0, Rd, jc, false_cond);
+  jit_storevalue_cond(iu, ii->super.ii_ret, Rd, false_cond);
 }
 
 
@@ -1118,6 +1184,9 @@ jit_check(ir_unit_t *iu, ir_instr_t *ii)
     break;
   case IR_IC_CMP_SELECT:
     r = jit_cmp_select_check(iu, (ir_instr_cmp_select_t *)ii);
+    break;
+  case IR_IC_CMP2:
+    r = jit_cmp_check(iu, (ir_instr_binary_t *)ii);
     break;
   case IR_IC_LEA:
     r = 1;
@@ -1252,6 +1321,9 @@ jit_emit(ir_unit_t *iu, ir_instr_t *ii, int *codeptr, int retvalue)
       break;
     case IR_IC_MLA:
       jit_mla(iu, (ir_instr_ternary_t *)ii, &jc);
+      break;
+    case IR_IC_CMP2:
+      jit_cmp(iu, (ir_instr_binary_t *)ii, &jc);
       break;
     case IR_IC_CMP_SELECT:
       jit_cmp_select(iu, (ir_instr_cmp_select_t *)ii, &jc);
