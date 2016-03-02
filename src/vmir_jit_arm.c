@@ -1007,12 +1007,17 @@ jit_cast_check(ir_unit_t *iu, ir_instr_unary_t *ii)
   const int castop = ii->op;
 
   switch(COMBINE3(dstcode, castop, srccode)) {
-  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT8,  CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT16, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT8,  CAST_TRUNC, IR_TYPE_INT16):
+
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT8):
+  case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT16):
   case COMBINE3(IR_TYPE_INT16, CAST_ZEXT, IR_TYPE_INT8):
 
-  case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
-  case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT8):
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT16):
+  case COMBINE3(IR_TYPE_INT16, CAST_SEXT, IR_TYPE_INT8):
     return 1;
 
   default:
@@ -1035,18 +1040,37 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
 
   switch(COMBINE3(dstcode, castop, srccode)) {
   case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT16):
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT8):
   case COMBINE3(IR_TYPE_INT16, CAST_ZEXT, IR_TYPE_INT8):
+    // UXTB
     jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) |
              (1 << 23) | (1 << 22) | (1 << 21) | 0xf0070 |
              (Rd << 12) | Rm);
     break;
 
   case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT8):
-  case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
-  case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
-    jit_storevalue(iu, ii->super.ii_ret, Rm);
-    return;
+  case COMBINE3(IR_TYPE_INT16, CAST_SEXT, IR_TYPE_INT8):
+    // SXTB
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) |
+             (1 << 23) | (1 << 21) | 0xf0070 |
+             (Rd << 12) | Rm);
+    break;
+
+  case COMBINE3(IR_TYPE_INT16, CAST_TRUNC, IR_TYPE_INT32):
+  case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT16):
+    // UXTH
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) |
+             (1 << 23) | (1 << 22) | (1 << 21) | (1 << 20) | 0xf0070 |
+             (Rd << 12) | Rm);
+    break;
+
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT16):
+    // SXTH
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) |
+             (1 << 23) | (1 << 21) | (1 << 20) | 0xf0070 |
+             (Rd << 12) | Rm);
+    break;
 
   default:
     abort();
