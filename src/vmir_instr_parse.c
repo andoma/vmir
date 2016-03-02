@@ -1112,35 +1112,37 @@ function_rec_handler(ir_unit_t *iu, int op,
 
 
 
-static void
-instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
+static int
+instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
 {
-  printf("%c %p: ", ii->ii_jit ? 'J' : ' ', ii);
+  int len = 0;
+  len += addstr(dstp, ii->ii_jit ? "J" : " ");
   if(ii->ii_ret.value < -1) {
     int num_values = -ii->ii_ret.value;
-    printf("{ ");
+    len += addstr(dstp, "{ ");
     for(int i = 0; i < num_values; i++) {
-      printf("%s%s", i ? ", " : "", value_str_vt(iu, ii->ii_rets[i]));
+      if(i)
+        len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, ii->ii_rets[i]);
     }
-    printf(" } = ");
+    len += addstr(dstp, "} = ");
   } else if(ii->ii_ret.value != -1) {
-    printf("%s = ", value_str_vt(iu, ii->ii_ret));
+    len += value_print_vt(dstp, iu, ii->ii_ret);
+    len += addstr(dstp, " = ");
   }
 
   switch(ii->ii_class) {
 
   case IR_IC_UNREACHABLE:
-    {
-      printf("unreachable ");
-    }
+    len += addstr(dstp, "unreachable");
     break;
 
   case IR_IC_RET:
     {
       ir_instr_unary_t *u = (ir_instr_unary_t *)ii;
-      printf("ret ");
+      len += addstr(dstp, "ret ");
       if(u->value.value != -1)
-        printf("%s", value_str_vt(iu, u->value));
+        len += value_print_vt(dstp, iu, u->value);
     }
     break;
 
@@ -1149,37 +1151,25 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       ir_instr_binary_t *b = (ir_instr_binary_t *)ii;
       const char *op = "???";
       switch(b->op) {
-      case BINOP_ADD:
-        op = "add"; break;
-      case BINOP_SUB:
-        op = "sub"; break;
-      case BINOP_MUL:
-        op = "mul"; break;
-      case BINOP_UDIV:
-        op = "udiv"; break;
-      case BINOP_SDIV:
-        op = "sdiv"; break;
-      case BINOP_UREM:
-        op = "urem"; break;
-      case BINOP_SREM:
-        op = "srem"; break;
-      case BINOP_SHL:
-        op = "shl"; break;
-      case BINOP_LSHR:
-        op = "lshr"; break;
-      case BINOP_ASHR:
-        op = "ashr"; break;
-      case BINOP_AND:
-        op = "and"; break;
-      case BINOP_OR:
-        op = "or"; break;
-      case BINOP_XOR:
-        op = "xor"; break;
+      case BINOP_ADD:        op = "add"; break;
+      case BINOP_SUB:        op = "sub"; break;
+      case BINOP_MUL:        op = "mul"; break;
+      case BINOP_UDIV:       op = "udiv"; break;
+      case BINOP_SDIV:       op = "sdiv"; break;
+      case BINOP_UREM:       op = "urem"; break;
+      case BINOP_SREM:       op = "srem"; break;
+      case BINOP_SHL:        op = "shl"; break;
+      case BINOP_LSHR:       op = "lshr"; break;
+      case BINOP_ASHR:       op = "ashr"; break;
+      case BINOP_AND:        op = "and"; break;
+      case BINOP_OR:         op = "or"; break;
+      case BINOP_XOR:        op = "xor"; break;
       }
-
-      printf("%s %s, %s", op,
-             value_str_vt(iu, b->lhs_value),
-             value_str_vt(iu, b->rhs_value));
+      len += addstr(dstp, op);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, b->lhs_value);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, b->rhs_value);
     }
     break;
   case IR_IC_CAST:
@@ -1187,41 +1177,43 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       ir_instr_unary_t *u = (ir_instr_unary_t *)ii;
       const char *op = "???";
       switch(u->op) {
-      case CAST_TRUNC: op = "trunc"; break;
-      case CAST_ZEXT: op = "zext"; break;
-      case CAST_SEXT: op = "sext"; break;
-      case CAST_FPTOUI: op = "fptoui"; break;
-      case CAST_FPTOSI: op = "fptosi"; break;
-      case CAST_UITOFP: op = "uitofp"; break;
-      case CAST_SITOFP: op = "sitofp"; break;
-      case CAST_FPTRUNC: op = "fptrunc"; break;
-      case CAST_FPEXT: op = "fpext"; break;
+      case CAST_TRUNC:    op = "trunc"; break;
+      case CAST_ZEXT:     op = "zext"; break;
+      case CAST_SEXT:     op = "sext"; break;
+      case CAST_FPTOUI:   op = "fptoui"; break;
+      case CAST_FPTOSI:   op = "fptosi"; break;
+      case CAST_UITOFP:   op = "uitofp"; break;
+      case CAST_SITOFP:   op = "sitofp"; break;
+      case CAST_FPTRUNC:  op = "fptrunc"; break;
+      case CAST_FPEXT:    op = "fpext"; break;
       case CAST_PTRTOINT: op = "ptrtoint"; break;
       case CAST_INTTOPTR: op = "inttoptr"; break;
-      case CAST_BITCAST: op = "bitcast"; break;
+      case CAST_BITCAST:  op = "bitcast"; break;
       }
-      printf("cast.%s %s", op, value_str_vt(iu, u->value));
+      len += addstr(dstp, op);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, u->value);
     }
     break;
 
   case IR_IC_LOAD:
     {
       ir_instr_load_t *u = (ir_instr_load_t *)ii;
-      const char *cast = "";
+      len += addstr(dstp, "load");
       switch(u->cast) {
-      case CAST_ZEXT:
-        cast = ".zext";
-        break;
-      case CAST_SEXT:
-        cast = ".sext";
-        break;
+      case CAST_ZEXT:  len += addstr(dstp, ".zext");  break;
+      case CAST_SEXT:  len += addstr(dstp, ".sext");  break;
       }
-      printf("load%s %s + #0x%x", cast, value_str_vt(iu, u->ptr),
-             u->immediate_offset);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, u->ptr);
+      if(u->immediate_offset) {
+        len += addstrf(dstp, " + #%x", u->immediate_offset);
+      }
       if(u->value_offset.value >= 0) {
-        printf(" + %s * #0x%x",
-               value_str_vt(iu, u->value_offset),
-               u->value_offset_multiply);
+        len += addstr(dstp, " + ");
+        len += value_print_vt(dstp, iu, u->value_offset);
+        if(u->value_offset_multiply)
+          len += addstrf(dstp, " * #0x%x", u->value_offset_multiply);
       }
     }
     break;
@@ -1229,21 +1221,28 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
   case IR_IC_STORE:
     {
       ir_instr_store_t *s = (ir_instr_store_t *)ii;
-      printf("store %s + #0x%x, %s",
-             value_str_vt(iu, s->ptr), s->offset, value_str_vt(iu, s->value));
+      len += addstr(dstp, "store ");
+      len += value_print_vt(dstp, iu, s->ptr);
+      if(s->offset)
+        len += addstrf(dstp, " + #%x", s->offset);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, s->value);
     }
     break;
 
   case IR_IC_GEP:
     {
       ir_instr_gep_t *g = (ir_instr_gep_t *)ii;
-      printf("gep ");
+      len += addstr(dstp, "gep ");
       if(g->baseptr.value != -1)
-        printf("%s", value_str_vt(iu, g->baseptr));
+        len += value_print_vt(dstp, iu, g->baseptr);
 
       for(int i = 0; i < g->num_indicies; i++) {
-        printf(" + %s[%s]", type_str_index(iu, g->indicies[i].type),
-               value_str_vt(iu, g->indicies[i].value));
+        len += addstr(dstp, " + ");
+        len += type_print_id(dstp, iu, g->indicies[i].type);
+        len += addstr(dstp, "[");
+        len += value_print_vt(dstp, iu, g->indicies[i].value);
+        len += addstr(dstp, "]");
       }
     }
     break;
@@ -1279,8 +1278,11 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       case ICMP_SLT: op = "icmp_slt"; break;
       case ICMP_SLE: op = "icmp_sle"; break;
       }
-      printf("%s %s, %s", op, value_str_vt(iu, b->lhs_value),
-             value_str_vt(iu, b->rhs_value));
+      len += addstr(dstp, op);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, b->lhs_value);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, b->rhs_value);
     }
     break;
 
@@ -1300,12 +1302,16 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
       case ICMP_SLT: op = "slt"; break;
       case ICMP_SLE: op = "sle"; break;
       }
-      printf("cmpbr.%s %s, %s true:.%d false:.%d",
-             op,
-             value_str_vt(iu, icb->lhs_value),
-             value_str_vt(iu, icb->rhs_value),
-             icb->true_branch,
-             icb->false_branch);
+
+      len += addstr(dstp, "cmpbr.");
+      len += addstr(dstp, op);
+      len += addstr(dstp, " ");
+      len += value_print_vt(dstp, iu, icb->lhs_value);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, icb->rhs_value);
+
+      len += addstrf(dstp, " true:.%d false:.%d",
+                     icb->true_branch, icb->false_branch);
     }
     break;
 
@@ -1313,22 +1319,23 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
     {
       ir_instr_br_t *br = (ir_instr_br_t *)ii;
       if(br->condition.value == -1) {
-        printf("b .%d", br->true_branch);
+        len += addstrf(dstp, "b .%d", br->true_branch);
       } else {
-        printf("bcond %s, true:.%d, false:.%d",
-               value_str_vt(iu, br->condition),
-               br->true_branch,
-               br->false_branch);
+        len += addstr(dstp, "bcond ");
+        len += value_print_vt(dstp, iu, br->condition);
+        len += addstrf(dstp, ", true:.%d, false:.%d",
+                       br->true_branch, br->false_branch);
       }
     }
     break;
   case IR_IC_PHI:
     {
       ir_instr_phi_t *p = (ir_instr_phi_t *)ii;
-      printf("phi");
+      len += addstr(dstp, "phi ");
       for(int i = 0; i < p->num_nodes; i++) {
-        printf(" [.%d %s]", p->nodes[i].predecessor,
-               value_str_vt(iu, p->nodes[i].value));
+        len += addstrf(dstp, " [.%d ", p->nodes[i].predecessor);
+        len += value_print_vt(dstp, iu, p->nodes[i].value);
+        len += addstr(dstp, "]");
       }
     }
     break;
@@ -1336,133 +1343,153 @@ instr_print(ir_unit_t *iu, ir_instr_t *ii, int flags)
   case IR_IC_VMOP:
     {
       ir_instr_call_t *p = (ir_instr_call_t *)ii;
-      ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, p->callee.value);
       ir_function_t *f = value_function(iu, p->callee.value);
 
       if(f != NULL) {
-
-        printf("%s %s (%s) (",
-               f->if_vmop ? "vmop" : "call",
-               f->if_name,
-               type_str_index(iu, p->callee.type));
+        len += addstr(dstp, f->if_vmop ? "vmop" : "call");
+        len += addstr(dstp, " ");
+        len += addstr(dstp, f->if_name);
       } else {
-        printf("fptr in %s (%s) (", value_str(iu, iv),
-               type_str_index(iu, p->callee.type));
+        len += addstr(dstp, "fptr in ");
+        len += value_print_vt(dstp, iu, p->callee);
       }
+      len += addstr(dstp, " (");
+      len += type_print_id(dstp, iu, p->callee.type);
+      len += addstr(dstp, ") (");
       for(int i = 0; i < p->argc; i++) {
-        if(i)printf(", ");
-        printf("%s", value_str_vt(iu, p->argv[i].value));
-        if(p->argv[i].copy_size) {
-          printf(" (byval %d bytes)", p->argv[i].copy_size);
-        }
+        if(i)
+          len += addstr(dstp, ", ");
+        len += value_print_vt(dstp, iu, p->argv[i].value);
+        if(p->argv[i].copy_size)
+          len += addstrf(dstp, " (byval %d bytes)", p->argv[i].copy_size);
       }
-      printf(")");
+      len += addstr(dstp, ")");
     }
     break;
 
   case IR_IC_SWITCH:
     {
       ir_instr_switch_t *s = (ir_instr_switch_t *)ii;
-      printf("switch on %s ", value_str_vt(iu, s->value));
-      for(int i = 0; i < s->num_paths; i++) {
-        printf(" [#%"PRIx64, s->paths[i].v64);
-        printf(" -> .%d]", s->paths[i].block);
-      }
-      printf(" default: .%d", s->defblock);
+      len += addstr(dstp, "switch");
+      len += value_print_vt(dstp, iu, s->value);
+      for(int i = 0; i < s->num_paths; i++)
+        len += addstrf(dstp, " [#%"PRId64" -> .%d]",
+                       s->paths[i].v64, s->paths[i].block);
+      len += addstrf(dstp, " default: .%d", s->defblock);
     }
     break;
   case IR_IC_ALLOCA:
     {
       ir_instr_alloca_t *a = (ir_instr_alloca_t *)ii;
-      printf("alloca [%d * %s], align: %d",
-             a->size, value_str_vt(iu, a->num_items_value), a->alignment);
+      len += addstrf(dstp, "alloca [%d * ", a->size);
+      len += value_print_vt(dstp, iu, a->num_items_value);
+      len += addstrf(dstp, " align: %d", a->alignment);
     }
     break;
   case IR_IC_SELECT:
     {
       ir_instr_select_t *s = (ir_instr_select_t *)ii;
-      printf("select %s, true: %s, false: %s",
-             value_str_vt(iu, s->pred),
-             value_str_vt(iu, s->true_value),
-             value_str_vt(iu, s->false_value));
+      len += addstr(dstp, "select ");
+      len += value_print_vt(dstp, iu, s->pred);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, s->true_value);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, s->false_value);
     }
     break;
   case IR_IC_VAARG:
     {
       ir_instr_unary_t *m = (ir_instr_unary_t *)ii;
-
-      printf("vaarg %s", value_str_vt(iu, m->value));
+      len += addstr(dstp, "vaarg ");
+      len += value_print_vt(dstp, iu, m->value);
     }
     break;
   case IR_IC_EXTRACTVAL:
     {
       ir_instr_extractval_t *jj = (ir_instr_extractval_t *)ii;
-
-      printf("extractval %s [", value_str_vt(iu, jj->value));
+      len += addstr(dstp, "extractval ");
+      len += value_print_vt(dstp, iu, jj->value);
       for(int i = 0; i < jj->num_indicies; i++)
-        printf("%s%d", i ? ",  " : "", jj->indicies[i]);
-      printf("]");
+        len += addstrf(dstp, "%s%d", i ? ",  " : "", jj->indicies[i]);
+
+      len += addstr(dstp, "]");
     }
     break;
   case IR_IC_LEA:
     {
       ir_instr_lea_t *l = (ir_instr_lea_t *)ii;
-
-      printf("lea %s + #0x%x",
-             value_str_vt(iu, l->baseptr),
-             l->immediate_offset);
+      len += addstr(dstp, "lea ");
+      len += value_print_vt(dstp, iu, l->baseptr);
+      if(l->immediate_offset)
+        len += addstrf(dstp, " + #0x%x", l->immediate_offset);
 
       if(l->value_offset.value >= 0) {
-        printf(" + %s * #0x%x",
-               value_str_vt(iu, l->value_offset),
-               l->value_offset_multiply);
+        len += addstr(dstp, " + ");
+        len += value_print_vt(dstp, iu, l->value_offset);
+        if(l->value_offset_multiply)
+          len += addstrf(dstp, " * #0x%x", l->value_offset_multiply);
       }
     }
     break;
   case IR_IC_MOVE:
     {
       ir_instr_move_t *m = (ir_instr_move_t *)ii;
-
-      printf("move %s", value_str_vt(iu, m->value));
+      len += addstr(dstp, "move ");
+      len += value_print_vt(dstp, iu, m->value);
     }
     break;
   case IR_IC_STACKCOPY:
     {
       ir_instr_stackcopy_t *sc = (ir_instr_stackcopy_t *)ii;
-
-      printf("stackcopy %s size:#0x%x",
-             value_str_vt(iu, sc->value),
-             sc->size);
+      len += addstr(dstp, "stackcopy ");
+      len += value_print_vt(dstp, iu, sc->value);
+      len += addstrf(dstp, "size:#0x%x", sc->size);
     }
     break;
   case IR_IC_STACKSHRINK:
     {
       ir_instr_stackshrink_t *ss = (ir_instr_stackshrink_t *)ii;
-      printf("stackshrink #0x%x", ss->size);
+      len += addstrf(dstp, "stackshrink #0x%x", ss->size);
     }
     break;
   case IR_IC_MLA:
     {
       ir_instr_ternary_t *mla = (ir_instr_ternary_t *)ii;
-
-      printf("mla %s, %s, %s",
-             value_str_vt(iu, mla->arg1),
-             value_str_vt(iu, mla->arg2),
-             value_str_vt(iu, mla->arg3));
+      len += addstr(dstp, "mla ");
+      len += value_print_vt(dstp, iu, mla->arg1);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, mla->arg2);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, mla->arg3);
     }
     break;
   }
 
   if(flags & 1) {
     const ir_value_instr_t *ivi;
-    printf(" <");
+    len += addstr(dstp, " <");
     LIST_FOREACH(ivi, &ii->ii_values, ivi_instr_link) {
-      printf("%s=%s ",
-             ivi->ivi_relation == IVI_INPUT ? "input" :
-             ivi->ivi_relation == IVI_OUTPUT ? "output" : "???",
-             value_str(iu, ivi->ivi_value));
+      len += addstrf(dstp, "%s= ",
+                     ivi->ivi_relation == IVI_INPUT ? "input" :
+                     ivi->ivi_relation == IVI_OUTPUT ? "output" : "???");
+      len += value_print(dstp, iu, ivi->ivi_value, NULL);
+      len += addstr(dstp, " ");
     }
-    printf(">");
+    len += addstr(dstp, ">");
   }
+  return len;
+}
 
+
+/**
+ *
+ */
+static const char *
+instr_str(ir_unit_t *iu, const ir_instr_t *ii, int flags)
+{
+  int len = instr_print(NULL, iu, ii, flags);
+  char *dst = tmpstr(iu, len);
+  const char *ret = dst;
+  instr_print(&dst, iu, ii, flags);
+  return ret;
 }

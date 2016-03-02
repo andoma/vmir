@@ -335,13 +335,36 @@ binop_prep_args(ir_unit_t *iu, ir_instr_binary_t *ii)
 static void
 binop_transform_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
-  if(ii->op == CAST_BITCAST) {
-    ir_type_t *srcty = type_get(iu, ii->value.type);
-    ir_type_t *dstty = type_get(iu, ii->super.ii_ret.type);
+  ir_type_t *srcty = type_get(iu, ii->value.type);
+  ir_type_t *dstty = type_get(iu, ii->super.ii_ret.type);
 
+  switch(ii->op) {
+  default:
+    return;
+
+  case CAST_BITCAST:
     if(srcty->it_code == IR_TYPE_POINTER && dstty->it_code == IR_TYPE_POINTER)
-      ii->super.ii_class = IR_IC_MOVE;
+      break;
+    return;
+
+  case CAST_INTTOPTR:
+    if(srcty->it_code == IR_TYPE_INT32)
+      break;
+    return;
+
+  case CAST_PTRTOINT:
+    if(dstty->it_code == IR_TYPE_INT32)
+      break;
+    return;
+
+  case CAST_TRUNC:
+    if(legalize_type(dstty) == legalize_type(srcty))
+      break;
+
+    return;
   }
+
+  ii->super.ii_class = IR_IC_MOVE;
 }
 
 /**
@@ -388,18 +411,16 @@ instr_verify_output(ir_unit_t *iu, ir_instr_t *ii)
       }
     }
     if(ivi == NULL) {
-      instr_print(iu, ii, 1);
-      printf("\n");
-      parser_error(iu, "Instruction output mismatch");
+      parser_error(iu, "Instruction output mismatch for %s",
+                   instr_str(iu, ii, 1));
     } else {
       ivi = LIST_NEXT(ivi, ivi_instr_link);
     }
   }
   for(; ivi != NULL; ivi = LIST_NEXT(ivi, ivi_instr_link)) {
     if(ivi->ivi_relation == IVI_OUTPUT) {
-      instr_print(iu, ii, 1);
-      printf("\n");
-      parser_error(iu, "Instruction output mismatch");
+      parser_error(iu, "Instruction output mismatch for %s",
+                   instr_str(iu, ii, 1));
     }
   }
 }
@@ -1632,8 +1653,7 @@ print_liveout(ir_unit_t *iu, ir_function_t *f, int temp_values, int ffv)
 
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      instr_print(iu, ii, 0);
-      printf("\n");
+      printf("%s\n", instr_str(iu, ii, 0));
       for(int j = 0; j < temp_values; j++)
         if(bitchk(ii->ii_liveness, j))
           printf("\tLiveout: %s\n", value_str_id(iu, j + ffv));
@@ -1750,10 +1770,9 @@ coalesce(ir_unit_t *iu,
           ir_value_t *saved = dst;
 
           if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
-            printf("Merging value %s -> %s based on instr: ",
-                   value_str(iu, killed),  value_str(iu, saved));
-            instr_print(iu, ii, 1);
-            printf("\n");
+            printf("Merging value %s -> %s based on instr: %s\n",
+                   value_str(iu, killed),  value_str(iu, saved),
+                   instr_str(iu, ii, 1));
           }
 
           ir_value_instr_t *ivi, *ivin;
@@ -1762,9 +1781,8 @@ coalesce(ir_unit_t *iu,
             ivin = LIST_NEXT(ivi, ivi_value_link);
 
             if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
-              printf("\t Pre altering instruction ");
-              instr_print(iu, ivi->ivi_instr, 1);
-              printf("\n");
+              printf("\tPre altering instruction %s\n",
+                     instr_str(iu, ivi->ivi_instr, 1));
             }
 
             instr_replace_values(ivi->ivi_instr, iu, killed->iv_id,
@@ -1782,9 +1800,8 @@ coalesce(ir_unit_t *iu,
             }
 #endif
             if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
-              printf("\tPost altering instruction ");
-              instr_print(iu, ivi->ivi_instr, 1);
-              printf("\n");
+              printf("\tPost altering instruction %s\n",
+                     instr_str(iu, ivi->ivi_instr, 1));
             }
           }
 

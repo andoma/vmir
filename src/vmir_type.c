@@ -104,7 +104,8 @@ type_clean(ir_type_t *it)
 /**
  *
  */
-static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it);
+static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it)
+  __attribute__((warn_unused_result));
 static const char *type_str_index(ir_unit_t *iu, int id);
 
 /**

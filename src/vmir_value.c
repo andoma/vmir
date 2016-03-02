@@ -729,7 +729,7 @@ value_str_id(ir_unit_t *iu, int id)
 /**
  *
  */
-static const char *
+  __attribute__((unused)) static const char *
 value_str_vt(ir_unit_t *iu, ir_valuetype_t vt)
 {
   int len = value_print_vt(NULL, iu, vt);

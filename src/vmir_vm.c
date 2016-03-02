@@ -2664,8 +2664,6 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
     break;
 
   default:
-    instr_print(iu, &ii->super, 0);
-    printf("\n");
     parser_error(iu, "Can't load from class %d %s immediate-offset:%d",
                  src->iv_class, type_str(iu, retty),
                  has_offset);
@@ -2884,8 +2882,6 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
 
   default:
-    instr_print(iu, &ii->super, 0);
-    printf("\n");
     parser_error(iu, "Can't store (type %s class %d) ptr class %d off:%d",
                  type_str_index(iu, ii->value.type),
                  val->iv_class,
@@ -3724,12 +3720,7 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
     break;
 
 
-    // optimization candidates
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT1):
-  case COMBINE3(IR_TYPE_POINTER, CAST_BITCAST, IR_TYPE_POINTER):
-  case COMBINE3(IR_TYPE_POINTER, CAST_INTTOPTR, IR_TYPE_INT32):
-  case COMBINE3(IR_TYPE_INT32, CAST_PTRTOINT, IR_TYPE_POINTER):
-  case COMBINE3(IR_TYPE_INT32, CAST_TRUNC, IR_TYPE_INT32):
     emit_op2(iu, VM_MOV32, value_reg(ret), value_reg(src));
     return;
 
@@ -3740,10 +3731,6 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 
   case COMBINE3(IR_TYPE_INT64, CAST_PTRTOINT, IR_TYPE_POINTER):
     op = VM_CAST_64_ZEXT_32;
-    return;
-
-  case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT8):
-    emit_op2(iu, VM_MOV8, value_reg(ret), value_reg(src));
     return;
 
   default:

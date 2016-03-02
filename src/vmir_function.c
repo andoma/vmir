@@ -97,9 +97,7 @@ function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
     }
     printf("\n");
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
-      printf("\t");
-      instr_print(iu, ii, 0);
-      printf("\n");
+      printf("\t%s\n", instr_str(iu, ii, 0));
     }
   }
 }

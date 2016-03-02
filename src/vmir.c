@@ -474,6 +474,27 @@ addstr(char **dst, const char *str)
   return len;
 }
 
+
+/**
+ *
+ */
+static int __attribute__((warn_unused_result))
+addstrf(char **dst, const char *fmt, ...)
+{
+  int len = 0;
+  va_list ap;
+  va_start(ap, fmt);
+  if(dst == NULL) {
+    len = vsnprintf(NULL, 0, fmt, ap);
+  } else {
+    len = vsprintf(*dst, fmt, ap);
+    *dst += len;
+  }
+  va_end(ap);
+  return len;
+}
+
+
 #include "vmir_type.c"
 #include "vmir_value.c"
 #include "vmir_vm.h"
