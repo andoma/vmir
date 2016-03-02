@@ -155,8 +155,8 @@ replace_gep_with_lea(ir_unit_t *iu, ir_instr_gep_t *ii)
         }
 
         value_offset = ii->indicies[j].value;
-        value_offset_multiply =
-          type_sizeof(iu, cur->it_array.element_type);
+        cur = type_get(iu, curtype);
+        value_offset_multiply = type_sizeof(iu, cur->it_array.element_type);
         break;
 
       default:
