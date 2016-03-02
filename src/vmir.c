@@ -277,6 +277,9 @@ typedef struct ir_function {
 
   vm_ext_function_t *if_ext_func;
 
+  struct ir_instr_backref *if_instr_backrefs;
+  int if_instr_backref_size;
+
 } ir_function_t;
 
 

@@ -1493,3 +1493,18 @@ instr_str(ir_unit_t *iu, const ir_instr_t *ii, int flags)
   instr_print(&dst, iu, ii, flags);
   return ret;
 }
+
+
+/**
+ *
+ */
+__attribute__((unused)) static char *
+instr_stra(ir_unit_t *iu, const ir_instr_t *ii, int flags)
+{
+  int len = instr_print(NULL, iu, ii, flags);
+  char *dst = malloc(len + 1);
+  char *ret = dst;
+  dst[len] = 0;
+  instr_print(&dst, iu, ii, flags);
+  return ret;
+}

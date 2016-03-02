@@ -31,7 +31,7 @@
 //#define VM_TRACE
 
 #ifdef VM_TRACE
-#define VM_DONE_USE_COMPUTED_GOTO
+#define VM_DONT_USE_COMPUTED_GOTO
 #endif
 
 #ifndef __has_builtin
@@ -39,9 +39,19 @@
 #endif
 
 #ifdef VM_TRACE
-#define vm_printf(fmt...) printf(fmt)
+#define vm_printf(fmt...) printf("\t\t"fmt)
 #else
 #define vm_printf(fmt...)
+#endif
+
+#ifdef VM_TRACE
+
+typedef struct ir_instr_backref {
+  char *str;
+  int offset;
+  int bb;
+} ir_instr_backref_t;
+
 #endif
 
 static void __attribute__((noinline)) __attribute__((noreturn))
@@ -334,6 +344,14 @@ vm_store_64(void *mem, uint32_t ea, uint64_t v, int line)
 }
 
 
+static ir_function_t *
+vm_getfunc(int callee, ir_unit_t *iu)
+{
+  if(callee >= VECTOR_LEN(&iu->iu_functions))
+    return NULL;
+  return VECTOR_ITEM(&iu->iu_functions, callee);
+}
+
 static const char *
 vm_funcname(int callee, ir_unit_t *iu)
 {
@@ -465,9 +483,44 @@ do_jit_call(void *rf, void *mem, void *(*code)(void *, void *))
   return r;
 }
 
+#ifdef VM_TRACE
+
+static int vm_find_backref(const void *A, const void *B)
+{
+  const ir_instr_backref_t *a = (const ir_instr_backref_t *)A;
+  const ir_instr_backref_t *b = (const ir_instr_backref_t *)B;
+  return a->offset - b->offset;
+}
+
+
+static void
+vm_trace_instruction(ir_unit_t *iu, ir_function_t *f, const uint16_t *I,
+                     const char *opname)
+{
+  int pc = (int)((void *)I - (void *)f->if_vm_text) - 2;
+  ir_instr_backref_t q;
+  q.offset = pc;
+  ir_instr_backref_t *iib = bsearch(&q, f->if_instr_backrefs,
+                                    f->if_instr_backref_size,
+                                    sizeof(ir_instr_backref_t),
+                                    vm_find_backref);
+  if(iib != NULL)
+    printf("%s().%d: %s [vmop:%s]\n", f->if_name, iib->bb, iib->str, opname);
+  else
+    printf("%s(): %s @ %d\n", f->if_name, opname, pc);
+
+
+}
+#endif
+
+
 static int __attribute__((noinline))
 vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
-        uint32_t allocaptr, vm_op_t op)
+        uint32_t allocaptr, vm_op_t op
+#ifdef VM_TRACE
+        , ir_function_t *f
+#endif
+)
 {
   int16_t opc;
 
@@ -494,8 +547,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #define NEXT(skip) I+=skip; opc = *I++; goto reswitch
 
 #ifdef VM_TRACE
-#define VMOP(x) case VM_ ## x : printf("%s %04x %04x %04x %04x %04x %04x %04x %04x\n", #x, \
-  I[0], I[1], I[2], I[3], I[4], I[5], I[6], I[7]);
+#define VMOP(x) case VM_ ## x : vm_trace_instruction(iu, f, I, #x);
 #else
 #define VMOP(x) case VM_ ## x :
 #endif
@@ -552,29 +604,31 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(B)     I = (void *)I + (int16_t)I[0]; NEXT(0);
   VMOP(BCOND) I = (void *)I + (int16_t)(R32(0) ? I[1] : I[2]); NEXT(0);
   VMOP(JSR_VM)
-    vm_printf(">>>>>>>>>>>>>>>>>>>\n");
     vm_printf("Calling %s\n", vm_funcname(I[0], iu));
-    vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1);
-    vm_printf("<<<<<<<<<<<<<<<<<<\n");
+    vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
+#ifdef VM_TRACE
+            , vm_getfunc(I[0], iu)
+#endif
+);
     NEXT(3);
 
   VMOP(JSR_EXT)
-    vm_printf(">>>>>>>>>>>>>>>>>>>");
     vm_printf("Calling %s (internal)\n", vm_funcname(I[0], iu));
     iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
-    vm_printf("<<<<<<<<<<<<<<<<<<");
     NEXT(3);
 
   VMOP(JSR_R)
-    vm_printf(">>>>>>>>>>>>>>>>>>>");
     vm_printf("Calling indirect %s (%d)\n", vm_funcname(R32(0), iu), R32(0));
     if(iu->iu_vm_funcs[R32(0)])
-      vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1);
+      vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1
+#ifdef VM_TRACE
+              , vm_getfunc(R32(0), iu)
+#endif
+              );
     else if(iu->iu_ext_funcs[R32(0)])
       iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
     else
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
-    vm_printf("<<<<<<<<<<<<<<<<<<");
     NEXT(3);
 
 
@@ -2116,7 +2170,11 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 static int16_t
 vm_resolve(int op)
 {
-  int o = vm_exec(NULL, NULL, NULL, NULL, 0, op);
+  int o = vm_exec(NULL, NULL, NULL, NULL, 0, op
+#ifdef VM_TRACE
+, NULL
+#endif
+                  );
   assert(o <= INT16_MAX);
   assert(o >= INT16_MIN);
   return o;
@@ -4067,6 +4125,16 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
         return;
     }
 #endif
+
+#ifdef VM_TRACE
+    ir_instr_backref_t *iib = f->if_instr_backrefs + f->if_instr_backref_size;
+    iib->offset = iu->iu_text_ptr - iu->iu_text_alloc;
+    iib->str = instr_stra(iu, ii, 0);
+    iib->bb = bb->ib_id;
+    f->if_instr_backref_size++;
+#endif
+
+
     switch(ii->ii_class) {
 
     case IR_IC_RET:
@@ -4220,6 +4288,9 @@ branch_fixup(ir_unit_t *iu)
 static void
 vm_emit_function(ir_unit_t *iu, ir_function_t *f)
 {
+  ir_bb_t *ib;
+  ir_instr_t *i;
+
   iu->iu_text_ptr = iu->iu_text_alloc;
 
   VECTOR_RESIZE(&iu->iu_branch_fixups, 0);
@@ -4227,14 +4298,24 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   VECTOR_RESIZE(&iu->iu_jit_vmbb_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_branch_fixups, 0);
 
-  ir_bb_t *ib;
+#ifdef VM_TRACE
+  int total_instructions = 0;
+  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+    TAILQ_FOREACH(i, &ib->ib_instrs, ii_link) {
+      total_instructions++;
+    }
+  }
+  f->if_instr_backrefs = calloc(total_instructions, sizeof(ir_instr_backref_t));
+  f->if_instr_backref_size = 0;
+#endif
+
+
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ib->ib_text_offset = iu->iu_text_ptr - iu->iu_text_alloc;
     if(iu->iu_debug_flags_func & VMIR_DBG_BB_INSTRUMENT) {
       emit_op(iu, VM_INSTRUMENT_COUNT);
       emit_i32(iu, VECTOR_LEN(&iu->iu_instrumentation));
 
-      ir_instr_t *i;
       int num_instructions = 0;
       TAILQ_FOREACH(i, &ib->ib_instrs, ii_link)
         num_instructions++;
@@ -4315,7 +4396,11 @@ vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
     return r;
   }
 
-  vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1);
+  vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
+#ifdef VM_TRACE
+          , f
+#endif
+          );
   return r;
 }
 

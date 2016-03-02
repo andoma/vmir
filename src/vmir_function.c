@@ -144,6 +144,7 @@ function_destroy(ir_function_t *f)
   function_remove_bb(f);
   free(f->if_name);
   free(f->if_vm_text);
+  free(f->if_instr_backrefs);
   free(f);
 }
 
