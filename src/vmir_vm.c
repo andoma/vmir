@@ -365,10 +365,6 @@ vm_funcname(int callee, ir_unit_t *iu)
 
 
 
-#define ACCPOS 8
-#define R32_ACC *(uint32_t *)(rf + ACCPOS)
-#define S32_ACC *(int32_t  *)(rf + ACCPOS)
-
 #define R8(r)  *(uint8_t  *)(rf + (int16_t)I[r])
 #define S8(r)  *(int8_t   *)(rf + (int16_t)I[r])
 #define R16(r) *(uint16_t *)(rf + (int16_t)I[r])
@@ -689,73 +685,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(AND_R16C)  AR16(0, R16(1) &  UIMM16(2)); NEXT(3);
   VMOP(OR_R16C)   AR16(0, R16(1) |  UIMM16(2)); NEXT(3);
   VMOP(XOR_R16C)  AR16(0, R16(1) ^  UIMM16(2)); NEXT(3);
-
-
-
-
-
-  VMOP(ADD_ACC_R32)  AR32(0, R32_ACC +  R32(1)); NEXT(2);
-  VMOP(SUB_ACC_R32)  AR32(0, R32_ACC -  R32(1)); NEXT(2);
-  VMOP(MUL_ACC_R32)  AR32(0, R32_ACC *  R32(1)); NEXT(2);
-  VMOP(UDIV_ACC_R32) AR32(0, R32_ACC /  R32(1)); NEXT(2);
-  VMOP(SDIV_ACC_R32) AS32(0, S32_ACC /  S32(1)); NEXT(2);
-  VMOP(UREM_ACC_R32) AR32(0, R32_ACC %  R32(1)); NEXT(2);
-  VMOP(SREM_ACC_R32) AS32(0, S32_ACC %  S32(1)); NEXT(2);
-  VMOP(SHL_ACC_R32)  AR32(0, R32_ACC << R32(1)); NEXT(2);
-  VMOP(LSHR_ACC_R32) AR32(0, R32_ACC >> R32(1)); NEXT(2);
-  VMOP(ASHR_ACC_R32) AS32(0, S32_ACC >> R32(1)); NEXT(2);
-  VMOP(AND_ACC_R32)  AR32(0, R32_ACC &  R32(1)); NEXT(2);
-  VMOP(OR_ACC_R32)   AR32(0, R32_ACC |  R32(1)); NEXT(2);
-  VMOP(XOR_ACC_R32)  AR32(0, R32_ACC ^  R32(1)); NEXT(2);
-
-  VMOP(INC_ACC_R32)  AR32(0, R32_ACC + 1); NEXT(1);
-  VMOP(DEC_ACC_R32)  AR32(0, R32_ACC - 1); NEXT(1);
-
-  VMOP(ADD_ACC_R32C)  AR32(0, R32_ACC +  UIMM32(1)); NEXT(3);
-  VMOP(SUB_ACC_R32C)  AR32(0, R32_ACC -  UIMM32(1)); NEXT(3);
-  VMOP(MUL_ACC_R32C)  AR32(0, R32_ACC *  UIMM32(1)); NEXT(3);
-  VMOP(UDIV_ACC_R32C) AR32(0, R32_ACC /  UIMM32(1)); NEXT(3);
-  VMOP(SDIV_ACC_R32C) AS32(0, S32_ACC /  SIMM32(1)); NEXT(3);
-  VMOP(UREM_ACC_R32C) AR32(0, R32_ACC %  UIMM32(1)); NEXT(3);
-  VMOP(SREM_ACC_R32C) AS32(0, S32_ACC %  SIMM32(1)); NEXT(3);
-  VMOP(SHL_ACC_R32C)  AR32(0, R32_ACC << UIMM32(1)); NEXT(3);
-  VMOP(LSHR_ACC_R32C) AR32(0, R32_ACC >> UIMM32(1)); NEXT(3);
-  VMOP(ASHR_ACC_R32C) AS32(0, S32_ACC >> UIMM32(1)); NEXT(3);
-  VMOP(AND_ACC_R32C)  AR32(0, R32_ACC &  UIMM32(1)); NEXT(3);
-  VMOP(OR_ACC_R32C)   AR32(0, R32_ACC |  UIMM32(1)); NEXT(3);
-  VMOP(XOR_ACC_R32C)  AR32(0, R32_ACC ^  UIMM32(1)); NEXT(3);
-
-  VMOP(ADD_2ACC_R32)  AR32_ACC(R32_ACC +  R32(0)); NEXT(1);
-  VMOP(SUB_2ACC_R32)  AR32_ACC(R32_ACC -  R32(0)); NEXT(1);
-  VMOP(MUL_2ACC_R32)  AR32_ACC(R32_ACC *  R32(0)); NEXT(1);
-  VMOP(UDIV_2ACC_R32) AR32_ACC(R32_ACC /  R32(0)); NEXT(1);
-  VMOP(SDIV_2ACC_R32) AS32_ACC(S32_ACC /  S32(0)); NEXT(1);
-  VMOP(UREM_2ACC_R32) AR32_ACC(R32_ACC %  R32(0)); NEXT(1);
-  VMOP(SREM_2ACC_R32) AS32_ACC(S32_ACC %  S32(0)); NEXT(1);
-  VMOP(SHL_2ACC_R32)  AR32_ACC(R32_ACC << R32(0)); NEXT(1);
-  VMOP(LSHR_2ACC_R32) AR32_ACC(R32_ACC >> R32(0)); NEXT(1);
-  VMOP(ASHR_2ACC_R32) AS32_ACC(S32_ACC >> R32(0)); NEXT(1);
-  VMOP(AND_2ACC_R32)  AR32_ACC(R32_ACC &  R32(0)); NEXT(1);
-  VMOP(OR_2ACC_R32)   AR32_ACC(R32_ACC |  R32(0)); NEXT(1);
-  VMOP(XOR_2ACC_R32)  AR32_ACC(R32_ACC ^  R32(0)); NEXT(1);
-
-  VMOP(INC_2ACC_R32)  AR32_ACC(R32_ACC + 1); NEXT(0);
-  VMOP(DEC_2ACC_R32)  AR32_ACC(R32_ACC - 1); NEXT(0);
-
-  VMOP(ADD_2ACC_R32C)  AR32_ACC(R32_ACC +  UIMM32(0)); NEXT(2);
-  VMOP(SUB_2ACC_R32C)  AR32_ACC(R32_ACC -  UIMM32(0)); NEXT(2);
-  VMOP(MUL_2ACC_R32C)  AR32_ACC(R32_ACC *  UIMM32(0)); NEXT(2);
-  VMOP(UDIV_2ACC_R32C) AR32_ACC(R32_ACC /  UIMM32(0)); NEXT(2);
-  VMOP(SDIV_2ACC_R32C) AS32_ACC(S32_ACC /  SIMM32(0)); NEXT(2);
-  VMOP(UREM_2ACC_R32C) AR32_ACC(R32_ACC %  UIMM32(0)); NEXT(2);
-  VMOP(SREM_2ACC_R32C) AS32_ACC(S32_ACC %  SIMM32(0)); NEXT(2);
-  VMOP(SHL_2ACC_R32C)  AR32_ACC(R32_ACC << UIMM32(0)); NEXT(2);
-  VMOP(LSHR_2ACC_R32C) AR32_ACC(R32_ACC >> UIMM32(0)); NEXT(2);
-  VMOP(ASHR_2ACC_R32C) AS32_ACC(S32_ACC >> UIMM32(0)); NEXT(2);
-  VMOP(AND_2ACC_R32C)  AR32_ACC(R32_ACC &  UIMM32(0)); NEXT(2);
-  VMOP(OR_2ACC_R32C)   AR32_ACC(R32_ACC |  UIMM32(0)); NEXT(2);
-  VMOP(XOR_2ACC_R32C)  AR32_ACC(R32_ACC ^  UIMM32(0)); NEXT(2);
-
 
   VMOP(ADD_R32)  AR32(0, R32(1) +  R32(2)); NEXT(3);
   VMOP(SUB_R32)  AR32(0, R32(1) -  R32(2)); NEXT(3);
@@ -1635,63 +1564,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_OR_R32C:    return &&OR_R32C   - &&opz;     break;
   case VM_XOR_R32C:   return &&XOR_R32C  - &&opz;     break;
 
-  case VM_ADD_ACC_R32:   return &&ADD_ACC_R32  - &&opz;     break;
-  case VM_SUB_ACC_R32:   return &&SUB_ACC_R32  - &&opz;     break;
-  case VM_MUL_ACC_R32:   return &&MUL_ACC_R32  - &&opz;     break;
-  case VM_UDIV_ACC_R32:  return &&UDIV_ACC_R32 - &&opz;     break;
-  case VM_SDIV_ACC_R32:  return &&SDIV_ACC_R32 - &&opz;     break;
-  case VM_UREM_ACC_R32:  return &&UREM_ACC_R32 - &&opz;     break;
-  case VM_SREM_ACC_R32:  return &&SREM_ACC_R32 - &&opz;     break;
-  case VM_SHL_ACC_R32:   return &&SHL_ACC_R32  - &&opz;     break;
-  case VM_LSHR_ACC_R32:  return &&LSHR_ACC_R32 - &&opz;     break;
-  case VM_ASHR_ACC_R32:  return &&ASHR_ACC_R32 - &&opz;     break;
-  case VM_AND_ACC_R32:   return &&AND_ACC_R32  - &&opz;     break;
-  case VM_OR_ACC_R32:    return &&OR_ACC_R32   - &&opz;     break;
-  case VM_XOR_ACC_R32:   return &&XOR_ACC_R32  - &&opz;     break;
-  case VM_INC_ACC_R32:   return &&INC_ACC_R32  - &&opz;     break;
-  case VM_DEC_ACC_R32:   return &&DEC_ACC_R32  - &&opz;     break;
-  case VM_ADD_ACC_R32C:   return &&ADD_ACC_R32C  - &&opz;     break;
-  case VM_SUB_ACC_R32C:   return &&SUB_ACC_R32C  - &&opz;     break;
-  case VM_MUL_ACC_R32C:   return &&MUL_ACC_R32C  - &&opz;     break;
-  case VM_UDIV_ACC_R32C:  return &&UDIV_ACC_R32C - &&opz;     break;
-  case VM_SDIV_ACC_R32C:  return &&SDIV_ACC_R32C - &&opz;     break;
-  case VM_UREM_ACC_R32C:  return &&UREM_ACC_R32C - &&opz;     break;
-  case VM_SREM_ACC_R32C:  return &&SREM_ACC_R32C - &&opz;     break;
-  case VM_SHL_ACC_R32C:   return &&SHL_ACC_R32C  - &&opz;     break;
-  case VM_LSHR_ACC_R32C:  return &&LSHR_ACC_R32C - &&opz;     break;
-  case VM_ASHR_ACC_R32C:  return &&ASHR_ACC_R32C - &&opz;     break;
-  case VM_AND_ACC_R32C:   return &&AND_ACC_R32C  - &&opz;     break;
-  case VM_OR_ACC_R32C:    return &&OR_ACC_R32C   - &&opz;     break;
-  case VM_XOR_ACC_R32C:   return &&XOR_ACC_R32C  - &&opz;     break;
-
-  case VM_ADD_2ACC_R32:   return &&ADD_2ACC_R32  - &&opz;     break;
-  case VM_SUB_2ACC_R32:   return &&SUB_2ACC_R32  - &&opz;     break;
-  case VM_MUL_2ACC_R32:   return &&MUL_2ACC_R32  - &&opz;     break;
-  case VM_UDIV_2ACC_R32:  return &&UDIV_2ACC_R32 - &&opz;     break;
-  case VM_SDIV_2ACC_R32:  return &&SDIV_2ACC_R32 - &&opz;     break;
-  case VM_UREM_2ACC_R32:  return &&UREM_2ACC_R32 - &&opz;     break;
-  case VM_SREM_2ACC_R32:  return &&SREM_2ACC_R32 - &&opz;     break;
-  case VM_SHL_2ACC_R32:   return &&SHL_2ACC_R32  - &&opz;     break;
-  case VM_LSHR_2ACC_R32:  return &&LSHR_2ACC_R32 - &&opz;     break;
-  case VM_ASHR_2ACC_R32:  return &&ASHR_2ACC_R32 - &&opz;     break;
-  case VM_AND_2ACC_R32:   return &&AND_2ACC_R32  - &&opz;     break;
-  case VM_OR_2ACC_R32:    return &&OR_2ACC_R32   - &&opz;     break;
-  case VM_XOR_2ACC_R32:   return &&XOR_2ACC_R32  - &&opz;     break;
-  case VM_INC_2ACC_R32:   return &&INC_2ACC_R32  - &&opz;     break;
-  case VM_DEC_2ACC_R32:   return &&DEC_2ACC_R32  - &&opz;     break;
-  case VM_ADD_2ACC_R32C:   return &&ADD_2ACC_R32C  - &&opz;     break;
-  case VM_SUB_2ACC_R32C:   return &&SUB_2ACC_R32C  - &&opz;     break;
-  case VM_MUL_2ACC_R32C:   return &&MUL_2ACC_R32C  - &&opz;     break;
-  case VM_UDIV_2ACC_R32C:  return &&UDIV_2ACC_R32C - &&opz;     break;
-  case VM_SDIV_2ACC_R32C:  return &&SDIV_2ACC_R32C - &&opz;     break;
-  case VM_UREM_2ACC_R32C:  return &&UREM_2ACC_R32C - &&opz;     break;
-  case VM_SREM_2ACC_R32C:  return &&SREM_2ACC_R32C - &&opz;     break;
-  case VM_SHL_2ACC_R32C:   return &&SHL_2ACC_R32C  - &&opz;     break;
-  case VM_LSHR_2ACC_R32C:  return &&LSHR_2ACC_R32C - &&opz;     break;
-  case VM_ASHR_2ACC_R32C:  return &&ASHR_2ACC_R32C - &&opz;     break;
-  case VM_AND_2ACC_R32C:   return &&AND_2ACC_R32C  - &&opz;     break;
-  case VM_OR_2ACC_R32C:    return &&OR_2ACC_R32C   - &&opz;     break;
-  case VM_XOR_2ACC_R32C:   return &&XOR_2ACC_R32C  - &&opz;     break;
 
 
   case VM_ADD_R64:   return &&ADD_R64  - &&opz;     break;
@@ -2422,24 +2294,13 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
      rhs->iv_class == IR_VC_REGFRAME) {
 
     int lhsreg = value_reg(lhs);
-    int retreg = value_reg(ret);
 
     switch(legalize_type(it)) {
 
     case IR_TYPE_INT1:
     case IR_TYPE_INT32:
-      if(lhsreg == ACCPOS && retreg == ACCPOS) {
-        op = VM_ADD_2ACC_R32 + binop;
-        emit_op1(iu, op, value_reg(rhs));
-        iu->iu_stats.vm_binop_acc_acc++;
-      } else if(lhsreg == ACCPOS) {
-        op = VM_ADD_ACC_R32 + binop;
-        emit_op2(iu, op, value_reg(ret), value_reg(rhs));
-        iu->iu_stats.vm_binop_acc++;
-      } else {
-        op = VM_ADD_R32 + binop;
-        emit_op3(iu, op, value_reg(ret), lhsreg, value_reg(rhs));
-      }
+      op = VM_ADD_R32 + binop;
+      emit_op3(iu, op, value_reg(ret), lhsreg, value_reg(rhs));
       return;
 
     case IR_TYPE_INT8:
@@ -2494,7 +2355,6 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
             rhs->iv_class == IR_VC_CONSTANT) {
 
     int lhsreg = value_reg(lhs);
-    int retreg = value_reg(ret);
 
     switch(legalize_type(it)) {
     case IR_TYPE_INT8:
@@ -2524,18 +2384,8 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
           return;
         }
 
-        if(lhsreg == ACCPOS && retreg == ACCPOS) {
-          op = VM_ADD_2ACC_R32C + binop;
-          emit_op(iu, op);
-          iu->iu_stats.vm_binop_acc_imm++;
-        } else if(lhsreg == ACCPOS) {
-          op = VM_ADD_ACC_R32C + binop;
-          emit_op1(iu, op, value_reg(ret));
-          iu->iu_stats.vm_binop_acc_acc_imm++;
-        } else {
-          op = VM_ADD_R32C + binop;
-          emit_op2(iu, op, value_reg(ret), lhsreg);
-        }
+        op = VM_ADD_R32C + binop;
+        emit_op2(iu, op, value_reg(ret), lhsreg);
         emit_i32(iu, value_get_const32(iu, rhs));
       }
       return;

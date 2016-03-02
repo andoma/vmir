@@ -1430,13 +1430,6 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
         vi[num_vertices].class = RA_CLASS_REGFRAME_32;
     }
     int score = iv->iv_edges;
-
-    ir_value_instr_t *ivi;
-    LIST_FOREACH(ivi, &iv->iv_instructions, ivi_value_link) {
-      if(ivi->ivi_instr->ii_class == IR_IC_BINOP)
-        score--;
-    }
-
     vi[num_vertices].value = i;
     vi[num_vertices].score = score;
     graph_degree = MAX(graph_degree, iv->iv_edges);

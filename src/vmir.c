@@ -132,11 +132,6 @@ typedef struct vmir_stats {
   int lea_load_combined;
   int lea_load_combined_failed;
 
-  int vm_binop_acc;
-  int vm_binop_acc_imm;
-  int vm_binop_acc_acc;
-  int vm_binop_acc_acc_imm;
-
 } vmir_stats_t;
 
 
@@ -890,15 +885,6 @@ vmir_print_stats(ir_unit_t *iu)
   printf("Cmp+Branch combined: %d\n", iu->iu_stats.cmp_branch_combine);
   printf("   Mul+Add combined: %d\n", iu->iu_stats.mla_combine);
   printf(" Load+Cast combined: %d\n", iu->iu_stats.load_cast_combine);
-  printf("     VM Reg Acc ops: %d+%d+%d+%d = %d\n",
-         iu->iu_stats.vm_binop_acc,
-         iu->iu_stats.vm_binop_acc_imm,
-         iu->iu_stats.vm_binop_acc_acc,
-         iu->iu_stats.vm_binop_acc_acc_imm,
-         iu->iu_stats.vm_binop_acc +
-         iu->iu_stats.vm_binop_acc_imm +
-         iu->iu_stats.vm_binop_acc_acc +
-         iu->iu_stats.vm_binop_acc_acc_imm);
 
   vmir_heap_print0(iu->iu_heap);
 }
