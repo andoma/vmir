@@ -14,6 +14,7 @@ DEPS = ${SRCS} \
 	src/vmir_bitstream.c \
 	src/vmir_bitcode_parser.c \
 	src/vmir_support.c \
+	src/vmir_function.c \
 	src/vmir_libc.c
 
 CFLAGS = -std=gnu99 -Wall -Werror -Wmissing-prototypes \
