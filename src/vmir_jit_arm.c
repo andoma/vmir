@@ -263,14 +263,6 @@ jit_loadvalue(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc)
 
   case IR_VC_REGFRAME:
     switch(legalize_type(it)) {
-#if 0
-    case IR_TYPE_INT8:
-      jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 24) | (1 << 22) | (1 << 20) |
-               (R_VMSTACK << 16) | (reg << 12) |
-               jit_offset_to_imm12_U(iv->iv_reg));
-      break;
-#endif
-
     case IR_TYPE_INT8:
     case IR_TYPE_INT16:
     case IR_TYPE_INT32:
@@ -286,7 +278,7 @@ jit_loadvalue(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc)
     break;
   case IR_VC_CONSTANT:
   case IR_VC_GLOBALVAR:
-    jit_loadimm(iu, value_get_const32(iu, iv), reg, jc);
+    jit_loadimm(iu, value_get_const(iu, iv), reg, jc);
     break;
   default:
     parser_error(iu, "JIT: Can't load value-class %d", iv->iv_class);
@@ -329,15 +321,6 @@ jit_storevalue(ir_unit_t *iu, ir_valuetype_t vt, int reg)
 
   case IR_VC_REGFRAME:
     switch(legalize_type(it)) {
-
-#if 0
-    case IR_TYPE_INT8:
-      jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 24) | (1 << 22) |
-               (R_VMSTACK << 16) | (reg << 12) |
-               jit_offset_to_imm12_U(iv->iv_reg));
-      break;
-#endif
-
     case IR_TYPE_INT8:
     case IR_TYPE_INT16:
     case IR_TYPE_INT32:
@@ -356,29 +339,6 @@ jit_storevalue(ir_unit_t *iu, ir_valuetype_t vt, int reg)
   }
 }
 
-
-
-/**
- *
- */
-static int
-is_r(const ir_value_t *iv)
-{
-  return iv->iv_class == IR_VC_REGFRAME || iv->iv_class == IR_VC_TEMPORARY;
-}
-
-/**
- *
- */
-static int
-is_rc(const ir_value_t *iv)
-{
-  return iv->iv_class == IR_VC_REGFRAME || iv->iv_class == IR_VC_TEMPORARY ||
-    iv->iv_class == IR_VC_CONSTANT || iv->iv_class == IR_VC_GLOBALVAR;
-}
-
-
-
 /**
  *
  */
@@ -386,9 +346,6 @@ static int
 jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
   const int binop = ii->op;
-  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
-  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
-
   int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
 
   switch(binop) {
@@ -398,7 +355,6 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
   case BINOP_UREM:
     return 0;
 
-  case BINOP_LSHR:
   case BINOP_ASHR:
     if(typecode != IR_TYPE_INT32)
       return 0;
@@ -406,14 +362,15 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
   }
 
   switch(typecode) {
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
     break;
   default:
     return 0;
   }
-
-  return is_r(lhs) && is_rc(rhs);
+  return 1;
 }
 
 
@@ -434,7 +391,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
   Rn = jit_loadvalue(iu, ii->lhs_value, Rn, jc);
 
   if(rhs->iv_class == IR_VC_CONSTANT) {
-    int32_t rc = value_get_const32(iu, rhs);
+    int32_t rc = value_get_const(iu, rhs);
     int imm12;
 
     switch(binop) {

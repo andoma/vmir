@@ -460,6 +460,46 @@ value_get_const32(ir_unit_t *iu, const ir_value_t *iv)
 /**
  *
  */
+static uint32_t __attribute__((unused))
+value_get_const(ir_unit_t *iu, const ir_value_t *iv)
+{
+  ir_type_t *it = type_get(iu, iv->iv_type);
+
+  switch(iv->iv_class) {
+
+  case IR_VC_GLOBALVAR:
+    return iv->iv_gvar->ig_addr;
+
+  case IR_VC_CONSTANT:
+    switch(it->it_code) {
+    case IR_TYPE_INT1:
+      return !!iv->iv_u32;
+    case IR_TYPE_INT8:
+    case IR_TYPE_INT16:
+    case IR_TYPE_INT32:
+    case IR_TYPE_POINTER:
+    case IR_TYPE_FLOAT:
+      return iv->iv_u32 & type_code_mask(it->it_code);
+    case IR_TYPE_INTx:
+    case IR_TYPE_INT64:
+    case IR_TYPE_DOUBLE:
+      return iv->iv_u64;
+    default:
+      break;
+    }
+    break;
+  default:
+    break;
+  }
+
+  parser_error(iu, "Unable to value_get_const for value %s",
+               value_str(iu, iv));
+}
+
+
+/**
+ *
+ */
 static uint64_t __attribute__((unused))
 value_get_const64(ir_unit_t *iu, const ir_value_t *iv)
 {
