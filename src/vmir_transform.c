@@ -2022,11 +2022,6 @@ combine_branch_with_compare(ir_unit_t *iu, ir_instr_br_t *br)
   if(!(cmp->op >= ICMP_EQ && cmp->op <= ICMP_SLE))
     return;
 
-  ir_value_t *lhs = value_get(iu, cmp->lhs_value.value);
-  // This check could be relaxed if we do swapPred() in vm
-  if(lhs->iv_class != IR_VC_TEMPORARY &&
-     lhs->iv_class != IR_VC_REGFRAME)
-    return;
   ir_type_t *ty = type_get(iu, cmp->lhs_value.type);
   if(!(ty->it_code == IR_TYPE_INT8 ||
        ty->it_code == IR_TYPE_INT32 ||

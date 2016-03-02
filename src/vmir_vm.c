@@ -2948,10 +2948,20 @@ emit_cmp_branch(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
     } else {
       parser_error(iu, "Can't compare pred %d", pred);
     }
+    return;
+  }
 
-  } else if(lhs->iv_class == IR_VC_REGFRAME &&
-            (rhs->iv_class == IR_VC_CONSTANT ||
-             rhs->iv_class == IR_VC_GLOBALVAR)) {
+  if(rhs->iv_class == IR_VC_REGFRAME) {
+    // Swap LHS RHS
+    const ir_value_t *tmp = rhs;
+    rhs = lhs;
+    lhs = tmp;
+    pred = swap_pred(pred);
+  }
+
+  if(lhs->iv_class == IR_VC_REGFRAME &&
+     (rhs->iv_class == IR_VC_CONSTANT ||
+      rhs->iv_class == IR_VC_GLOBALVAR)) {
 
     if(pred >= ICMP_EQ && pred <= ICMP_SLE) {
 
