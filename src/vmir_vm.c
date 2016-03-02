@@ -30,6 +30,8 @@
 
 //#define VM_TRACE
 
+#define PURE32
+
 #ifdef VM_TRACE
 #define VM_DONT_USE_COMPUTED_GOTO
 #endif
@@ -173,173 +175,197 @@ vm_vaarg64(void *rf, void **ptr)
 
 #ifdef VM_TRACE
 static void __attribute__((noinline))
-vm_wr_u8(void *rf, int16_t reg, uint8_t data, int line)
+vm_wr_u8(void *rf, int16_t reg, uint8_t data)
 {
-  vm_printf("Reg 0x%x (u8) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (u8) = 0x%x\n", reg, data);
+#ifdef PURE32
+  *(uint32_t *)(rf + reg) = data;
+#else
   *(uint8_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_wr_s8(void *rf, int16_t reg, int8_t data, int line)
+vm_wr_s8(void *rf, int16_t reg, int8_t data)
 {
-  vm_printf("Reg 0x%x (s8) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (s8) = 0x%x\n", reg, data);
+#ifdef PURE32
+  *(int32_t *)(rf + reg) = data;
+#else
   *(int8_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_wr_u16(void *rf, int16_t reg, uint16_t data, int line)
+vm_wr_u16(void *rf, int16_t reg, uint16_t data)
 {
-  vm_printf("Reg 0x%x (u16) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (u16) = 0x%x\n", reg, data);
+#ifdef PURE32
+  *(uint32_t *)(rf + reg) = data;
+#else
   *(uint16_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_wr_s16(void *rf, int16_t reg, int16_t data, int line)
+vm_wr_s16(void *rf, int16_t reg, int16_t data)
 {
-  vm_printf("Reg 0x%x (s16) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (s16) = 0x%x\n", reg, data);
+#ifdef PURE32
+  *(int32_t *)(rf + reg) = data;
+#else
   *(int16_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_wr_u32(void *rf, int16_t reg, uint32_t data, int line)
+vm_wr_u32(void *rf, int16_t reg, uint32_t data)
 {
-  vm_printf("Reg 0x%x (u32) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (u32) = 0x%x\n", reg, data);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_s32(void *rf, int16_t reg, int32_t data, int line)
+vm_wr_s32(void *rf, int16_t reg, int32_t data)
 {
-  vm_printf("Reg 0x%x (s32) = 0x%x by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (s32) = 0x%x\n", reg, data);
   *(int32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_u64(void *rf, int16_t reg, uint64_t data, int line)
+vm_wr_u64(void *rf, int16_t reg, uint64_t data)
 {
-  vm_printf("Reg 0x%x (u64) = 0x%"PRIx64" by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (u64) = 0x%"PRIx64"\n", reg, data);
   *(uint64_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_s64(void *rf, int16_t reg, int64_t data, int line)
+vm_wr_s64(void *rf, int16_t reg, int64_t data)
 {
-  vm_printf("Reg 0x%x (s8) = 0x%"PRIx64" by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (s8) = 0x%"PRIx64"\n", reg, data);
   *(int64_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_flt(void *rf, int16_t reg, float data, int line)
+vm_wr_flt(void *rf, int16_t reg, float data)
 {
-  vm_printf("Reg 0x%x (flt) = %f by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (flt) = %f\n", reg, data);
   *(float *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_dbl(void *rf, int16_t reg, double data, int line)
+vm_wr_dbl(void *rf, int16_t reg, double data)
 {
-  vm_printf("Reg 0x%x (dbl) = %f by %d\n", reg, data, line);
+  vm_printf("Reg 0x%x (dbl) = %f\n", reg, data);
   *(double *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_8(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_8(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint8_t data = mem_rd8(mem + ea);
-  vm_printf("Reg 0x%x (u8) = Loaded 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u8) = Loaded 0x%x from 0x%08x\n",
+         reg, data, ea);
+#ifdef PURE32
+  *(uint32_t *)(rf + reg) = data;
+#else
   *(uint8_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_load_8_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_8_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint8_t data = mem_rd8(mem + ea);
-  vm_printf("Reg 0x%x (u32) = Loaded.u8 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u32) = Loaded.u8 0x%x from 0x%08x\n",
+         reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_8_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_8_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   int8_t data = mem_rd8(mem + ea);
-  vm_printf("Reg 0x%x (u32) = Loaded.s8 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u32) = Loaded.s8 0x%x from 0x%08x\n",
+         reg, data, ea);
   *(int32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_16(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_16(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint16_t data = mem_rd16(mem + ea);
-  vm_printf("Reg 0x%x (u16) = Loaded 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u16) = Loaded 0x%x from 0x%08x\n",
+         reg, data, ea);
+#ifdef PURE32
+  *(uint32_t *)(rf + reg) = data;
+#else
   *(uint16_t *)(rf + reg) = data;
+#endif
 }
 
 static void __attribute__((noinline))
-vm_load_16_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_16_zext_32(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint16_t data = mem_rd16(mem + ea);
-  vm_printf("Reg 0x%x (u32) = Loaded.u16 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u32) = Loaded.u16 0x%x from 0x%08x\n",
+         reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_16_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_16_sext_32(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   int16_t data = mem_rd16(mem + ea);
-  vm_printf("Reg 0x%x (u32) = Loaded.s16 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u32) = Loaded.s16 0x%x from 0x%08x\n",
+         reg, data, ea);
   *(int32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_32(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_32(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint32_t data = mem_rd32(mem + ea);
-  vm_printf("Reg 0x%x (u32) = Loaded 0x%x from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u32) = Loaded 0x%x from 0x%08x\n",
+         reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_64(void *rf, int16_t reg, void *mem, uint32_t ea, int line)
+vm_load_64(void *rf, int16_t reg, void *mem, uint32_t ea)
 {
   uint64_t data = mem_rd64(mem + ea);
-  vm_printf("Reg 0x%x (u64) = Loaded 0x%"PRIx64" from 0x%08x by %d\n",
-         reg, data, ea, line);
+  vm_printf("Reg 0x%x (u64) = Loaded 0x%"PRIx64" from 0x%08x\n",
+         reg, data, ea);
   *(uint64_t *)(rf + reg) = data;
 }
 
 
 static void __attribute__((noinline))
-vm_store_8(void *mem, uint32_t ea, uint8_t v, int line)
+vm_store_8(void *mem, uint32_t ea, uint8_t v)
 {
-  vm_printf("Store (u8) 0x%x to 0x%08x by %d\n", v, ea, line);
+  vm_printf("Store (u8) 0x%x to 0x%08x\n", v, ea);
   mem_wr8(mem + ea, v);
 }
 
 static void __attribute__((noinline))
-vm_store_16(void *mem, uint32_t ea, uint16_t v, int line)
+vm_store_16(void *mem, uint32_t ea, uint16_t v)
 {
-  vm_printf("Store (u16) 0x%x to 0x%08x by %d\n", v, ea, line);
+  vm_printf("Store (u16) 0x%x to 0x%08x\n", v, ea);
   mem_wr16(mem + ea, v);
 }
 
 static void __attribute__((noinline))
-vm_store_32(void *mem, uint32_t ea, uint32_t v, int line)
+vm_store_32(void *mem, uint32_t ea, uint32_t v)
 {
-  vm_printf("Store (u32) 0x%x to 0x%08x by %d\n", v, ea, line);
+  vm_printf("Store (u32) 0x%x to 0x%08x\n", v, ea);
   mem_wr32(mem + ea, v);
 }
 
 static void __attribute__((noinline))
-vm_store_64(void *mem, uint32_t ea, uint64_t v, int line)
+vm_store_64(void *mem, uint32_t ea, uint64_t v)
 {
-  vm_printf("Store (u64) 0x%"PRIx64" to 0x%08x by %d\n", v, ea, line);
+  vm_printf("Store (u64) 0x%"PRIx64" to 0x%08x\n", v, ea);
   mem_wr64(mem + ea, v);
 }
 
@@ -364,11 +390,23 @@ vm_funcname(int callee, ir_unit_t *iu)
 #endif
 
 
+#ifdef PURE32
+
+#define R8(r)  (uint8_t)*(uint32_t *)(rf + (int16_t)I[r])
+#define S8(r)  (int8_t)*(int32_t  *)(rf + (int16_t)I[r])
+#define R16(r) (uint16_t)*(uint32_t *)(rf + (int16_t)I[r])
+#define S16(r) (int16_t)*(int32_t  *)(rf + (int16_t)I[r])
+
+#else
 
 #define R8(r)  *(uint8_t  *)(rf + (int16_t)I[r])
 #define S8(r)  *(int8_t   *)(rf + (int16_t)I[r])
 #define R16(r) *(uint16_t *)(rf + (int16_t)I[r])
 #define S16(r) *(int16_t  *)(rf + (int16_t)I[r])
+
+#endif
+
+
 #define R32(r) *(uint32_t *)(rf + (int16_t)I[r])
 #define S32(r) *(int32_t  *)(rf + (int16_t)I[r])
 #define R64(r) *(uint64_t *)(rf + (int16_t)I[r])
@@ -379,45 +417,43 @@ vm_funcname(int callee, ir_unit_t *iu)
 
 #ifdef VM_TRACE
 
-#define AR8(reg, src)  vm_wr_u8(rf,  I[reg], src, __LINE__)
-#define AS8(reg, src)  vm_wr_s8(rf,  I[reg], src, __LINE__)
-#define AR16(reg, src) vm_wr_u16(rf, I[reg], src, __LINE__)
-#define AS16(reg, src) vm_wr_s16(rf, I[reg], src, __LINE__)
-#define AR32(reg, src) vm_wr_u32(rf, I[reg], src, __LINE__)
-#define AS32(reg, src) vm_wr_s32(rf, I[reg], src, __LINE__)
-#define AR64(reg, src) vm_wr_u64(rf, I[reg], src, __LINE__)
-#define AS64(reg, src) vm_wr_s64(rf, I[reg], src, __LINE__)
-#define AFLT(reg, src) vm_wr_flt(rf, I[reg], src, __LINE__)
-#define ADBL(reg, src) vm_wr_dbl(rf, I[reg], src, __LINE__)
-
-#define AR32_ACC(src) vm_wr_u32(rf, ACCPOS, src, __LINE__)
-#define AS32_ACC(src) vm_wr_s32(rf, ACCPOS, src, __LINE__)
+#define AR8(reg, src)  vm_wr_u8(rf, I[reg], src)
+#define AS8(reg, src)  vm_wr_s8(rf, I[reg], src)
+#define AR16(reg, src) vm_wr_u16(rf, I[reg], src)
+#define AS16(reg, src) vm_wr_s16(rf, I[reg], src)
+#define AR32(reg, src) vm_wr_u32(rf, I[reg], src)
+#define AS32(reg, src) vm_wr_s32(rf, I[reg], src)
+#define AR64(reg, src) vm_wr_u64(rf, I[reg], src)
+#define AS64(reg, src) vm_wr_s64(rf, I[reg], src)
+#define AFLT(reg, src) vm_wr_flt(rf, I[reg], src)
+#define ADBL(reg, src) vm_wr_dbl(rf, I[reg], src)
 
 
-#define LOAD8(reg, ea)       vm_load_8(rf,  I[reg], hostmem, ea, __LINE__)
-#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(rf,  I[r], hostmem, ea, __LINE__)
-#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(rf,  I[r], hostmem, ea, __LINE__)
 
-#define LOAD16(reg, ea)       vm_load_16(rf, I[reg], hostmem, ea, __LINE__)
-#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(rf,  I[r], hostmem, ea, __LINE__)
-#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(rf,  I[r], hostmem, ea, __LINE__)
+#define LOAD8(reg, ea)       vm_load_8(rf,  I[reg], hostmem, ea)
+#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(rf,  I[r], hostmem, ea)
+#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(rf,  I[r], hostmem, ea)
+
+#define LOAD16(reg, ea)       vm_load_16(rf, I[reg], hostmem, ea)
+#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(rf,  I[r], hostmem, ea)
+#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(rf,  I[r], hostmem, ea)
 
 
-#define LOAD32(reg, ea)  vm_load_32(rf, I[reg], hostmem, ea, __LINE__)
-#define LOAD64(reg, ea)  vm_load_64(rf, I[reg], hostmem, ea, __LINE__)
+#define LOAD32(reg, ea)  vm_load_32(rf, I[reg], hostmem, ea)
+#define LOAD64(reg, ea)  vm_load_64(rf, I[reg], hostmem, ea)
 
-#define STORE8(ea, v)    vm_store_8(hostmem, ea, v, __LINE__)
-#define STORE16(ea, v)   vm_store_16(hostmem, ea, v, __LINE__)
-#define STORE32(ea, v)   vm_store_32(hostmem, ea, v, __LINE__)
-#define STORE64(ea, v)   vm_store_64(hostmem, ea, v, __LINE__)
+#define STORE8(ea, v)    vm_store_8(hostmem, ea, v)
+#define STORE16(ea, v)   vm_store_16(hostmem, ea, v)
+#define STORE32(ea, v)   vm_store_32(hostmem, ea, v)
+#define STORE64(ea, v)   vm_store_64(hostmem, ea, v)
 
 
 #else
 
-#define LOAD8(r, ea)           R8(r) = mem_rd8(HOSTADDR(ea))
+#define LOAD8(r, ea)          R32(r) = mem_rd8(HOSTADDR(ea))
 #define LOAD8_ZEXT_32(r, ea)  R32(r) = mem_rd8(HOSTADDR(ea))
 #define LOAD8_SEXT_32(r, ea)  S32(r) = (int8_t)mem_rd8(HOSTADDR(ea))
-#define LOAD16(r, ea)         R16(r) = mem_rd16(HOSTADDR(ea))
+#define LOAD16(r, ea)         R32(r) = mem_rd16(HOSTADDR(ea))
 #define LOAD16_ZEXT_32(r, ea) R32(r) = mem_rd16(HOSTADDR(ea))
 #define LOAD16_SEXT_32(r, ea) S32(r) = (int16_t)mem_rd16(HOSTADDR(ea))
 #define LOAD32(r, ea)         R32(r) = mem_rd32(HOSTADDR(ea))
@@ -427,10 +463,10 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define STORE32(ea, v)                 mem_wr32(HOSTADDR(ea), v)
 #define STORE64(ea, v)                 mem_wr64(HOSTADDR(ea), v)
 
-#define AR8(r, src)  R8(r) = src
-#define AS8(r, src)  S8(r) = src
-#define AR16(r, src) R16(r) = src
-#define AS16(r, src) S16(r) = src
+#define AR8(r, src)  R32(r) = (uint8_t)src
+#define AS8(r, src)  R32(r) = (int8_t)src
+#define AR16(r, src) R32(r) = (uint16_t)src
+#define AS16(r, src) R32(r) = (int16_t)src
 #define AR32(r, src) R32(r) = src
 #define AS32(r, src) S32(r) = src
 #define AR32_ACC(src) R32_ACC = src
@@ -569,11 +605,19 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   }
 
   VMOP(RET_R8)
+#ifdef PURE32
+    *(uint32_t *)ret = R8(0);
+#else
     *(uint8_t *)ret = R8(0);
+#endif
     return 0;
 
   VMOP(RET_R16)
+#ifdef PURE32
+    *(uint32_t *)ret = R16(0);
+#else
     *(uint16_t *)ret = R16(0);
+#endif
     return 0;
 
   VMOP(RET_R32)
@@ -585,10 +629,18 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     return 0;
 
   VMOP(RET_R8C)
+#ifdef PURE32
+    *(uint32_t *)ret = UIMM8(0);
+#else
     *(uint8_t *)ret = UIMM8(0);
+#endif
     return 0;
   VMOP(RET_R16C)
+#ifdef PURE32
+    *(uint32_t *)ret = UIMM16(0);
+#else
     *(uint16_t *)ret = UIMM16(0);
+#endif
     return 0;
   VMOP(RET_R32C)
     *(uint32_t *)ret = UIMM32(0);
@@ -2304,12 +2356,24 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       return;
 
     case IR_TYPE_INT8:
-      op = VM_ADD_R8 + binop;
+      switch(binop) {
+      case BINOP_SDIV: op = VM_SDIV_R8;         break;
+      case BINOP_SREM: op = VM_SREM_R8;         break;
+      case BINOP_ASHR: op = VM_ASHR_R8;         break;
+      default:         op = VM_ADD_R32 + binop; break;
+        break;
+      }
       emit_op3(iu, op, value_reg(ret), value_reg(lhs), value_reg(rhs));
       return;
 
     case IR_TYPE_INT16:
-      op = VM_ADD_R16 + binop;
+      switch(binop) {
+      case BINOP_SDIV: op = VM_SDIV_R16;        break;
+      case BINOP_SREM: op = VM_SREM_R16;        break;
+      case BINOP_ASHR: op = VM_ASHR_R16;        break;
+      default:         op = VM_ADD_R32 + binop; break;
+        break;
+      }
       emit_op3(iu, op, value_reg(ret), value_reg(lhs), value_reg(rhs));
       return;
 
