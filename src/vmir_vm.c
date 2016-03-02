@@ -571,49 +571,17 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(3);
 
 
-  VMOP(ADD_R8)  AR32(0,  R8(1) +  R8(2)); NEXT(3);
-  VMOP(SUB_R8)  AR32(0,  R8(1) -  R8(2)); NEXT(3);
-  VMOP(MUL_R8)  AR32(0,  R8(1) *  R8(2)); NEXT(3);
-  VMOP(UDIV_R8) AR32(0,  R8(1) /  R8(2)); NEXT(3);
   VMOP(SDIV_R8) AR32(0,  S8(1) /  S8(2)); NEXT(3);
-  VMOP(UREM_R8) AR32(0,  R8(1) %  R8(2)); NEXT(3);
   VMOP(SREM_R8) AR32(0,  S8(1) %  S8(2)); NEXT(3);
-  VMOP(SHL_R8)  AR32(0,  R8(1) << R8(2)); NEXT(3);
-  VMOP(LSHR_R8) AR32(0,  R8(1) >> R8(2)); NEXT(3);
   VMOP(ASHR_R8) AR32(0,  S8(1) >> R8(2)); NEXT(3);
-  VMOP(AND_R8)  AR32(0,  R8(1) &  R8(2)); NEXT(3);
-  VMOP(OR_R8)   AR32(0,  R8(1) |  R8(2)); NEXT(3);
-  VMOP(XOR_R8)  AR32(0,  R8(1) ^  R8(2)); NEXT(3);
 
-  VMOP(ADD_R8C)  AR32(0, R8(1) +  UIMM8(2)); NEXT(3);
-  VMOP(SUB_R8C)  AR32(0, R8(1) -  UIMM8(2)); NEXT(3);
-  VMOP(MUL_R8C)  AR32(0, R8(1) *  UIMM8(2)); NEXT(3);
-  VMOP(UDIV_R8C) AR32(0, R8(1) /  UIMM8(2)); NEXT(3);
   VMOP(SDIV_R8C) AR32(0, S8(1) /  SIMM8(2)); NEXT(3);
-  VMOP(UREM_R8C) AR32(0, R8(1) %  UIMM8(2)); NEXT(3);
   VMOP(SREM_R8C) AR32(0, S8(1) %  SIMM8(2)); NEXT(3);
-  VMOP(SHL_R8C)  AR32(0, R8(1) << UIMM8(2)); NEXT(3);
-  VMOP(LSHR_R8C) AR32(0, R8(1) >> UIMM8(2)); NEXT(3);
   VMOP(ASHR_R8C) AR32(0, S8(1) >> UIMM8(2)); NEXT(3);
-  VMOP(AND_R8C)  AR32(0, R8(1) &  UIMM8(2)); NEXT(3);
-  VMOP(OR_R8C)   AR32(0, R8(1) |  UIMM8(2)); NEXT(3);
-  VMOP(XOR_R8C)  AR32(0, R8(1) ^  UIMM8(2)); NEXT(3);
 
-
-
-  VMOP(ADD_R16)  AR32(0, R16(1) +  R16(2)); NEXT(3);
-  VMOP(SUB_R16)  AR32(0, R16(1) -  R16(2)); NEXT(3);
-  VMOP(MUL_R16)  AR32(0, R16(1) *  R16(2)); NEXT(3);
-  VMOP(UDIV_R16) AR32(0, R16(1) /  R16(2)); NEXT(3);
   VMOP(SDIV_R16) AR32(0, S16(1) /  S16(2)); NEXT(3);
-  VMOP(UREM_R16) AR32(0, R16(1) %  R16(2)); NEXT(3);
   VMOP(SREM_R16) AR32(0, S16(1) %  S16(2)); NEXT(3);
-  VMOP(SHL_R16)  AR32(0, R16(1) << R16(2)); NEXT(3);
-  VMOP(LSHR_R16) AR32(0, R16(1) >> R16(2)); NEXT(3);
   VMOP(ASHR_R16) AR32(0, S16(1) >> R16(2)); NEXT(3);
-  VMOP(AND_R16)  AR32(0, R16(1) &  R16(2)); NEXT(3);
-  VMOP(OR_R16)   AR32(0, R16(1) |  R16(2)); NEXT(3);
-  VMOP(XOR_R16)  AR32(0, R16(1) ^  R16(2)); NEXT(3);
 
   VMOP(ADD_R16C)  AR32(0, R16(1) +  UIMM16(2)); NEXT(3);
   VMOP(SUB_R16C)  AR32(0, R16(1) -  UIMM16(2)); NEXT(3);
@@ -1409,47 +1377,17 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_RET_R32C:  return &&RET_R32C - &&opz;     break;
   case VM_RET_R64C:  return &&RET_R64C - &&opz;     break;
 
-  case VM_ADD_R8:   return &&ADD_R8  - &&opz;     break;
-  case VM_SUB_R8:   return &&SUB_R8  - &&opz;     break;
-  case VM_MUL_R8:   return &&MUL_R8  - &&opz;     break;
-  case VM_UDIV_R8:  return &&UDIV_R8 - &&opz;     break;
   case VM_SDIV_R8:  return &&SDIV_R8 - &&opz;     break;
-  case VM_UREM_R8:  return &&UREM_R8 - &&opz;     break;
   case VM_SREM_R8:  return &&SREM_R8 - &&opz;     break;
-  case VM_SHL_R8:   return &&SHL_R8  - &&opz;     break;
-  case VM_LSHR_R8:  return &&LSHR_R8 - &&opz;     break;
   case VM_ASHR_R8:  return &&ASHR_R8 - &&opz;     break;
-  case VM_AND_R8:   return &&AND_R8  - &&opz;     break;
-  case VM_OR_R8:    return &&OR_R8   - &&opz;     break;
-  case VM_XOR_R8:   return &&XOR_R8  - &&opz;     break;
 
-  case VM_ADD_R8C:   return &&ADD_R8C  - &&opz;     break;
-  case VM_SUB_R8C:   return &&SUB_R8C  - &&opz;     break;
-  case VM_MUL_R8C:   return &&MUL_R8C  - &&opz;     break;
-  case VM_UDIV_R8C:  return &&UDIV_R8C - &&opz;     break;
   case VM_SDIV_R8C:  return &&SDIV_R8C - &&opz;     break;
-  case VM_UREM_R8C:  return &&UREM_R8C - &&opz;     break;
   case VM_SREM_R8C:  return &&SREM_R8C - &&opz;     break;
-  case VM_SHL_R8C:   return &&SHL_R8C  - &&opz;     break;
-  case VM_LSHR_R8C:  return &&LSHR_R8C - &&opz;     break;
   case VM_ASHR_R8C:  return &&ASHR_R8C - &&opz;     break;
-  case VM_AND_R8C:   return &&AND_R8C  - &&opz;     break;
-  case VM_OR_R8C:    return &&OR_R8C   - &&opz;     break;
-  case VM_XOR_R8C:   return &&XOR_R8C  - &&opz;     break;
 
-  case VM_ADD_R16:   return &&ADD_R16  - &&opz;     break;
-  case VM_SUB_R16:   return &&SUB_R16  - &&opz;     break;
-  case VM_MUL_R16:   return &&MUL_R16  - &&opz;     break;
-  case VM_UDIV_R16:  return &&UDIV_R16 - &&opz;     break;
   case VM_SDIV_R16:  return &&SDIV_R16 - &&opz;     break;
-  case VM_UREM_R16:  return &&UREM_R16 - &&opz;     break;
   case VM_SREM_R16:  return &&SREM_R16 - &&opz;     break;
-  case VM_SHL_R16:   return &&SHL_R16  - &&opz;     break;
-  case VM_LSHR_R16:  return &&LSHR_R16 - &&opz;     break;
   case VM_ASHR_R16:  return &&ASHR_R16 - &&opz;     break;
-  case VM_AND_R16:   return &&AND_R16  - &&opz;     break;
-  case VM_OR_R16:    return &&OR_R16   - &&opz;     break;
-  case VM_XOR_R16:   return &&XOR_R16  - &&opz;     break;
 
   case VM_ADD_R16C:   return &&ADD_R16C  - &&opz;     break;
   case VM_SUB_R16C:   return &&SUB_R16C  - &&opz;     break;
@@ -2290,10 +2228,26 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
 
     switch(legalize_type(it)) {
     case IR_TYPE_INT8:
-      op = VM_ADD_R8C + binop;
-      emit_op2(iu, op, value_reg(ret), value_reg(lhs));
-      emit_i8(iu, value_get_const32(iu, rhs));
-      return;
+
+      switch(binop) {
+      case BINOP_SDIV:
+        emit_op2(iu, VM_SDIV_R8C, value_reg(ret), value_reg(lhs));
+        emit_i8(iu, value_get_const32(iu, rhs));
+        return;
+      case BINOP_SREM:
+        emit_op2(iu, VM_SREM_R8C, value_reg(ret), value_reg(lhs));
+        emit_i8(iu, value_get_const32(iu, rhs));
+        return;
+      case BINOP_ASHR:
+        emit_op2(iu, VM_ASHR_R8C, value_reg(ret), value_reg(lhs));
+        emit_i8(iu, value_get_const32(iu, rhs));
+        return;
+      default:
+        op = VM_ADD_R16C + binop;
+        emit_op2(iu, op, value_reg(ret), value_reg(lhs));
+        emit_i16(iu, value_get_const32(iu, rhs) & 0xff);
+        return;
+      }
 
     case IR_TYPE_INT16:
       op = VM_ADD_R16C + binop;
