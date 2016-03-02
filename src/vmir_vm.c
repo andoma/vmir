@@ -30,8 +30,6 @@
 
 //#define VM_TRACE
 
-#define PURE32
-
 #ifdef VM_TRACE
 #define VM_DONT_USE_COMPUTED_GOTO
 #endif
@@ -178,44 +176,28 @@ static void __attribute__((noinline))
 vm_wr_u8(void *rf, int16_t reg, uint8_t data)
 {
   vm_printf("Reg 0x%x (u8) = 0x%x\n", reg, data);
-#ifdef PURE32
   *(uint32_t *)(rf + reg) = data;
-#else
-  *(uint8_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
 vm_wr_s8(void *rf, int16_t reg, int8_t data)
 {
   vm_printf("Reg 0x%x (s8) = 0x%x\n", reg, data);
-#ifdef PURE32
   *(int32_t *)(rf + reg) = data;
-#else
-  *(int8_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
 vm_wr_u16(void *rf, int16_t reg, uint16_t data)
 {
   vm_printf("Reg 0x%x (u16) = 0x%x\n", reg, data);
-#ifdef PURE32
   *(uint32_t *)(rf + reg) = data;
-#else
-  *(uint16_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
 vm_wr_s16(void *rf, int16_t reg, int16_t data)
 {
   vm_printf("Reg 0x%x (s16) = 0x%x\n", reg, data);
-#ifdef PURE32
   *(int32_t *)(rf + reg) = data;
-#else
-  *(int16_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
@@ -266,11 +248,7 @@ vm_load_8(void *rf, int16_t reg, void *mem, uint32_t ea)
   uint8_t data = mem_rd8(mem + ea);
   vm_printf("Reg 0x%x (u8) = Loaded 0x%x from 0x%08x\n",
          reg, data, ea);
-#ifdef PURE32
   *(uint32_t *)(rf + reg) = data;
-#else
-  *(uint8_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
@@ -297,11 +275,7 @@ vm_load_16(void *rf, int16_t reg, void *mem, uint32_t ea)
   uint16_t data = mem_rd16(mem + ea);
   vm_printf("Reg 0x%x (u16) = Loaded 0x%x from 0x%08x\n",
          reg, data, ea);
-#ifdef PURE32
   *(uint32_t *)(rf + reg) = data;
-#else
-  *(uint16_t *)(rf + reg) = data;
-#endif
 }
 
 static void __attribute__((noinline))
@@ -389,22 +363,11 @@ vm_funcname(int callee, ir_unit_t *iu)
 
 #endif
 
-
-#ifdef PURE32
-
 #define R8(r)  (uint8_t)*(uint32_t *)(rf + (int16_t)I[r])
 #define S8(r)  (int8_t)*(int32_t  *)(rf + (int16_t)I[r])
 #define R16(r) (uint16_t)*(uint32_t *)(rf + (int16_t)I[r])
 #define S16(r) (int16_t)*(int32_t  *)(rf + (int16_t)I[r])
 
-#else
-
-#define R8(r)  *(uint8_t  *)(rf + (int16_t)I[r])
-#define S8(r)  *(int8_t   *)(rf + (int16_t)I[r])
-#define R16(r) *(uint16_t *)(rf + (int16_t)I[r])
-#define S16(r) *(int16_t  *)(rf + (int16_t)I[r])
-
-#endif
 
 
 #define R32(r) *(uint32_t *)(rf + (int16_t)I[r])
@@ -605,19 +568,11 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   }
 
   VMOP(RET_R8)
-#ifdef PURE32
     *(uint32_t *)ret = R8(0);
-#else
-    *(uint8_t *)ret = R8(0);
-#endif
     return 0;
 
   VMOP(RET_R16)
-#ifdef PURE32
     *(uint32_t *)ret = R16(0);
-#else
-    *(uint16_t *)ret = R16(0);
-#endif
     return 0;
 
   VMOP(RET_R32)
@@ -629,18 +584,10 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     return 0;
 
   VMOP(RET_R8C)
-#ifdef PURE32
     *(uint32_t *)ret = UIMM8(0);
-#else
-    *(uint8_t *)ret = UIMM8(0);
-#endif
     return 0;
   VMOP(RET_R16C)
-#ifdef PURE32
     *(uint32_t *)ret = UIMM16(0);
-#else
-    *(uint16_t *)ret = UIMM16(0);
-#endif
     return 0;
   VMOP(RET_R32C)
     *(uint32_t *)ret = UIMM32(0);
