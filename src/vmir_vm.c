@@ -1086,7 +1086,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(STORE64)      STORE64(R32(0),             R64(1));    NEXT(2);
 
 
-  VMOP(MOV8)    AR32(0,  R8(1));   NEXT(2);
   VMOP(MOV32)   AR32(0, R32(1));   NEXT(2);
   VMOP(MOV64)   AR64(0, R64(1));   NEXT(2);
 
@@ -1826,7 +1825,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_JSR_EXT:   return &&JSR_EXT  - &&opz;     break;
   case VM_JSR_R:     return &&JSR_R    - &&opz;     break;
 
-  case VM_MOV8:      return &&MOV8     - &&opz;     break;
   case VM_MOV32:     return &&MOV32    - &&opz;     break;
   case VM_MOV64:     return &&MOV64    - &&opz;     break;
   case VM_MOV8_C:    return &&MOV8_C   - &&opz;     break;

@@ -476,7 +476,6 @@ typedef enum {
   VM_SWITCH32_BS,
   VM_SWITCH64_BS,
 
-  VM_MOV8,
   VM_MOV32,
   VM_MOV64,
   VM_MOV8_C,
