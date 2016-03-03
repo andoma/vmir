@@ -1138,7 +1138,7 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
         len += addstr(dstp, ", ");
       len += value_print_vt(dstp, iu, ii->ii_rets[i]);
     }
-    len += addstr(dstp, "} = ");
+    len += addstr(dstp, " } = ");
   } else if(ii->ii_ret.value != -1) {
     len += value_print_vt(dstp, iu, ii->ii_ret);
     len += addstr(dstp, " = ");
