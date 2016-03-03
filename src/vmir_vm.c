@@ -3276,17 +3276,42 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 static void
 emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
 {
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
   const ir_value_t *src = value_get(iu, ii->value.value);
-  const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
 
-  switch(COMBINE2(src->iv_class, legalize_type(ty))) {
+  int retreg, typecode;
+
+  if(ii->super.ii_ret.value == -2) {
+    const ir_value_t *v1 = value_get(iu, ii->super.ii_rets[0].value);
+    const ir_value_t *v2 = value_get(iu, ii->super.ii_rets[1].value);
+
+    if(v1->iv_reg + 4 != v2->iv_reg ||
+       ii->super.ii_rets[0].type != ii->super.ii_rets[1].type)
+      parser_error(iu, "Bad aggregate destionation for move");
+
+    const ir_type_t *ty = type_get(iu, ii->super.ii_rets[0].type);
+    typecode = legalize_type(ty);
+    if(typecode != IR_TYPE_INT32)
+      parser_error(iu, "Bad aggregate destionation type for move");
+
+    // Merge to one 64bit reg
+    retreg = value_reg(v1);
+    typecode = IR_TYPE_INT64;
+
+  } else {
+
+    const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+    const ir_type_t *ty = type_get(iu, ii->super.ii_ret.type);
+    retreg = value_reg(ret);
+    typecode = legalize_type(ty);
+  }
+
+  switch(COMBINE2(src->iv_class, typecode)) {
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT8):
-    emit_op1(iu, VM_MOV8_C, value_reg(ret));
+    emit_op1(iu, VM_MOV8_C, retreg);
     emit_i8(iu, value_get_const32(iu, src));
     return;
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT16):
-    emit_op1(iu, VM_MOV16_C, value_reg(ret));
+    emit_op1(iu, VM_MOV16_C, retreg);
     emit_i16(iu, value_get_const32(iu, src));
     return;
 
@@ -3294,19 +3319,19 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT32):
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_POINTER):
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_FLOAT):
-    emit_op1(iu, VM_MOV32_C, value_reg(ret));
+    emit_op1(iu, VM_MOV32_C, retreg);
     emit_i32(iu, value_get_const32(iu, src));
     return;
 
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_INT64):
   case COMBINE2(IR_VC_CONSTANT, IR_TYPE_DOUBLE):
     vm_align32(iu, 0);
-    emit_op1(iu, VM_MOV64_C, value_reg(ret));
+    emit_op1(iu, VM_MOV64_C, retreg);
     emit_i64(iu, value_get_const64(iu, src));
     return;
 
   case COMBINE2(IR_VC_GLOBALVAR, IR_TYPE_POINTER):
-    emit_op1(iu, VM_MOV32_C, value_reg(ret));
+    emit_op1(iu, VM_MOV32_C, retreg);
     emit_i32(iu, value_get_const32(iu, src));
     return;
 
@@ -3316,22 +3341,20 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
   case COMBINE2(IR_VC_REGFRAME, IR_TYPE_INT32):
   case COMBINE2(IR_VC_REGFRAME, IR_TYPE_POINTER):
   case COMBINE2(IR_VC_REGFRAME, IR_TYPE_FLOAT):
-    emit_op2(iu, VM_MOV32, value_reg(ret), value_reg(src));
+    emit_op2(iu, VM_MOV32, retreg, value_reg(src));
     return;
   case COMBINE2(IR_VC_REGFRAME, IR_TYPE_INT64):
   case COMBINE2(IR_VC_REGFRAME, IR_TYPE_DOUBLE):
-    emit_op2(iu, VM_MOV64, value_reg(ret), value_reg(src));
+    emit_op2(iu, VM_MOV64, retreg, value_reg(src));
     return;
 
   case COMBINE2(IR_VC_FUNCTION, IR_TYPE_FUNCTION):
   case COMBINE2(IR_VC_FUNCTION, IR_TYPE_POINTER):
-    emit_op1(iu, VM_MOV32_C, value_reg(ret));
+    emit_op1(iu, VM_MOV32_C, retreg);
     emit_i32(iu, value_function_addr(src));
     break;
   default:
-    parser_error(iu, "Can't move from %s (code:%d) class %d  srcvalue=%s",
-                 type_str(iu, ty), legalize_type(ty), src->iv_class,
-                 value_str(iu, src));
+    parser_error(iu, "Can't emit %s", instr_str(iu, &ii->super, 0));
   }
 }
 

@@ -29,7 +29,6 @@ typedef enum {
   IR_VC_CONSTANT,
   IR_VC_TEMPORARY,
   IR_VC_REGFRAME,
-  IR_VC_CALL_ARGUMENT,
   IR_VC_MACHINEREG,
   IR_VC_DATA,
   IR_VC_CE,   // Const expression
@@ -113,8 +112,10 @@ typedef struct ir_value {
     int iv_reg;
 
     int iv_num_values; // For aggregate types
-    int iv_jit;        // For temporary types that only exist in JITed code
+    int iv_jit;        // For IR_VC_TEMPORARY that only exist in JITed code (Machine registers)
   };
+
+  int iv_precolored;
 
 } ir_value_t;
 
@@ -172,6 +173,21 @@ instr_bind_clear(ir_instr_t *ii)
   ir_value_instr_t *ivi;
   while((ivi = LIST_FIRST(&ii->ii_values)) != NULL)
     ivi_destroy(ivi);
+}
+
+
+/**
+ *
+ */
+static void
+instr_bind_clear_inputs(ir_instr_t *ii)
+{
+  ir_value_instr_t *ivi, *next;
+  for(ivi = LIST_FIRST(&ii->ii_values); ivi != NULL; ivi = next) {
+    next = LIST_NEXT(ivi, ivi_instr_link);
+    if(ivi->ivi_relation == IVI_INPUT)
+      ivi_destroy(ivi);
+  }
 }
 
 
@@ -300,6 +316,7 @@ value_alloc_instr_ret(ir_unit_t *iu, int type, struct ir_instr *ii)
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
   iv->iv_class = IR_VC_TEMPORARY;
   iv->iv_type = type;
+  iv->iv_precolored = -1;
   ii->ii_ret.value = val;
   ii->ii_ret.type = type;
 
@@ -316,22 +333,8 @@ value_alloc_temporary(ir_unit_t *iu, int type)
   int val = value_append(iu);
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
   iv->iv_class = IR_VC_TEMPORARY;
+  iv->iv_precolored = -1;
   iv->iv_type = type;
-  return (ir_valuetype_t) {.value = val, .type = type};
-}
-
-
-/**
- *
- */
-static ir_valuetype_t
-value_alloc_call_arg(ir_unit_t *iu, int type, int position)
-{
-  int val = value_append(iu);
-  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
-  iv->iv_class = IR_VC_CALL_ARGUMENT;
-  iv->iv_type = type;
-  iv->iv_reg = position;
   return (ir_valuetype_t) {.value = val, .type = type};
 }
 
@@ -340,7 +343,7 @@ value_alloc_call_arg(ir_unit_t *iu, int type, int position)
  *
  */
 static int
-value_regframe_size(ir_unit_t *iu, int type)
+value_regframe_slots(ir_unit_t *iu, int type)
 {
   ir_type_t *it = type_get(iu, type);
 
@@ -352,18 +355,18 @@ value_regframe_size(ir_unit_t *iu, int type)
   case IR_TYPE_FLOAT:
   case IR_TYPE_POINTER:
   case IR_TYPE_FUNCTION:
-    return 4;
+    return 1;
   case IR_TYPE_INT64:
   case IR_TYPE_DOUBLE:
-    return 8;
+    return 2;
   case IR_TYPE_INTx:
     if(it->it_bits <= 32)
-      return 4;
+      return 1;
     else
-      return 8;
+      return 2;
 
   default:
-    parser_error(iu, "Can't determine regframe size for type %s",
+    parser_error(iu, "Can't determine regframe slots for type %s",
                  type_str(iu, it));
   }
 }
@@ -371,33 +374,13 @@ value_regframe_size(ir_unit_t *iu, int type)
 /**
  *
  */
-static void __attribute__((unused))
-value_make_regframe_space(ir_unit_t *iu, ir_value_t *iv)
+static int
+value_regframe_size(ir_unit_t *iu, int type)
 {
-  ir_function_t *f = iu->iu_current_function;
-  int size = value_regframe_size(iu, iv->iv_type);
-  iv->iv_reg = f->if_regframe_size;
-  assert(iv->iv_reg < INT16_MAX);
-  f->if_regframe_size = iv->iv_reg + size;
+  return value_regframe_slots(iu, type) * 4;
 }
 
-/**
- *
- */
-/*
-static int
-value_alloc_regframe(bc_parser_state_t *bps, int type)
-{
-  ir_unit_t *iu = bps->bps_iu;
-  int val = value_append(iu);
-  ir_value_t *iv = &VECTOR_ITEM(&iu->iu_values, val);
-  iv->iv_class = IR_VC_REGFRAME;
-  iv->iv_type = type;
-  iv->iv_instr = NULL;
-  value_make_regframe_space(bps, iv);
-  return val;
-}
-*/
+
 
 /**
  *
@@ -665,12 +648,6 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
     snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{r%d}", value, iv->iv_reg);
     len += addstr(dstp, tmpbuf);
     break;
-  case IR_VC_CALL_ARGUMENT:
-    len += addstr(dstp, "(");
-    len += type_print(dstp, iu, it);
-    snprintf(tmpbuf, sizeof(tmpbuf), ")%%%d{argpos:%d}", value, iv->iv_reg);
-    len += addstr(dstp, tmpbuf);
-    break;
   case IR_VC_DATA:
     {
       len += addstr(dstp, "data [");
@@ -685,11 +662,6 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
     }
     break;
   }
-
-#if 0
-  if(iv->iv_instr != NULL)
-    len += addstr(dstp, "!");
-#endif
 
   if(iv->iv_name != NULL) {
     len += addstr(dstp, "\"");

@@ -275,11 +275,11 @@ type_str_index(ir_unit_t *iu, int id)
  *
  */
 static int
-type_make(ir_unit_t *iu, int type)
+type_make(ir_unit_t *iu, int code)
 {
   for(int i = 0; i < VECTOR_LEN(&iu->iu_types); i++) {
     ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, i);
-    if(it->it_code == type)
+    if(it->it_code == code)
       return i;
   }
 
@@ -287,7 +287,7 @@ type_make(ir_unit_t *iu, int type)
 
   ir_type_t it;
   int r = VECTOR_LEN(&iu->iu_types);
-  it.it_code = type;
+  it.it_code = code;
   VECTOR_PUSH_BACK(&iu->iu_types, it);
   return r;
 }

@@ -178,7 +178,6 @@ struct ir_unit {
   struct ir_value_vector iu_values;
   int iu_next_value;
   int iu_first_func_value;
-  int iu_first_call_arg;
 
   char *iu_current_struct_name;
 

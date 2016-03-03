@@ -554,6 +554,9 @@ eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
          ii->ii_class == IR_IC_CALL)
         continue;
 
+      if(ii->ii_ret.value < 1)
+        continue; // Maybe need to deal with multiple ret values in the future?
+
       ir_value_t *output = value_get(iu, ii->ii_ret.value);
 
       LIST_FOREACH(ivi, &output->iv_instructions, ivi_value_link) {
@@ -1432,17 +1435,19 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
 
   for(int i = 0; i < temp_values; i++) {
     const ir_value_t *iv = value_get(iu, i + ffv);
-    if(iv->iv_class != IR_VC_TEMPORARY)
+    if(iv->iv_class != IR_VC_TEMPORARY || iv->iv_precolored != -1)
       continue;
 
-    int s = value_regframe_size(iu, iv->iv_type);
-    if(s == 8) {
+    int s = value_regframe_slots(iu, iv->iv_type);
+    if(s == 2) {
       vi[num_vertices].class = RA_CLASS_REGFRAME_64;
-    } else {
+    } else if(s == 1) {
       if(iv->iv_jit)
         vi[num_vertices].class = RA_CLASS_MACHINEREG_32;
       else
         vi[num_vertices].class = RA_CLASS_REGFRAME_32;
+    } else {
+      abort();
     }
     int score = iv->iv_edges;
     vi[num_vertices].value = i;
@@ -1754,7 +1759,9 @@ coalesce(ir_unit_t *iu,
         ir_value_t *src = VECTOR_ITEM(&iu->iu_values, v);
         if(src->iv_class != IR_VC_TEMPORARY)
           continue;
-        assert(ii->ii_ret.value >= 0);
+        if(ii->ii_ret.value < -1)
+          continue;
+
         ir_value_t *dst = VECTOR_ITEM(&iu->iu_values, ii->ii_ret.value);
 
         if(dst == src) {
@@ -1773,9 +1780,19 @@ coalesce(ir_unit_t *iu,
 
         assert(dst->iv_class == IR_VC_TEMPORARY);
 
+        if(dst->iv_precolored != -1 && src->iv_precolored != -1)
+          continue;
+
         if(!tribitmtx_get(mtx, ii->ii_ret.value - ffv, v - ffv)) {
-          ir_value_t *killed = src;
-          ir_value_t *saved = dst;
+          ir_value_t *killed, *saved;
+
+          if(src->iv_precolored != -1) {
+            killed = dst;
+            saved = src;
+          } else {
+            killed = src;
+            saved = dst;
+          }
 
           if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
             printf("Merging value %s -> %s based on instr: %s\n",
@@ -1789,7 +1806,7 @@ coalesce(ir_unit_t *iu,
             ivin = LIST_NEXT(ivi, ivi_value_link);
 
             if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_REGALLOC) {
-              printf("\tPre altering instruction %s\n",
+              printf("\t Pre altering instruction %s\n",
                      instr_str(iu, ivi->ivi_instr, 1));
             }
 
@@ -1798,11 +1815,10 @@ coalesce(ir_unit_t *iu,
             LIST_REMOVE(ivi, ivi_value_link);
             ivi->ivi_value = saved;
             LIST_INSERT_HEAD(&saved->iv_instructions, ivi, ivi_value_link);
-
 #ifdef VMIR_VM_JIT
             if(!(iu->iu_debug_flags_func & VMIR_DBG_DISABLE_JIT)) {
-              memset(ivi->ivi_instr->ii_liveness + setwords,
-                     0, setwords * sizeof(uint32_t));
+              memset(ivi->ivi_instr->ii_liveness,
+                     0, setwords * sizeof(uint32_t) * 3);
               liveness_set_gen(ivi->ivi_instr, iu,
                                ivi->ivi_instr->ii_liveness + setwords);
             }
@@ -1841,9 +1857,6 @@ coalesce(ir_unit_t *iu,
 #ifdef VMIR_VM_JIT
   if(!(iu->iu_debug_flags_func & VMIR_DBG_DISABLE_JIT)) {
     liveness_update(f, setwords, ffv);
-
-    if(0)
-      print_liveout(iu, f, temp_values, ffv);
     jit_analyze(iu, f);
   }
 #endif
@@ -1880,10 +1893,6 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
   }
 
   liveness_update(f, setwords, ffv);
-
-  if(0)
-    print_liveout(iu, f, temp_values, ffv);
-
   coalesce(iu, setwords, temp_values, ffv, f);
 }
 
@@ -1892,34 +1901,83 @@ liveness_analysis(ir_unit_t *iu, ir_function_t *f)
  *
  */
 static int
-prepare_call(ir_unit_t *iu, ir_function_t *f, ir_instr_call_t *ii)
+prepare_call(ir_unit_t *iu, ir_function_t *f, ir_instr_call_t *ii,
+             int call_arg_base, int *num_call_args, int callargtype)
 {
   int callpos = 0;
   int stackgrowth = 0;
-  for(int i = 0; i < ii->argc; i++) {
-    int size = value_regframe_size(iu, ii->argv[i].value.type);
+  int total_slots = 0;
 
-    callpos += size;
-    ir_valuetype_t carg = value_alloc_call_arg(iu, ii->argv[i].value.type,
-                                               -callpos);
+  instr_bind_clear_inputs(&ii->super);
+  instr_bind_input(iu, ii->callee, &ii->super);
+
+  for(int i = 0; i < ii->argc; i++) {
+    int slots = value_regframe_slots(iu, ii->argv[i].value.type);
+    int arg = call_arg_base + total_slots;
+    total_slots += slots;
+
+    while(total_slots > *num_call_args) {
+      ir_valuetype_t vt = value_alloc_temporary(iu, callargtype);
+      ir_value_t *iv = value_get(iu, vt.value);
+      iv->iv_precolored = *num_call_args;
+      *num_call_args += 1;
+    }
+
 
     if(ii->argv[i].copy_size) {
+      assert(slots == 1);
       ir_instr_stackcopy_t *stackcopy =
         instr_add_before(sizeof(ir_instr_stackcopy_t), IR_IC_STACKCOPY,
                          &ii->super);
-      stackcopy->super.ii_ret = carg;
+
+      stackcopy->super.ii_ret.value = arg;
+      stackcopy->super.ii_ret.type = callargtype;
+
       stackcopy->value = ii->argv[i].value;
       stackcopy->size = ii->argv[i].copy_size;
+
+      instr_bind_input(iu, ii->argv[i].value, &stackcopy->super);
+      value_bind_return_value(iu, &stackcopy->super);
+
       stackgrowth += stackcopy->size;
+
+      ii->argv[i].value.value = arg;
+      instr_bind_input(iu, ii->argv[i].value, &ii->super);
+
+    } else if(slots == 2) {
+      ir_instr_move_t *move =
+        instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, &ii->super);
+
+      move->super.ii_rets = malloc(sizeof(ir_valuetype_t) * 2);
+      move->super.ii_ret.value = -2;
+      move->super.ii_rets[0].value = arg + 1;
+      move->super.ii_rets[0].type = callargtype;
+      move->super.ii_rets[1].value = arg;
+      move->super.ii_rets[1].type = callargtype;
+      move->value = ii->argv[i].value;
+
+      instr_bind_input(iu, move->value, &move->super);
+
+      value_bind_instr(value_get(iu, arg + 1), &move->super, IVI_OUTPUT);
+      value_bind_instr(value_get(iu, arg    ), &move->super, IVI_OUTPUT);
+
+      ii->argv[i].value.value = arg;
+      instr_bind_input(iu, ii->argv[i].value, &ii->super);
+
 
     } else {
       ir_instr_move_t *move =
         instr_add_before(sizeof(ir_instr_move_t), IR_IC_MOVE, &ii->super);
-      move->super.ii_ret = carg;
-      move->value = ii->argv[i].value;
-    }
+      move->super.ii_ret.value = arg;
+      move->super.ii_ret.type = ii->argv[i].value.type;
 
-    ii->argv[i].value = carg;
+      move->value = ii->argv[i].value;
+      instr_bind_input(iu, ii->argv[i].value, &move->super);
+      value_bind_return_value(iu, &move->super);
+
+      ii->argv[i].value.value = arg;
+      instr_bind_input(iu, ii->argv[i].value, &ii->super);
+    }
   }
 
   ir_function_t *callee = value_function(iu, ii->callee.value);
@@ -1944,47 +2002,36 @@ static int
 prepare_calls(ir_unit_t *iu, ir_function_t *f)
 {
   ir_bb_t *bb;
-
-  iu->iu_first_call_arg = iu->iu_next_value;
-  int max_call_arg_size = 0;
+  int call_arg_base = iu->iu_next_value;
+  int num_call_args = 0;
+  int callargtype = type_make(iu, IR_TYPE_INT32);
   TAILQ_FOREACH(bb, &f->if_bbs, ib_link) {
     ir_instr_t *ii;
     TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
-      if(ii->ii_class == IR_IC_CALL) {
-        int s = prepare_call(iu, f, (ir_instr_call_t *)ii);
-        max_call_arg_size = MAX(max_call_arg_size, s);
+    if(ii->ii_class == IR_IC_CALL) {
+      prepare_call(iu, f, (ir_instr_call_t *)ii,
+                   call_arg_base, &num_call_args,
+                   callargtype);
       }
     }
   }
-
-  return max_call_arg_size;
+  return num_call_args;
 }
-
 
 /**
  *
  */
 static void
-value_alloc_registers(ir_unit_t *iu, ir_function_t *f, int call_arg_size)
+finalize_call_args(ir_unit_t *iu, ir_function_t *f,
+                   int call_arg_base, int num_call_args)
 {
-#if 0
-  for(int i = iu->iu_first_func_value; i < iu->iu_next_value; i++) {
-    ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, i);
-    if(iv->iv_class != IR_VC_TEMPORARY)
-      continue;
-    value_make_regframe_space(iu, iv);
-    iv->iv_class = IR_VC_REGFRAME;
-  }
-#endif
-
+  int call_arg_size = num_call_args * 4;
   f->if_regframe_size += call_arg_size;
 
-  for(int i = iu->iu_first_func_value; i < iu->iu_next_value; i++) {
-    ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, i);
-    if(iv->iv_class != IR_VC_CALL_ARGUMENT)
-      continue;
-    iv->iv_reg += f->if_regframe_size;
+  for(int i = 0; i < num_call_args; i++) {
+    ir_value_t *iv = value_get(iu, call_arg_base + i);
     iv->iv_class = IR_VC_REGFRAME;
+    iv->iv_reg = f->if_regframe_size - (i + 1) * 4;
   }
 }
 
@@ -2202,13 +2249,6 @@ static void
 combine_binop_load_cast(ir_unit_t *iu, ir_instr_unary_t *cast,
                         ir_instr_load_t *load)
 {
-#if 0
-  printf("cast combine\n");
-  instr_print(iu, &load->super, 1);
-  printf("\n");
-  instr_print(iu, &cast->super, 1);
-  printf("\n");
-#endif
   ir_value_t *kill = value_get(iu, load->super.ii_ret.value);
   load->cast = cast->op;
   load->load_type = kill->iv_type;
@@ -2398,13 +2438,14 @@ transform_function(ir_unit_t *iu, ir_function_t *f)
 
   exit_ssa(iu, f);
 
+  int call_arg_base = iu->iu_next_value;
+  int num_call_args = prepare_calls(iu, f);
+
   eliminate_dead_code(iu, f);
 
   legalize_values(iu, f);
 
   liveness_analysis(iu, f);
 
-  int cs = prepare_calls(iu, f);
-
-  value_alloc_registers(iu, f, cs);
+  finalize_call_args(iu, f, call_arg_base, num_call_args);
 }
