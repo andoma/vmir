@@ -37,6 +37,7 @@
 #define ARM_COND_AL  0xe0000000
 
 
+#define VMIR_VM_JIT
 
 
 /**
@@ -63,6 +64,17 @@ armcond(int pred)
   return cond;
 }
 
+
+
+static int
+arm_machinereg(int reg)
+{
+  if(reg < 5)
+    return reg + 4;  // r4, r5, r6, r7, r8
+  return reg + 5;    // r10, r11
+}
+
+#define JIT_MACHINE_REGS 7
 
 /**
  * Registers
@@ -315,7 +327,7 @@ jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc,
   switch(iv->iv_class) {
   case IR_VC_MACHINEREG:
 
-    mr = iv->iv_reg + 4;
+    mr = arm_machinereg(iv->iv_reg);
 
     switch(legalize_type(it)) {
     case IR_TYPE_INT8:
@@ -458,7 +470,7 @@ jit_storevalue_reg(ir_unit_t *iu, ir_valuetype_t vt, int reg)
 {
   const ir_value_t *iv = value_get(iu, vt.value);
   if(iv->iv_class == IR_VC_MACHINEREG)
-    return iv->iv_reg + 4;
+    return arm_machinereg(iv->iv_reg);
   return reg;
 }
 
@@ -474,8 +486,8 @@ jit_storevalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, uint32_t cond)
 
   switch(iv->iv_class) {
   case IR_VC_MACHINEREG:
-    if(iv->iv_reg + 4 != reg) {
-      int Rd = iv->iv_reg + 4;
+    if(arm_machinereg(iv->iv_reg) != reg) {
+      int Rd = arm_machinereg(iv->iv_reg);
       int Rm = reg;
       // MOV
       jit_push(iu, cond | (1 << 24) | (1 << 23) | (1 << 21) | (Rd << 12) | Rm);
@@ -1672,6 +1684,4 @@ jit_seal_code(ir_unit_t *iu)
            PROT_EXEC | PROT_READ);
 }
 
-#define VMIR_VM_JIT
-#define JIT_MACHINE_REGS 5
 
