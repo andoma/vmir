@@ -89,7 +89,7 @@ function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
   ir_bb_t *ib;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ir_instr_t *ii;
-    printf(".%d:", ib->ib_id);
+    printf(".%d:%s", ib->ib_id, ib->ib_jit ? " (JIT)" : "");
 
     ir_bb_edge_t *ibe;
     LIST_FOREACH(ibe, &ib->ib_incoming_edges, ibe_to_link) {

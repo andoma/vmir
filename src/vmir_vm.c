@@ -3170,13 +3170,12 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
   case IR_TYPE_INT8:
 
     width = type_bitwidth(iu, cty);
-
     if(width <= 4) {
       jumptable_size = 1 << width;
       goto jumptable;
     }
 
-    if(ii->num_paths >= ii->num_paths / 4) {
+    if(ii->num_paths > 64) {
       jumptable_size = 256;
       goto jumptable;
     }
@@ -3943,22 +3942,31 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
 {
   ir_instr_t *ii;
   //  printf("=========== BB %s.%d\n", f->if_name, bb->ib_id);
-  TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
 
-    //    printf("EMIT INSTR: %s\n", instr_str(iu, ii, 1));
 
 #ifdef VMIR_VM_JIT
-    if(ii->ii_jit) {
-      int jitoffset;
-      ii = jit_emit(iu, ii, &jitoffset, iu->iu_text_ptr - iu->iu_text_alloc + 6);
-      if(jitoffset != -1) {
-        emit_op(iu, VM_JIT_CALL);
-        emit_i32(iu, jitoffset);
-      }
-      if(ii == NULL)
-        return;
-    }
+  if(bb->ib_jit) {
+    int jitoffset = jit_emit(iu, bb);
+
+#ifdef VM_TRACE
+    char tmp[128];
+    ir_instr_backref_t *iib = f->if_instr_backrefs + f->if_instr_backref_size;
+    iib->offset = iu->iu_text_ptr - iu->iu_text_alloc;
+    snprintf(tmp, sizeof(tmp), "JIT CALL to 0x%x", jitoffset);
+    iib->str = strdup(tmp);
+    iib->bb = bb->ib_id;
+    f->if_instr_backref_size++;
 #endif
+    emit_op(iu, VM_JIT_CALL);
+    emit_i32(iu, jitoffset);
+    return;
+  }
+#endif
+
+
+  TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
+    //    printf("EMIT INSTR: %s\n", instr_str(iu, ii, 1));
+    assert(ii->ii_jit == 0);
 
 #ifdef VM_TRACE
     ir_instr_backref_t *iib = f->if_instr_backrefs + f->if_instr_backref_size;

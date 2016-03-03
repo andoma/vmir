@@ -896,14 +896,7 @@ cfg_add_edge(ir_function_t *f, ir_bb_t *from, int bb, int mark)
       return;
     to->ib_mark = 1;
   }
-  ir_bb_edge_t *ibe = malloc(sizeof(ir_bb_edge_t));
-  LIST_INSERT_HEAD(&f->if_edges,             ibe, ibe_function_link);
-
-  ibe->ibe_from = from;
-  LIST_INSERT_HEAD(&from->ib_outgoing_edges, ibe, ibe_from_link);
-
-  ibe->ibe_to   = to;
-  LIST_INSERT_HEAD(&to->ib_incoming_edges,   ibe, ibe_to_link);
+  cfg_create_edge(f, from, to);
 }
 
 
@@ -1857,7 +1850,7 @@ coalesce(ir_unit_t *iu,
 #ifdef VMIR_VM_JIT
   if(!(iu->iu_debug_flags_func & VMIR_DBG_DISABLE_JIT)) {
     liveness_update(f, setwords, ffv);
-    jit_analyze(iu, f);
+    jit_analyze(iu, f, setwords, ffv);
   }
 #endif
 

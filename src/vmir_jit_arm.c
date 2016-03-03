@@ -430,6 +430,9 @@ jit_loadvalue_cond(ir_unit_t *iu, ir_valuetype_t vt, int reg, jitctx_t *jc,
                      value_get_const32(iu, iv) : value_get_const(iu, iv),
                      reg, jc, cond);
     break;
+  case IR_VC_FUNCTION:
+    jit_loadimm_cond(iu, value_function_addr(iv), reg, jc, cond);
+    break;
   default:
     parser_error(iu, "JIT: Can't load value-class %d", iv->iv_class);
   }
@@ -974,13 +977,11 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
   int ptr1 = 0;
   int ptr2 = 0;
   ir_bb_t *ib;
-  ir_instr_t *tgt;
 
   const int cond = armcond(pred);
 
   ib = bb_find(iu->iu_current_function, true_bb);
-  tgt = TAILQ_FIRST(&ib->ib_instrs);
-  if(tgt->ii_jit) {
+  if(ib->ib_jit) {
     // Jumping to another JITen instruction, emit a branch
     VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
     jit_push(iu, cond | (1 << 27) | (1 << 25) | true_bb);
@@ -991,8 +992,7 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
   }
 
   ib = bb_find(iu->iu_current_function, false_bb);
-  tgt = TAILQ_FIRST(&ib->ib_instrs);
-  if(tgt->ii_jit) {
+  if(ib->ib_jit) {
     // Jumping to another JITen instruction, emit a branch
     VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
     jit_pushal(iu, (1 << 27) | (1 << 25) | false_bb);
@@ -1038,9 +1038,8 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
   }
   // Unconditional branch
   ir_bb_t *ib = bb_find(iu->iu_current_function, ii->true_branch);
-  ir_instr_t *tgt = TAILQ_FIRST(&ib->ib_instrs);
-  if(tgt->ii_jit) {
-    // Jumping to another JITen instruction, emit a branch
+  if(ib->ib_jit) {
+    // Jumping to another JITed BB, emit a branch
     VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
     jit_pushal(iu, (1 << 27) | (1 << 25) | ii->true_branch);
     jit_push_literal_pool(iu, jc);
@@ -1354,103 +1353,60 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
 /**
  *
  */
-static void
+static int
 jit_check(ir_unit_t *iu, ir_instr_t *ii)
 {
-  int r;
-  if(ii->ii_jit_checked)
-    return;
-  ii->ii_jit_checked = 1;
-
   switch(ii->ii_class) {
   case IR_IC_BINOP:
-    r = jit_binop_check(iu, (ir_instr_binary_t *)ii);
-    break;
+    return jit_binop_check(iu, (ir_instr_binary_t *)ii);
   case IR_IC_CAST:
-    r = jit_cast_check(iu, (ir_instr_unary_t *)ii);
-    break;
+    return jit_cast_check(iu, (ir_instr_unary_t *)ii);
   case IR_IC_MOVE:
-    r = jit_move_check(iu, (ir_instr_move_t *)ii);
-    break;
+    return jit_move_check(iu, (ir_instr_move_t *)ii);
   case IR_IC_LOAD:
-    r = jit_load_check(iu, (ir_instr_load_t *)ii);
-    break;
+    return jit_load_check(iu, (ir_instr_load_t *)ii);
   case IR_IC_STORE:
-    r = jit_store_check(iu, (ir_instr_store_t *)ii);
-    break;
+    return jit_store_check(iu, (ir_instr_store_t *)ii);
   case IR_IC_MLA:
-    r = jit_mla_check(iu, (ir_instr_ternary_t *)ii);
-    break;
+    return jit_mla_check(iu, (ir_instr_ternary_t *)ii);
   case IR_IC_BR:
-    r = jit_br_check(iu, (ir_instr_br_t *)ii);
-    break;
+    return jit_br_check(iu, (ir_instr_br_t *)ii);
   case IR_IC_CMP_BRANCH:
-    r = jit_cmp_br_check(iu, (ir_instr_cmp_branch_t *)ii);
-    break;
+    return jit_cmp_br_check(iu, (ir_instr_cmp_branch_t *)ii);
   case IR_IC_CMP_SELECT:
-    r = jit_cmp_select_check(iu, (ir_instr_cmp_select_t *)ii);
-    break;
+    return jit_cmp_select_check(iu, (ir_instr_cmp_select_t *)ii);
   case IR_IC_CMP2:
-    r = jit_cmp_check(iu, (ir_instr_binary_t *)ii);
-    break;
+    return jit_cmp_check(iu, (ir_instr_binary_t *)ii);
   case IR_IC_SELECT:
-    r = jit_select_check(iu, (ir_instr_select_t *)ii);
-    break;
+    return jit_select_check(iu, (ir_instr_select_t *)ii);
   case IR_IC_LEA:
-    r = 1;
-    break;
+    return 1;
   default:
-    return;
+    return 0;
   }
-
-  ii->ii_jit = r;
 }
 
 
+
 /**
- * Figure out which values are live only during a specific JIT
- * segment. Such values are allocated to machine registers.
+ * DFS to find cluster of fully JITed basic blocks
  */
 static void
-jit_analyze_segment(ir_unit_t *iu, ir_instr_t *first, ir_instr_t *last)
+jit_bb_dfs(ir_bb_t *ib, struct ir_bb_list *cluster)
 {
-  const ir_instr_t *stop = TAILQ_NEXT(last, ii_link);
-  ir_instr_t *ii;
+  ir_bb_edge_t *ibe;
+  ib->ib_mark = 1;
 
-  // Live-out values from JITed segment
-  const uint32_t *liveout = last->ii_liveness;
-  const int ffv = iu->iu_first_func_value;
-#if 0
-  printf("Analyze segment first: ");
-  instr_print(iu, first, 0);
-  printf("\n");
+  LIST_REMOVE(ib, ib_traversal_link);
+  LIST_INSERT_HEAD(cluster, ib, ib_traversal_link);
 
-  printf("Analyze segment  last: ");
-  instr_print(iu, last, 0);
-  printf("\n");
-  printf("last liveout values\n");
-  for(int i = 0; i < 32;i++) {
-    if(bitchk(liveout, i))
-      printf("%s\n", value_str_id(iu, i + ffv));
-  }
-#endif
-  for(ii = first; ii != stop; ii = TAILQ_NEXT(ii, ii_link)) {
-    int r = ii->ii_ret.value;
-    if(r == -1)
-      continue;
-    r -= ffv;
-    if(bitchk(liveout, r))
-      continue; // Value is liveout
+  LIST_FOREACH(ibe, &ib->ib_outgoing_edges, ibe_from_link)
+    if(ibe->ibe_to->ib_jit && !ibe->ibe_to->ib_mark)
+      jit_bb_dfs(ibe->ibe_to, cluster);
 
-    ir_value_t *iv = value_get(iu, ii->ii_ret.value);
-    assert(iv->iv_class == IR_VC_TEMPORARY);
-    iv->iv_jit = 1;
-#if 0
-    printf("Value %s is machineregisterable, emitted by ", value_str(iu, iv));
-    instr_print(iu, ii, 0);
-    printf("\n");
-#endif
-  }
+  LIST_FOREACH(ibe, &ib->ib_incoming_edges, ibe_to_link)
+    if(ibe->ibe_from->ib_jit && !ibe->ibe_from->ib_mark)
+      jit_bb_dfs(ibe->ibe_from, cluster);
 }
 
 
@@ -1459,28 +1415,146 @@ jit_analyze_segment(ir_unit_t *iu, ir_instr_t *first, ir_instr_t *last)
  * This happens just before register allocation.
  */
 static void
-jit_analyze(ir_unit_t *iu, ir_function_t *f)
+jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
 {
-  ir_bb_t *ib;
-  ir_instr_t *ii;
+  ir_bb_t *ib, *ibn, *curbb;
+  ir_instr_t *ii, *iin, *prev;
 
-  ir_instr_t *first = NULL;
 
-  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
-    TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+  //  function_print(iu, f, "PRE JIT ANALYZE");
 
-      jit_check(iu, ii);
-      if(ii->ii_jit && first == NULL)
-        first = ii;
+  struct ir_bb_list jitbbs;
+  LIST_INIT(&jitbbs);
 
-      if(!ii->ii_jit && first != NULL) {
-        jit_analyze_segment(iu, first, TAILQ_PREV(ii, ir_instr_queue, ii_link));
-        first = NULL;
+  for(ib = TAILQ_FIRST(&f->if_bbs); ib != NULL; ib = ibn) {
+    ibn = TAILQ_NEXT(ib, ib_link);
+
+    prev = ii = TAILQ_FIRST(&ib->ib_instrs);
+
+    ib->ib_jit = ii->ii_jit = jit_check(iu, ii);
+    curbb = ib;
+
+    if(ib->ib_jit)
+      LIST_INSERT_HEAD(&jitbbs, ib, ib_traversal_link);
+
+    ib->ib_mark = 0;
+
+    ii = TAILQ_NEXT(ii, ii_link);
+    for(; ii != NULL; ii = iin) {
+      iin = TAILQ_NEXT(ii, ii_link);
+      ii->ii_jit = jit_check(iu, ii);
+
+      if(ii->ii_jit != curbb->ib_jit) {
+        // Enter/Leaved JIT section, split into new bb
+
+        ir_bb_t *newbb = bb_add(f, curbb);
+        newbb->ib_jit = ii->ii_jit;
+        if(newbb->ib_jit) {
+          LIST_INSERT_HEAD(&jitbbs, newbb, ib_traversal_link);
+          newbb->ib_mark = 0;
+        }
+        // Emit an unconditional branch
+        ir_instr_br_t *br = instr_create(sizeof(ir_instr_br_t), IR_IC_BR);
+        br->super.ii_bb = curbb;
+        TAILQ_INSERT_AFTER(&curbb->ib_instrs, prev, &br->super, ii_link);
+        br->true_branch = newbb->ib_id;
+        br->condition.value = -1;
+        br->super.ii_jit = curbb->ib_jit;
+        // Set successor on branch instruction for liveness analysis
+        br->super.ii_num_succ = 1;
+        br->super.ii_succ = malloc(sizeof(ir_bb_t *));
+        br->super.ii_succ[0] = newbb;
+        br->super.ii_liveness = malloc(sizeof(uint32_t) * setwords * 3);
+        memcpy(br->super.ii_liveness, prev->ii_liveness,
+               sizeof(uint32_t) * setwords * 3);
+
+        // Move edges from curbb to newbb
+        ir_bb_edge_t *ibe;
+        while((ibe = LIST_FIRST(&curbb->ib_outgoing_edges)) != NULL) {
+          LIST_REMOVE(ibe, ibe_from_link);
+          LIST_INSERT_HEAD(&newbb->ib_outgoing_edges, ibe, ibe_from_link);
+          ibe->ibe_from = newbb;
+        }
+
+        // Create edge in CFG
+        cfg_create_edge(f, curbb, newbb);
+        curbb = newbb;
+      }
+
+      if(curbb != ib) {
+        // Move over instruction if current bb is different than original
+        TAILQ_REMOVE(&ib->ib_instrs, ii, ii_link);
+        TAILQ_INSERT_TAIL(&curbb->ib_instrs, ii, ii_link);
+        ii->ii_bb = curbb;
+      }
+      prev = ii;
+    }
+  }
+
+  //  function_print(iu, f, "POST JIT ANALYZE");
+
+  // Mask of values we can't put in machine registers
+  uint32_t *mask = alloca(setwords * sizeof(uint32_t));
+
+  while(1) {
+    ir_bb_t *start = LIST_FIRST(&jitbbs);
+    struct ir_bb_list jitcluster;
+    if(start == NULL)
+      break;
+    LIST_INIT(&jitcluster);
+    //    printf("--------------------------------------------\n");
+
+    jit_bb_dfs(start, &jitcluster);
+
+    memset(mask, 0, setwords * sizeof(uint32_t));
+
+    LIST_FOREACH(ib, &jitcluster, ib_traversal_link) {
+      ir_bb_edge_t *ibe;
+
+      LIST_FOREACH(ibe, &ib->ib_outgoing_edges, ibe_from_link) {
+        if(!ibe->ibe_to->ib_jit) {
+          ir_bb_t *to = ibe->ibe_to;
+          ir_instr_t *ii = TAILQ_FIRST(&to->ib_instrs);
+          const uint32_t *in = ii->ii_liveness + setwords * 2;
+          bitset_or(mask, in, setwords);
+        }
+      }
+
+      LIST_FOREACH(ibe, &ib->ib_incoming_edges, ibe_to_link) {
+        if(!ibe->ibe_from->ib_jit) {
+          ir_bb_t *from = ibe->ibe_from;
+          ir_instr_t *ii = TAILQ_LAST(&from->ib_instrs, ir_instr_queue);
+          const uint32_t *out = ii->ii_liveness;
+          bitset_or(mask, out, setwords);
+        }
       }
     }
-    if(first != NULL) {
-      jit_analyze_segment(iu, first, TAILQ_LAST(&ib->ib_instrs, ir_instr_queue));
-      first = NULL;
+
+#if 0
+    for(int i = 0; i < setwords * 32; i++)
+      if(bitchk(mask, i))
+        printf("\tMask: %s\n", value_str_id(iu, i + ffv));
+#endif
+
+    LIST_FOREACH(ib, &jitcluster, ib_traversal_link) {
+      ir_instr_t *ii;
+      TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+        int r = ii->ii_ret.value;
+        if(r < 0)
+          continue;
+        r -= ffv;
+        if(bitchk(mask, r))
+          continue;
+
+        ir_value_t *iv = value_get(iu, ii->ii_ret.value);
+        assert(iv->iv_class == IR_VC_TEMPORARY);
+        ir_value_instr_t *ivi;
+        LIST_FOREACH(ivi, &iv->iv_instructions, ivi_value_link)
+          if(!ivi->ivi_instr->ii_jit)
+            break;
+        if(ivi == NULL)
+          iv->iv_jit = 1;
+      }
     }
   }
 }
@@ -1489,25 +1563,21 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f)
 /**
  *
  */
-static ir_instr_t *
-jit_emit(ir_unit_t *iu, ir_instr_t *ii, int *codeptr, int retvalue)
+static int
+jit_emit(ir_unit_t *iu, ir_bb_t *ib)
 {
   jitctx_t jc;
   jc.literal_pool_use = 0;
 
-  *codeptr = iu->iu_jit_ptr;
+  int ret = iu->iu_jit_ptr;
 
   jit_pushal(iu, (0x92d << 16) | (0x4DF0));
 
-  if(ii == TAILQ_FIRST(&ii->ii_bb->ib_instrs))
-    ii->ii_bb->ib_jit_offset = iu->iu_jit_ptr;
+  ib->ib_jit_offset = iu->iu_jit_ptr;
 
-  while(ii != NULL && ii->ii_jit) {
-#if 0
-    printf("JIT ");
-    instr_print(iu, ii, 0);
-    printf("\n");
-#endif
+  ir_instr_t *ii;
+  TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+
     switch(ii->ii_class) {
     case IR_IC_BINOP:
       jit_binop(iu, (ir_instr_binary_t *)ii, &jc);
@@ -1541,25 +1611,15 @@ jit_emit(ir_unit_t *iu, ir_instr_t *ii, int *codeptr, int retvalue)
       break;
     case IR_IC_BR:
       jit_br(iu, (ir_instr_br_t *)ii, &jc);
-      return NULL;
+      return ret;
     case IR_IC_CMP_BRANCH:
       jit_cmp_br(iu, (ir_instr_cmp_branch_t *)ii, &jc);
-      return NULL;
+      return ret;
     default:
       abort();
     }
-    ii = TAILQ_NEXT(ii, ii_link);
   }
-
-  // Offset in code segment where to write the return value from this
-  // JITed segment.
-  int retvalueptr;
-
-  jit_loadimm_from_literal_pool(iu, retvalue, 0, &retvalueptr, &jc);
-  jit_push_epilogue(iu, &jc);
-  VECTOR_PUSH_BACK(&iu->iu_jit_vmcode_fixups, retvalueptr);
-
-  return ii;
+  abort();
 }
 
 

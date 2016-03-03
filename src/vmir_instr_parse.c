@@ -40,6 +40,20 @@ bb_add(ir_function_t *f, ir_bb_t *after)
 }
 
 
+/**
+ *
+ */
+static void
+cfg_create_edge(ir_function_t *f, ir_bb_t *from, ir_bb_t *to)
+{
+  ir_bb_edge_t *ibe = malloc(sizeof(ir_bb_edge_t));
+  LIST_INSERT_HEAD(&f->if_edges,             ibe, ibe_function_link);
+  ibe->ibe_from = from;
+  LIST_INSERT_HEAD(&from->ib_outgoing_edges, ibe, ibe_from_link);
+  ibe->ibe_to   = to;
+  LIST_INSERT_HEAD(&to->ib_incoming_edges,   ibe, ibe_to_link);
+}
+
 
 /**
  *
@@ -394,7 +408,7 @@ typedef struct ir_instr_extractval {
 /**
  *
  */
-static ir_instr_t *
+static void *
 instr_create(size_t size, instr_class_t ic)
 {
   ir_instr_t *ii = calloc(1, size);

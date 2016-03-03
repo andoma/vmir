@@ -114,6 +114,7 @@ TAILQ_HEAD(ir_bb_queue, ir_bb);
 TAILQ_HEAD(ir_function_queue, ir_function);
 TAILQ_HEAD(ir_instr_queue, ir_instr);
 
+LIST_HEAD(ir_bb_list, ir_bb);
 LIST_HEAD(ir_bb_edge_list, ir_bb_edge);
 LIST_HEAD(ir_value_instr_list, ir_value_instr);
 
@@ -308,10 +309,13 @@ typedef struct ir_bb {
   int ib_text_offset;
   int ib_jit_offset;
   int ib_id;
-  int ib_mark;
+  uint8_t ib_mark;
+  uint8_t ib_jit;
 
   struct ir_bb_edge_list ib_incoming_edges;
   struct ir_bb_edge_list ib_outgoing_edges;
+
+  LIST_ENTRY(ir_bb) ib_traversal_link; // Temporary for graph traversal
 } ir_bb_t;
 
 
@@ -402,8 +406,7 @@ typedef struct ir_instr {
   struct ir_bb **ii_succ;
 
   int16_t ii_num_succ;
-  int16_t ii_jit : 1;
-  int16_t ii_jit_checked : 1;
+  uint8_t ii_jit;
 } ir_instr_t;
 
 static void type_print_list(ir_unit_t *iu);
