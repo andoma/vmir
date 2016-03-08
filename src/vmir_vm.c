@@ -3681,6 +3681,8 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 
 
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT1):
+  case COMBINE3(IR_TYPE_INT32, CAST_BITCAST, IR_TYPE_FLOAT):
+  case COMBINE3(IR_TYPE_FLOAT, CAST_BITCAST, IR_TYPE_INT32):
     emit_op2(iu, VM_MOV32, value_reg(ret), value_reg(src));
     return;
 
