@@ -1467,7 +1467,7 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
       len += addstr(dstp, "extractval ");
       len += value_print_vt(dstp, iu, jj->value);
       for(int i = 0; i < jj->num_indicies; i++)
-        len += addstrf(dstp, "%s%d", i ? ",  " : "", jj->indicies[i]);
+        len += addstrf(dstp, ":%d", jj->indicies[i]);
 
       len += addstr(dstp, "]");
     }

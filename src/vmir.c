@@ -519,7 +519,7 @@ initialize_global(ir_unit_t *iu, void *addr,
                   int dstty_index, const ir_value_t *c)
 {
   int x, size;
-
+  ir_valuetype_t *ivt;
   const ir_type_t *dstty = type_get(iu, dstty_index);
 
   switch(dstty->it_code) {
@@ -568,9 +568,9 @@ initialize_global(ir_unit_t *iu, void *addr,
       // Iterate over all elements
       x = dstty->it_array.num_elements;
       assert(c->iv_num_values == x);
-
+      ivt = c->iv_data;
       for(int i = 0; i < x; i++) {
-        ir_value_t *subvalue = value_get(iu, ((int *)c->iv_data)[i]);
+        ir_value_t *subvalue = value_get(iu, ivt[i].value);
         initialize_global(iu, addr, dstty->it_array.element_type, subvalue);
         addr += type_sizeof(iu, dstty->it_array.element_type);
       }
@@ -592,9 +592,9 @@ initialize_global(ir_unit_t *iu, void *addr,
       // Iterate over all elements
       x = dstty->it_struct.num_elements;
       assert(c->iv_num_values == x);
-
+      ivt = c->iv_data;
       for(int i = 0; i < x; i++) {
-        ir_value_t *subvalue = value_get(iu, ((int *)c->iv_data)[i]);
+        ir_value_t *subvalue = value_get(iu, ivt[i].value);
         initialize_global(iu, addr + dstty->it_struct.elements[i].offset,
                           dstty->it_struct.elements[i].type, subvalue);
       }

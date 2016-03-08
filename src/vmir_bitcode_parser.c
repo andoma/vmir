@@ -501,10 +501,13 @@ constants_rec_handler(ir_unit_t *iu, int op,
   case CST_CODE_AGGREGATE:
     iv->iv_class = IR_VC_AGGREGATE;
     iv->iv_num_values = argc;
-    int *values = malloc(sizeof(int) * iv->iv_num_values);
+    ir_valuetype_t *values = malloc(sizeof(ir_valuetype_t) * iv->iv_num_values);
     iv->iv_data = values;
-    for(int i = 0; i < iv->iv_num_values; i++)
-      values[i] = argv[i].i64;
+    for(int i = 0; i < iv->iv_num_values; i++) {
+      ir_value_t *ivx = value_get(iu, argv[i].i64);
+      values[i].value = argv[i].i64;
+      values[i].type = ivx->iv_type;
+    }
     break;
 
   case CST_CODE_DATA:

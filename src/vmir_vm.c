@@ -2344,13 +2344,132 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
  *
  */
 static void
+emit_load1(ir_unit_t *iu, const ir_value_t *src,
+           const ir_value_t *ret, const ir_type_t *retty,
+           const ir_value_t *roff,
+           int immediate_offset, int value_offset_multiply)
+{
+  const int has_offset = immediate_offset != 0 || roff != NULL;
+
+  switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
+
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 0):
+    emit_op2(iu, VM_LOAD8, value_reg(ret), value_reg(src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 1):
+    emit_op2(iu, roff ? VM_LOAD8_ROFF : VM_LOAD8_OFF,
+             value_reg(ret), value_reg(src));
+    emit_i16(iu, immediate_offset);
+    break;
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT8, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT8, 0):
+    emit_op1(iu, VM_LOAD8_G, value_reg(ret));
+    emit_i32(iu, value_get_const32(iu, src));
+    return;
+
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT1, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT1, 0):
+    emit_op1(iu, VM_LOAD8_G, 0);
+    emit_i32(iu, value_get_const32(iu, src));
+    emit_op2(iu, VM_CAST_1_TRUNC_8, value_reg(ret), 0);
+    return;
+
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT16, 0):
+    emit_op2(iu, VM_LOAD16, value_reg(ret), value_reg(src));
+    return;
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT16, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT16, 0):
+    emit_op1(iu, VM_LOAD16_G, value_reg(ret));
+    emit_i32(iu, value_get_const32(iu, src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT16, 1):
+    emit_op2(iu, roff ? VM_LOAD16_ROFF : VM_LOAD16_OFF,
+             value_reg(ret), value_reg(src));
+    emit_i16(iu, immediate_offset);
+    break;
+
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT32, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_POINTER, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_FLOAT, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 0):
+    emit_op1(iu, VM_LOAD32_G, value_reg(ret));
+    emit_i32(iu, value_get_const32(iu, src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT32, 0):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_POINTER, 0):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_FLOAT, 0):
+    emit_op2(iu, VM_LOAD32, value_reg(ret), value_reg(src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT32, 1):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_POINTER, 1):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_FLOAT, 1):
+    emit_op2(iu, roff ? VM_LOAD32_ROFF : VM_LOAD32_OFF,
+             value_reg(ret), value_reg(src));
+    emit_i16(iu, immediate_offset);
+    break;
+
+
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_DOUBLE, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT64, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_DOUBLE, 0):
+    emit_op1(iu, VM_LOAD64_G, value_reg(ret));
+    emit_i32(iu, value_get_const32(iu, src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT64, 0):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 0):
+    emit_op2(iu, VM_LOAD64, value_reg(ret), value_reg(src));
+    return;
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT64, 1):
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 1):
+    emit_op2(iu, roff ? VM_LOAD64_ROFF : VM_LOAD64_OFF,
+             value_reg(ret), value_reg(src));
+    emit_i16(iu, immediate_offset);
+    break;
+
+  default:
+    parser_error(iu, "Can't load from class %d %s immediate-offset:%d",
+                 src->iv_class, type_str(iu, retty),
+                 has_offset);
+  }
+  if(roff != NULL) {
+    emit_i16(iu, value_reg(roff));
+    emit_i16(iu, value_offset_multiply);
+  }
+}
+
+
+/**
+ *
+ */
+static void
 emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
 {
   const ir_value_t *src = value_get(iu, ii->ptr.value);
-  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
-  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
   const ir_value_t *roff =
     ii->value_offset.value >= 0 ? value_get(iu, ii->value_offset.value) : NULL;
+
+  if(ii->super.ii_ret.value < -1) {
+    // Combined loads
+    const ir_type_t *aggty = type_get(iu, type_get_pointee(iu, ii->ptr.type));
+    assert(aggty->it_code == IR_TYPE_STRUCT);
+    assert(aggty->it_struct.num_elements == -ii->super.ii_ret.value);
+    for(int i = 0; i < -ii->super.ii_ret.value; i++) {
+      const ir_value_t *ret = value_get(iu, ii->super.ii_rets[i].value);
+      const ir_type_t *retty = type_get(iu, ii->super.ii_rets[i].type);
+      int offset = aggty->it_struct.elements[i].offset;
+      emit_load1(iu, src, ret, retty, roff, ii->immediate_offset + offset,
+                 ii->value_offset_multiply);
+    }
+    return;
+  }
+
+
+
+  const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
 
   if(ii->cast != -1) {
     // Load + Cast
@@ -2392,95 +2511,8 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
     return;
   }
 
-  const int has_offset = ii->immediate_offset != 0 || roff != NULL;
-
-  switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
-
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 0):
-    emit_op2(iu, VM_LOAD8, value_reg(ret), value_reg(src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 1):
-    emit_op2(iu, roff ? VM_LOAD8_ROFF : VM_LOAD8_OFF,
-             value_reg(ret), value_reg(src));
-    emit_i16(iu, ii->immediate_offset);
-    break;
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT8, 0):
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT8, 0):
-    emit_op1(iu, VM_LOAD8_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
-    return;
-
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT1, 0):
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT1, 0):
-    emit_op1(iu, VM_LOAD8_G, 0);
-    emit_i32(iu, value_get_const32(iu, src));
-    emit_op2(iu, VM_CAST_1_TRUNC_8, value_reg(ret), 0);
-    return;
-
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT16, 0):
-    emit_op2(iu, VM_LOAD16, value_reg(ret), value_reg(src));
-    return;
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT16, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT16, 0):
-    emit_op1(iu, VM_LOAD16_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT16, 1):
-    emit_op2(iu, roff ? VM_LOAD16_ROFF : VM_LOAD16_OFF,
-             value_reg(ret), value_reg(src));
-    emit_i16(iu, ii->immediate_offset);
-    break;
-
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT32, 0):
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_POINTER, 0):
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_FLOAT, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 0):
-    emit_op1(iu, VM_LOAD32_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT32, 0):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_POINTER, 0):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_FLOAT, 0):
-    emit_op2(iu, VM_LOAD32, value_reg(ret), value_reg(src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT32, 1):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_POINTER, 1):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_FLOAT, 1):
-    emit_op2(iu, roff ? VM_LOAD32_ROFF : VM_LOAD32_OFF,
-             value_reg(ret), value_reg(src));
-    emit_i16(iu, ii->immediate_offset);
-    break;
-
-
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64, 0):
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_DOUBLE, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT64, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_DOUBLE, 0):
-    emit_op1(iu, VM_LOAD64_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT64, 0):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 0):
-    emit_op2(iu, VM_LOAD64, value_reg(ret), value_reg(src));
-    return;
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT64, 1):
-  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 1):
-    emit_op2(iu, roff ? VM_LOAD64_ROFF : VM_LOAD64_OFF,
-             value_reg(ret), value_reg(src));
-    emit_i16(iu, ii->immediate_offset);
-    break;
-
-  default:
-    parser_error(iu, "Can't load from class %d %s immediate-offset:%d",
-                 src->iv_class, type_str(iu, retty),
-                 has_offset);
-  }
-  if(roff != NULL) {
-    emit_i16(iu, value_reg(roff));
-    emit_i16(iu, ii->value_offset_multiply);
-  }
+  emit_load1(iu, src, ret, retty, roff, ii->immediate_offset,
+             ii->value_offset_multiply);
 }
 
 

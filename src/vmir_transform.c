@@ -2323,13 +2323,67 @@ combine_instructions(ir_unit_t *iu, ir_function_t *f)
 }
 
 
+/**
+ *
+ */
+static void
+legalize_aggregate_move(ir_unit_t *iu, ir_instr_move_t *ii)
+{
+  const ir_value_t *src = value_get(iu, ii->value.value);
+  const ir_value_t *dst = value_get(iu, ii->super.ii_ret.value);
+
+  assert(src->iv_num_values == dst->iv_num_values);
+  const ir_valuetype_t *sv = src->iv_data;
+  const ir_valuetype_t *dv = dst->iv_data;
+  for(int i = 0; i < src->iv_num_values; i++)
+    insert_move(iu, dv[i], sv[i], &ii->super);
+
+  instr_destroy(&ii->super);
+}
+
 
 /**
  *
  */
 static void
-registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
+legalize_aggregate_select(ir_unit_t *iu, ir_instr_select_t *ii)
 {
+  const ir_value_t *tval = value_get(iu, ii->true_value.value);
+  const ir_value_t *fval = value_get(iu, ii->false_value.value);
+  const ir_value_t *dst = value_get(iu, ii->super.ii_ret.value);
+
+  assert(tval->iv_num_values == dst->iv_num_values);
+  assert(fval->iv_num_values == dst->iv_num_values);
+
+  const ir_valuetype_t *tv = tval->iv_data;
+  const ir_valuetype_t *fv = fval->iv_data;
+  const ir_valuetype_t *dv = dst->iv_data;
+
+  for(int i = 0; i < dst->iv_num_values; i++) {
+    // TODO: Individual values can be constant-same for true and false path
+    //       Such switches should use a MOVE -operand instead
+    ir_instr_select_t *s =
+      instr_add_before(sizeof(ir_instr_select_t), IR_IC_SELECT, &ii->super);
+    s->super.ii_ret = dv[i];
+    s->pred = ii->pred;
+    s->true_value = tv[i];
+    s->false_value = fv[i];
+    value_bind_return_value(iu, &s->super);
+    instr_bind_input(iu, s->pred, &s->super);
+    instr_bind_input(iu, s->true_value, &s->super);
+    instr_bind_input(iu, s->false_value, &s->super);
+  }
+  instr_destroy(&ii->super);
+}
+
+
+/**
+ *
+ */
+static void
+legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
+{
+  const int num_values = iv->iv_num_values;
   const ir_valuetype_t *values = iv->iv_data;
   assert(num_values > 1);
 
@@ -2338,6 +2392,17 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
     const int rel = ivi->ivi_relation;
     ir_instr_t *ii = ivi->ivi_instr;
     ivi_destroy(ivi);
+
+    switch(ii->ii_class) {
+    case IR_IC_MOVE:
+      legalize_aggregate_move(iu, (ir_instr_move_t *)ii);
+      continue;
+    case IR_IC_SELECT:
+      legalize_aggregate_select(iu, (ir_instr_select_t *)ii);
+      continue;
+    default:
+      break;
+    }
 
     switch(rel) {
     case IVI_OUTPUT:
@@ -2372,15 +2437,33 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
         }
         break;
 
+      case IR_IC_STORE:
+        {
+          ir_instr_store_t *st = (ir_instr_store_t *)ii;
+          const ir_type_t *aggty = type_get(iu, type_get_pointee(iu, st->ptr.type));
+          assert(aggty->it_code == IR_TYPE_STRUCT);
+          assert(aggty->it_struct.num_elements == num_values);
+
+          st->value = values[0];
+          value_bind_instr(value_get(iu, st->value.value), ii, IVI_INPUT);
+          for(int i = 1; i < num_values; i++) {
+            ir_instr_store_t *st2 = instr_add_after(sizeof(ir_instr_store_t),
+                                                    IR_IC_STORE, ii);
+            st2->value = values[i];
+            value_bind_instr(value_get(iu, st2->value.value), ii, IVI_INPUT);
+            st2->ptr = st->ptr;
+            st2->offset = st->offset + aggty->it_struct.elements[i].offset;
+          }
+        }
+        break;
+
       default:
-        parser_error(iu, "Unable to legalize aggregate value as input to %d",
-                     ii->ii_class);
+        parser_error(iu, "Unable to legalize aggregate value as input to %s",
+                     instr_str(iu, ii, 0));
         break;
       }
     }
   }
-  // The old temporary aggregate value should no longer be used for anything
-  iv->iv_class = IR_VC_DEAD;
 }
 
 /**
@@ -2389,26 +2472,35 @@ registrate_aggregate(ir_unit_t *iu, ir_value_t *iv, int num_values)
 static void
 legalize_values(ir_unit_t *iu, ir_function_t *f)
 {
+  SLIST_HEAD(, ir_value) vals;
+  SLIST_INIT(&vals);
+  ir_value_t *iv;
+
   for(int i = iu->iu_first_func_value; i < iu->iu_next_value; i++) {
-    ir_value_t *iv = value_get(iu, i);
+    iv = value_get(iu, i);
     if(iv->iv_class != IR_VC_TEMPORARY)
       continue;
     ir_type_t *ty = type_get(iu, iv->iv_type);
-    ir_valuetype_t *values;
-    int num_values;
-    switch(ty->it_code) {
-    default:
-      continue;
 
-    case IR_TYPE_STRUCT:
-      num_values = ty->it_struct.num_elements;
-      iv->iv_data = values = malloc(sizeof(ir_valuetype_t) * num_values);
+    if(ty->it_code == IR_TYPE_STRUCT) {
+      const int num_values = ty->it_struct.num_elements;
+      ir_valuetype_t *values = malloc(sizeof(ir_valuetype_t) * num_values);
       for(int j = 0; j < num_values; j++) {
         values[j] = value_alloc_temporary(iu, ty->it_struct.elements[j].type);
       }
-      registrate_aggregate(iu, iv, num_values);
-      break;
+      iv->iv_data = values;
+      iv->iv_num_values = num_values;
+      SLIST_INSERT_HEAD(&vals, iv, iv_tmp_link);
     }
+  }
+
+  SLIST_FOREACH(iv, &vals, iv_tmp_link) {
+    legalize_aggregate(iu, iv);
+  }
+
+  SLIST_FOREACH(iv, &vals, iv_tmp_link) {
+    // The old temporary aggregate value should no longer be used for anything
+    iv->iv_class = IR_VC_DEAD;
   }
 }
 

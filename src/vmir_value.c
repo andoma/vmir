@@ -116,6 +116,7 @@ typedef struct ir_value {
   };
 
   int iv_precolored;
+  SLIST_ENTRY(ir_value) iv_tmp_link;
 
 } ir_value_t;
 
@@ -525,6 +526,7 @@ value_create_const32(ir_unit_t *iu, int v)
 }
 
 static int value_print_id(char **dstp, ir_unit_t *iu, int id);
+static int value_print_vt(char **dstp, ir_unit_t *iu, ir_valuetype_t vt);
 
 /**
  *
@@ -554,11 +556,11 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
   case IR_VC_AGGREGATE:
     len += type_print(dstp, iu, it);
     len += addstr(dstp, " = {");
-    const int *values = iv->iv_data;
+    ir_valuetype_t *values = iv->iv_data;
     for(int i = 0; i < iv->iv_num_values; i++) {
       if(i != 0)
         len += addstr(dstp, ", ");
-      len += value_print_id(dstp, iu, values[i]);
+      len += value_print_vt(dstp, iu, values[i]);
     }
     len += addstr(dstp, "}");
     break;
