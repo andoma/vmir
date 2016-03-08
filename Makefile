@@ -26,7 +26,7 @@ vmir: ${DEPS}
 	$(CC) -O2 ${CFLAGS} -g ${SRCS} -lm -o $@
 
 vmir.dbg: ${DEPS}
-	$(CC) -Og -DVM_DONE_USE_COMPUTED_GOTO ${CFLAGS} -g ${SRCS} -lm -o $@
+	$(CC) -Og -DVM_DONT_USE_COMPUTED_GOTO ${CFLAGS} -g ${SRCS} -lm -o $@
 
 vmir.armv7: ${DEPS}
 	arm-linux-gnueabihf-gcc -O2 -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
