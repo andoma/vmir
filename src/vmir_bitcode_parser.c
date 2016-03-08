@@ -743,6 +743,10 @@ ir_enter_subblock(ir_unit_t *iu)
   case 11:
     eval_constexprs(iu);
     break;
+
+  case 17:
+    types_finalize(iu);
+    break;
   }
 
   block_destroy(ib);

@@ -66,6 +66,8 @@ typedef struct ir_type {
       int num_elements;
       int size;
       int alignment;
+      char packed;
+      char computed;
     } it_struct;
 
     struct {
@@ -84,6 +86,17 @@ typedef struct ir_type {
 } ir_type_t;
 
 
+static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it)
+  __attribute__((warn_unused_result));
+static const char *type_str_index(ir_unit_t *iu, int id);
+static void type_struct_layout(ir_unit_t *iu, ir_type_t *it);
+static unsigned int type_sizeof(ir_unit_t *iu, int index);
+static unsigned int type_alignment(ir_unit_t *iu, int index);
+
+
+/**
+ *
+ */
 static void
 type_clean(ir_type_t *it)
 {
@@ -101,12 +114,6 @@ type_clean(ir_type_t *it)
 }
 
 
-/**
- *
- */
-static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it)
-  __attribute__((warn_unused_result));
-static const char *type_str_index(ir_unit_t *iu, int id);
 
 /**
  *
@@ -332,14 +339,12 @@ type_find_by_code(ir_unit_t *iu, ir_type_code_t code)
 }
 
 
-
 /**
  *
  */
 static unsigned int
-type_sizeof(ir_unit_t *iu, int index)
+type_sizeof_ptr(ir_unit_t *iu, const ir_type_t *it)
 {
-  ir_type_t *it = type_get(iu, index);
   switch(it->it_code) {
   case IR_TYPE_VOID:
     return 0;
@@ -378,6 +383,15 @@ type_sizeof(ir_unit_t *iu, int index)
     parser_error(iu, "Unable to compute size of type %s\n",
                  type_str(iu, it));
   }
+}
+
+/**
+ *
+ */
+static unsigned int
+type_sizeof(ir_unit_t *iu, int index)
+{
+  return type_sizeof_ptr(iu, type_get(iu, index));
 }
 
 /**
@@ -432,9 +446,8 @@ type_bitwidth(ir_unit_t *iu, const ir_type_t *it)
  *
  */
 static unsigned int
-type_alignment(ir_unit_t *iu, int index)
+type_alignment_ptr(ir_unit_t *iu, const ir_type_t *it)
 {
-  ir_type_t *it = type_get(iu, index);
   switch(it->it_code) {
   case IR_TYPE_VOID:
     return 0;
@@ -472,6 +485,11 @@ type_alignment(ir_unit_t *iu, int index)
   }
 }
 
+static unsigned int
+type_alignment(ir_unit_t *iu, int index)
+{
+  return type_alignment_ptr(iu, type_get(iu, index));
+}
 
 
 /**
@@ -547,29 +565,11 @@ types_new_rec_handler(struct ir_unit *iu, int op,
     it.it_struct.num_elements = argc - 1;
     it.it_struct.elements = malloc(it.it_struct.num_elements *
                                    sizeof(it.it_struct.elements[0]));
-    {
-      const int packed = !!argv[0].i64;
-      int offset = 0;
-      int ba = 1; // Biggest alignment
-
-      for(int i = 0; i < it.it_struct.num_elements; i++) {
-        int t = argv[i + 1].i64;
-        it.it_struct.elements[i].type = t;
-        int s = type_sizeof(iu, t);
-
-        if(!packed) {
-          int a = type_alignment(iu ,t);
-          offset = VMIR_ALIGN(offset, a);
-          ba = MAX(ba, a);
-        }
-        it.it_struct.elements[i].offset = offset;
-        offset += s;
-      }
-      it.it_struct.size = packed ? offset : VMIR_ALIGN(offset, ba);
-      it.it_struct.alignment = ba;
+    it.it_struct.packed = !!argv[0].i64;
+    for(int i = 0; i < it.it_struct.num_elements; i++) {
+      it.it_struct.elements[i].type = argv[i + 1].i64;
     }
     break;
-
 
   case TYPE_CODE_POINTER:
     it.it_code = IR_TYPE_POINTER;
@@ -648,4 +648,52 @@ legalize_type(const ir_type_t *ty)
       return IR_TYPE_INT64;
   }
   return ty->it_code;
+}
+
+
+/**
+ *
+ */
+static void
+type_struct_layout(ir_unit_t *iu, ir_type_t *it)
+{
+  int offset = 0;
+  int ba = 1; // Biggest alignment
+  const int packed = it->it_struct.packed;
+
+  for(int i = 0; i < it->it_struct.num_elements; i++) {
+    ir_type_t *ty = type_get(iu, it->it_struct.elements[i].type);
+
+    if(ty->it_code == IR_TYPE_STRUCT && !ty->it_struct.computed)
+      type_struct_layout(iu, ty);
+
+    int s = type_sizeof_ptr(iu, ty);
+
+    if(!packed) {
+      int a = type_alignment_ptr(iu, ty);
+      offset = VMIR_ALIGN(offset, a);
+      ba = MAX(ba, a);
+    }
+    it->it_struct.elements[i].offset = offset;
+    offset += s;
+  }
+  it->it_struct.size = packed ? offset : VMIR_ALIGN(offset, ba);
+  it->it_struct.alignment = ba;
+  it->it_struct.computed = 1;
+}
+
+
+
+/**
+ *
+ */
+static void
+types_finalize(ir_unit_t *iu)
+{
+  for(int i = 0; i < VECTOR_LEN(&iu->iu_types); i++) {
+    ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, i);
+    if(it->it_code == IR_TYPE_STRUCT && !it->it_struct.computed) {
+      type_struct_layout(iu, it);
+    }
+  }
 }
