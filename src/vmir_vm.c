@@ -114,6 +114,12 @@ vm_ret32(void *ret, uint32_t v)
   *(uint32_t *)ret = v;
 }
 
+static void
+vm_ret64(void *ret, uint64_t v)
+{
+  *(uint64_t *)ret = v;
+}
+
 
 static void
 vm_exit(void *ret, const void *rf, ir_unit_t *iu)
@@ -136,6 +142,14 @@ vm_strchr(uint32_t a, int b, void *mem)
   void *r = strchr(s, b);
   int ret = r ? r - mem : 0;
   vm_printf("strchr(%s (@ 0x%x), %c) = 0x%x\n", (char *)s, a, b, ret);
+  return ret;
+}
+
+static uint32_t __attribute__((noinline))
+vm_strdup(uint32_t a, void *mem)
+{
+  void *r = strdup(mem + a);
+  int ret = r ? r - mem : 0;
   return ret;
 }
 
@@ -958,7 +972,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(POW)       ADBL(0,   pow(RDBL(1), RDBL(2))); NEXT(3);
   VMOP(FABS)      ADBL(0,  fabs(RDBL(1)));          NEXT(2);
   VMOP(FMOD)      ADBL(0,  fmod(RDBL(1), RDBL(2))); NEXT(3);
+  VMOP(LOG)       ADBL(0, log(RDBL(1)));            NEXT(2);
   VMOP(LOG10)     ADBL(0, log10(RDBL(1)));          NEXT(2);
+  VMOP(ROUND)     ADBL(0, round(RDBL(1)));          NEXT(2);
 
   VMOP(FLOORF)    AFLT(0, floorf(RFLT(1)));          NEXT(2);
   VMOP(SINF)      AFLT(0,   sinf(RFLT(1)));          NEXT(2);
@@ -966,7 +982,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(POWF)      AFLT(0,   powf(RFLT(1), RFLT(2))); NEXT(3);
   VMOP(FABSF)     AFLT(0,  fabsf(RFLT(1)));          NEXT(2);
   VMOP(FMODF)     AFLT(0,  fmodf(RFLT(1), RFLT(2))); NEXT(3);
+  VMOP(LOGF)      AFLT(0,   logf(RFLT(1)));          NEXT(2);
   VMOP(LOG10F)    AFLT(0, log10f(RFLT(1)));          NEXT(2);
+  VMOP(ROUNDF)    AFLT(0, roundf(RFLT(1)));          NEXT(2);
 
     // ---
 
@@ -1300,6 +1318,13 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
       NEXT(3);
     }
 
+  VMOP(STRCAT) {
+      uint32_t r = R32(1);
+      strcat(HOSTADDR(R32(1)), HOSTADDR(R32(2)));
+      AR32(0, r);
+      NEXT(3);
+    }
+
   VMOP(STRNCPY) {
       uint32_t r = R32(1);
       strncpy(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3));
@@ -1307,8 +1332,17 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
       NEXT(4);
     }
 
+  VMOP(STRNCAT) {
+      uint32_t r = R32(1);
+      strncat(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3));
+      AR32(0, r);
+      NEXT(4);
+    }
+
   VMOP(STRCMP)
     AR32(0, strcmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)))); NEXT(3);
+  VMOP(STRCASECMP)
+    AR32(0, strcasecmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)))); NEXT(3);
   VMOP(STRNCMP)
     AR32(0, strncmp(HOSTADDR(R32(1)), HOSTADDR(R32(2)), R32(3))); NEXT(4);
   VMOP(STRCHR)
@@ -1317,6 +1351,8 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     AR32(0, vm_strrchr(R32(1), R32(2), hostmem)); NEXT(3);
   VMOP(STRLEN)
     AR32(0, strlen(HOSTADDR(R32(1)))); NEXT(2);
+  VMOP(STRDUP)
+    AR32(0, vm_strdup(R32(1), hostmem)); NEXT(2);
 
   VMOP(VAARG32)
     AR32(0, vm_vaarg32(rf, HOSTADDR(R32(1)))); NEXT(2);
@@ -1496,14 +1532,19 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_POW: return &&POW - &&opz; break;
   case VM_FABS: return &&FABS - &&opz; break;
   case VM_FMOD: return &&FMOD - &&opz; break;
+  case VM_LOG: return &&LOG - &&opz; break;
   case VM_LOG10: return &&LOG10 - &&opz; break;
+  case VM_ROUND: return &&ROUND - &&opz; break;
+
   case VM_FLOORF: return &&FLOORF - &&opz; break;
   case VM_SINF: return &&SINF - &&opz; break;
   case VM_COSF: return &&COSF - &&opz; break;
   case VM_POWF: return &&POWF - &&opz; break;
   case VM_FABSF: return &&FABSF - &&opz; break;
   case VM_FMODF: return &&FMODF - &&opz; break;
+  case VM_LOGF: return &&LOGF - &&opz; break;
   case VM_LOG10F: return &&LOG10F - &&opz; break;
+  case VM_ROUNDF: return &&ROUNDF - &&opz; break;
 
   case VM_LOAD8:     return &&LOAD8      - &&opz;     break;
   case VM_LOAD8_G:   return &&LOAD8_G    - &&opz;     break;
@@ -1902,12 +1943,16 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_MEMCMP:   return &&MEMCMP  - &&opz; break;
 
   case VM_STRCMP:   return &&STRCMP  - &&opz; break;
+  case VM_STRCASECMP:   return &&STRCASECMP  - &&opz; break;
   case VM_STRNCMP:  return &&STRNCMP - &&opz; break;
   case VM_STRCPY:   return &&STRCPY  - &&opz; break;
   case VM_STRNCPY:  return &&STRNCPY - &&opz; break;
+  case VM_STRCAT:   return &&STRCAT  - &&opz; break;
+  case VM_STRNCAT:  return &&STRNCAT - &&opz; break;
   case VM_STRCHR:   return &&STRCHR  - &&opz; break;
   case VM_STRRCHR:  return &&STRRCHR - &&opz; break;
   case VM_STRLEN:   return &&STRLEN  - &&opz; break;
+  case VM_STRDUP:   return &&STRDUP  - &&opz; break;
 
   case VM_UNREACHABLE: return &&UNREACHABLE - &&opz; break;
 

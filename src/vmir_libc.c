@@ -284,11 +284,25 @@ vmir_isprint(void *ret, const void *rf, ir_unit_t *iu)
 
 
 static void
+vmir_isdigit(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t c = vm_arg32(&rf);
+  vm_ret32(ret, c >= '0' && c <= '9');
+}
+
+
+static void
 vmir_atoi(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *str = vm_ptr(&rf, iu);
   int r = atoi(str);
   vm_ret32(ret, r);
+}
+
+static void
+vmir_getpid(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vm_ret32(ret, 1);
 }
 
 
@@ -328,6 +342,16 @@ vmir_fseek(void *ret, const void *rf, ir_unit_t *iu)
 }
 
 static void
+vmir_fseeko(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vFILE_t *vfile = vm_ptr(&rf, iu);
+  uint64_t offset = vm_arg64(&rf);
+  uint32_t whence = vm_arg32(&rf);
+  int r = fseeko(vfile->fp, offset, whence);
+  vm_ret32(ret, r);
+}
+
+static void
 vmir_fread(void *ret, const void *rf, ir_unit_t *iu)
 {
   void *buf = vm_ptr(&rf, iu);
@@ -363,6 +387,14 @@ vmir_ftell(void *ret, const void *rf, ir_unit_t *iu)
   vFILE_t *vfile = vm_ptr(&rf, iu);
   int r = ftell(vfile->fp);
   vm_ret32(ret, r);
+}
+
+static void
+vmir_ftello(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vFILE_t *vfile = vm_ptr(&rf, iu);
+  uint64_t r = ftello(vfile->fp);
+  vm_ret64(ret, r);
 }
 
 static void
@@ -857,6 +889,14 @@ vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
 }
 
 
+
+static void
+vmir_getenv(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vm_ret32(ret, 0);
+}
+
+
 /*-----------------------------------------------------------------------
  * c++
  */
@@ -912,12 +952,17 @@ static const function_tab_t function_routes[] = {
   FN_VMOP("memcmp",  VM_MEMCMP, 3),
 
   FN_VMOP("strcmp",  VM_STRCMP, 2),
+  FN_VMOP("strcasecmp",  VM_STRCASECMP, 2),
   FN_VMOP("strchr",  VM_STRCHR, 2),
   FN_VMOP("strrchr", VM_STRRCHR, 2),
   FN_VMOP("strlen",  VM_STRLEN, 1),
   FN_VMOP("strcpy",  VM_STRCPY, 2),
-  FN_VMOP("strncmp", VM_STRNCMP, 3),
   FN_VMOP("strncpy", VM_STRNCPY, 3),
+  FN_VMOP("strcat",  VM_STRCAT, 2),
+  FN_VMOP("strncat",  VM_STRNCAT, 3),
+  FN_VMOP("strncmp", VM_STRNCMP, 3),
+  FN_VMOP("strdup",  VM_STRDUP, 1),
+
 
   FN_VMOP("llvm.va_start", VM_VASTART, 2),
 
@@ -929,7 +974,9 @@ static const function_tab_t function_routes[] = {
   FN_VMOP("pow",   VM_POW,   2),
   FN_VMOP("fabs",  VM_FABS,  1),
   FN_VMOP("fmod",  VM_FMOD,  2),
+  FN_VMOP("log",   VM_LOG,   1),
   FN_VMOP("log10", VM_LOG10, 1),
+  FN_VMOP("round", VM_ROUND, 1),
 
   FN_VMOP("floorf", VM_FLOORF, 1),
   FN_VMOP("sinf",   VM_SINF,   1),
@@ -937,7 +984,9 @@ static const function_tab_t function_routes[] = {
   FN_VMOP("powf",   VM_POWF,   2),
   FN_VMOP("fabsf",  VM_FABSF,  1),
   FN_VMOP("fmodf",  VM_FMODF,  2),
+  FN_VMOP("logf",   VM_LOGF,   1),
   FN_VMOP("log10f", VM_LOG10F, 1),
+  FN_VMOP("roundf", VM_ROUNDF, 1),
 
 
 
@@ -945,10 +994,12 @@ static const function_tab_t function_routes[] = {
   FN_EXT("abort", vm_abort),
   FN_EXT("llvm.trap", vm_abort),
 
+  FN_EXT("getpid", vmir_getpid),
   FN_EXT("atoi", vmir_atoi),
   FN_EXT("toupper", vmir_toupper),
   FN_EXT("tolower", vmir_tolower),
   FN_EXT("isprint", vmir_isprint),
+  FN_EXT("isdigit", vmir_isdigit),
 
   FN_EXT("malloc",  vmir_malloc),
   FN_EXT("free",    vmir_free),
@@ -957,10 +1008,12 @@ static const function_tab_t function_routes[] = {
 
   FN_EXT("fopen",   vmir_fopen),
   FN_EXT("fseek",   vmir_fseek),
+  FN_EXT("fseeko",  vmir_fseeko),
   FN_EXT("fread",   vmir_fread),
   FN_EXT("fwrite",  vmir_fwrite),
   FN_EXT("feof",    vmir_feof),
   FN_EXT("ftell",   vmir_ftell),
+  FN_EXT("ftello",  vmir_ftello),
   FN_EXT("fclose",  vmir_fclose),
   FN_EXT("puts",    vmir_puts),
   FN_EXT("fputc",   vmir_fputc),
@@ -974,6 +1027,8 @@ static const function_tab_t function_routes[] = {
   FN_EXT("printf",  vmir_printf),
   FN_EXT("vfprintf",  vmir_vfprintf),
   FN_EXT("fprintf",  vmir_fprintf),
+
+  FN_EXT("getenv",  vmir_getenv),
 
   FN_EXT("__vmir_heap_print",  vmir_heap_print),
 

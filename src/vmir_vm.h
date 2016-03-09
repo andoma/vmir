@@ -545,7 +545,9 @@ typedef enum {
   VM_POW,
   VM_FABS,
   VM_FMOD,
+  VM_LOG,
   VM_LOG10,
+  VM_ROUND,
 
   VM_FLOORF,
   VM_SINF,
@@ -553,7 +555,9 @@ typedef enum {
   VM_POWF,
   VM_FABSF,
   VM_FMODF,
+  VM_LOGF,
   VM_LOG10F,
+  VM_ROUNDF,
 
   // Other misc
   VM_ALLOCA,
@@ -573,12 +577,16 @@ typedef enum {
 
   // Intrinsics
   VM_STRCMP,
+  VM_STRCASECMP,
   VM_STRLEN,
+  VM_STRDUP,
   VM_STRCHR,
   VM_STRRCHR,
   VM_STRNCMP,
   VM_STRCPY,
   VM_STRNCPY,
+  VM_STRCAT,
+  VM_STRNCAT,
 
   VM_MEMMOVE,
   VM_MEMCMP,
