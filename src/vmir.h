@@ -57,7 +57,7 @@ vmir_errcode_t vmir_load(ir_unit_t *iu, const uint8_t *bitcode,
 /**
  * Run will call main() with argc and argv as given by this call.
  *
- * Note: argv[0] is expeected to be the executable name just as
+ * Note: argv[0] is expected to be the executable name just as
  * the "normal" argv[] vector behaves. The user is responsible for
  * filling that out as well.
  */
@@ -68,7 +68,7 @@ void vmir_run(ir_unit_t *iu, int argc, char **argv);
  * passed in to vmir_create(). THe user is responsible for freeing this
  * memory.
  *
- * After this the ir_unit is also free'd an no longer available
+ * After this the ir_unit is also free'd and no longer available
  */
 void vmir_destroy(ir_unit_t *iu);
 
