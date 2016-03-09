@@ -369,7 +369,9 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
     case IR_VC_FUNCTION:
       free(iv->iv_func->if_name);
       iv->iv_func->if_name = str;
-      function_route(iv->iv_func);
+      if(!vmop_resolve(iv->iv_func)) {
+        function_resolve(iv->iv_func);
+      }
 
       if(iu->iu_debug_flags & VMIR_DBG_LIST_FUNCTIONS) {
         const ir_function_t *f = iv->iv_func;

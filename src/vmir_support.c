@@ -120,6 +120,7 @@ vmir_hexdump(const char *pfx, const void *data_, int len)
   }
 }
 
+#define VMIR_ARRAYSIZE(x) (sizeof(x) / sizeof(x[0]))
 
 static int
 vmir_llvm_alignment(int align)

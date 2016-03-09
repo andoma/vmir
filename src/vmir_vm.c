@@ -4261,6 +4261,98 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
 }
 
 
+
+
+typedef struct {
+  const char *name;
+  vm_op_t vmop;
+  int vmop_args;
+} vmop_tab_t;
+
+#define FN_VMOP(a,b,c) { .name = a, .vmop = b, .vmop_args = c}
+
+static const vmop_tab_t vmop_map[] = {
+  FN_VMOP("llvm.memcpy.p0i8.p0i8.i32", VM_LLVM_MEMCPY, 3),
+  FN_VMOP("llvm.memset.p0i8.i32", VM_LLVM_MEMSET, 3),
+  FN_VMOP("llvm.memset.p0i8.i64", VM_LLVM_MEMSET64, 3),
+  FN_VMOP("llvm.va_copy", VM_VACOPY, 2),
+  FN_VMOP("llvm.invariant.start", VM_NOP, 2),
+  FN_VMOP("llvm.stacksave", VM_STACKSAVE, 0),
+  FN_VMOP("llvm.stackrestore", VM_STACKRESTORE, 1),
+  FN_VMOP("llvm.cttz.i32", VM_CTZ32, 1),
+  FN_VMOP("llvm.ctlz.i32", VM_CLZ32, 1),
+  FN_VMOP("llvm.ctpop.i32", VM_POP32, 1),
+
+  FN_VMOP("llvm.cttz.i64", VM_CTZ64, 1),
+  FN_VMOP("llvm.ctlz.i64", VM_CLZ64, 1),
+  FN_VMOP("llvm.ctpop.i64", VM_POP64, 1),
+  FN_VMOP("llvm.uadd.with.overflow.i32", VM_UADDO32, 2),
+
+  FN_VMOP("memcpy",  VM_MEMCPY, 3),
+  FN_VMOP("memmove", VM_MEMMOVE, 3),
+  FN_VMOP("memset",  VM_MEMSET, 3),
+  FN_VMOP("memcmp",  VM_MEMCMP, 3),
+
+  FN_VMOP("strcmp",  VM_STRCMP, 2),
+  FN_VMOP("strcasecmp",  VM_STRCASECMP, 2),
+  FN_VMOP("strchr",  VM_STRCHR, 2),
+  FN_VMOP("strrchr", VM_STRRCHR, 2),
+  FN_VMOP("strlen",  VM_STRLEN, 1),
+  FN_VMOP("strcpy",  VM_STRCPY, 2),
+  FN_VMOP("strncpy", VM_STRNCPY, 3),
+  FN_VMOP("strcat",  VM_STRCAT, 2),
+  FN_VMOP("strncat",  VM_STRNCAT, 3),
+  FN_VMOP("strncmp", VM_STRNCMP, 3),
+  FN_VMOP("strdup",  VM_STRDUP, 1),
+
+
+  FN_VMOP("llvm.va_start", VM_VASTART, 2),
+
+  FN_VMOP("abs",   VM_ABS, 1),
+
+  FN_VMOP("floor", VM_FLOOR, 1),
+  FN_VMOP("sin",   VM_SIN,   1),
+  FN_VMOP("cos",   VM_COS,   1),
+  FN_VMOP("pow",   VM_POW,   2),
+  FN_VMOP("fabs",  VM_FABS,  1),
+  FN_VMOP("fmod",  VM_FMOD,  2),
+  FN_VMOP("log",   VM_LOG,   1),
+  FN_VMOP("log10", VM_LOG10, 1),
+  FN_VMOP("round", VM_ROUND, 1),
+
+  FN_VMOP("floorf", VM_FLOORF, 1),
+  FN_VMOP("sinf",   VM_SINF,   1),
+  FN_VMOP("cosf",   VM_COSF,   1),
+  FN_VMOP("powf",   VM_POWF,   2),
+  FN_VMOP("fabsf",  VM_FABSF,  1),
+  FN_VMOP("fmodf",  VM_FMODF,  2),
+  FN_VMOP("logf",   VM_LOGF,   1),
+  FN_VMOP("log10f", VM_LOG10F, 1),
+  FN_VMOP("roundf", VM_ROUNDF, 1),
+};
+
+
+
+/**
+ *
+ */
+static int
+vmop_resolve(ir_function_t *f)
+{
+  f->if_vmop = 0;
+
+  for(int i = 0; i < VMIR_ARRAYSIZE(vmop_map); i++) {
+    const vmop_tab_t *vt = &vmop_map[i];
+    if(!strcmp(f->if_name, vt->name)) {
+      f->if_vmop = vt->vmop;
+      f->if_vmop_args = vt->vmop_args;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
 /**
  *
  */
