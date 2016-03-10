@@ -22,6 +22,8 @@
  * SOFTWARE.
  */
 
+#define _GNU_SOURCE
+
 #include <setjmp.h>
 #include <string.h>
 #include <stdarg.h>
@@ -118,8 +120,6 @@ LIST_HEAD(ir_bb_list, ir_bb);
 LIST_HEAD(ir_bb_edge_list, ir_bb_edge);
 LIST_HEAD(ir_value_instr_list, ir_value_instr);
 
-struct ir_unit;
-
 typedef void (vm_ext_function_t)(void *ret, const void *regs,
                                  struct ir_unit *iu);
 
@@ -159,6 +159,14 @@ struct ir_unit {
   uint32_t iu_asize;
   uint32_t iu_alloca_ptr;
   uint32_t iu_memsize;
+
+  struct vFILE *iu_stdin;
+  struct vFILE *iu_stdout;
+  struct vFILE *iu_stderr;
+  const vmir_fsops_t *iu_fsops;
+  VECTOR_HEAD(, struct vmir_fd) iu_vfds;
+  int iu_vfd_free;  // Point to first free FD (-1 == nothing free)
+  LIST_HEAD(, vFILE) iu_vfiles;
 
   uint32_t iu_debug_flags;
   uint32_t iu_debug_flags_func;
@@ -224,6 +232,14 @@ struct ir_unit {
 
   vmir_stats_t iu_stats;
 };
+
+static uint32_t
+vmir_host_to_vmaddr(ir_unit_t *iu, void *ptr)
+{
+  if(ptr == NULL)
+    return 0;
+  return ptr - iu->iu_mem;
+}
 
 
 /**
@@ -693,10 +709,12 @@ vmir_destroy(ir_unit_t *iu)
  */
 ir_unit_t *
 vmir_create(void *membase, uint32_t memsize,
-            uint32_t rsize, uint32_t asize)
+            uint32_t rsize, uint32_t asize,
+            void *opaque)
 {
   ir_unit_t *iu = calloc(1, sizeof(ir_unit_t));
 
+  iu->iu_opaque = opaque;
   iu->iu_mem = membase;
   iu->iu_memsize = memsize;
   iu->iu_rsize = rsize;
@@ -706,6 +724,7 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_text_alloc = malloc(iu->iu_text_alloc_memsize);
   return iu;
 }
+
 
 /**
  *
@@ -746,7 +765,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
 
   initialize_globals(iu, iu->iu_mem);
 
-  initialize_libc(iu);
+  libc_initialize(iu);
 
   iu->iu_vm_funcs  = calloc(VECTOR_LEN(&iu->iu_functions), sizeof(void *));
   iu->iu_ext_funcs = calloc(VECTOR_LEN(&iu->iu_functions), sizeof(void *));
@@ -847,6 +866,7 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
   int64_t ts = get_ts();
   int r = vm_function_call(iu, f, &ret, argc, vm_argv);
   ts = get_ts() - ts;
+  libc_terminate(iu);
   if(r == 0)
     printf("main() returned %d\n", ret.u32);
   printf("stopcode=%d call took %"PRId64"\n", r, ts);

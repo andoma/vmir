@@ -27,10 +27,36 @@
 typedef struct ir_unit ir_unit_t;
 
 
-typedef enum vmir_errcode {
+typedef enum {
   VMIR_ERR_NOT_BITCODE = -1,
   VMIR_ERR_LOAD_ERROR = -2,
+  VMIR_ERR_INVALID_ARGS = -3,
+  VMIR_ERR_FS_ERROR = -4,  // Add more specific errors
 } vmir_errcode_t;
+
+
+typedef enum {
+  VMIR_FS_OPEN_READ    = 0x1,   // Open file for reading
+  VMIR_FS_OPEN_WRITE   = 0x2,   // Open file for writing
+  VMIR_FS_OPEN_RW      = 0x3,   // Read + Write
+  VMIR_FS_OPEN_CREATE  = 0x4,   // Create file if not exist
+  VMIR_FS_OPEN_TRUNC   = 0x8,   // Truncate file
+  VMIR_FS_OPEN_APPEND  = 0x10,  // Position file pointer at end of file
+} vmir_openflags_t;
+
+
+typedef struct {
+  vmir_errcode_t(*open)(void *opaque, const char *path,
+                        vmir_openflags_t flags, intptr_t *fh);
+
+  void (*close)(void *opaque, intptr_t fh);
+
+  ssize_t (*read)(void *opaque, intptr_t fh, void *buf, size_t count);
+  ssize_t (*write)(void *opaque, intptr_t fh, const void *buf, size_t count);
+
+  int64_t (*seek)(void *opaque, intptr_t fh, int64_t offset, int whence);
+
+} vmir_fsops_t;
 
 
 
@@ -43,9 +69,18 @@ typedef enum vmir_errcode {
  * rsize is how much of the memory that will be used for register frames
  * asize is how much of the memory that will be used for stack allocation
  * Rest of memory will be used for standard malloc()/free() heap
+ *
+ * Opaque is a reference passed back in various callbacks and not
+ * interpreted by vmir in any way.
  */
 ir_unit_t *vmir_create(void *membase, uint32_t memsize,
-                       uint32_t rsize, uint32_t asize);
+                       uint32_t rsize, uint32_t asize,
+                       void *opaque);
+
+/**
+ * Override defaults functions for filesystem access
+ */
+void vmir_set_fsops(ir_unit_t *iu, const vmir_fsops_t *ops);
 
 
 /**

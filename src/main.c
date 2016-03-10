@@ -107,7 +107,7 @@ main(int argc, char **argv)
 
   void *mem = malloc(MB(64));
 
-  ir_unit_t *iu = vmir_create(mem, MB(64), MB(1), MB(1));
+  ir_unit_t *iu = vmir_create(mem, MB(64), MB(1), MB(1), NULL);
 
   vmir_set_debug_flags(iu, debug_flags);
   vmir_set_debugged_function(iu, debugged_function);

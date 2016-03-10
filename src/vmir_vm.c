@@ -96,17 +96,19 @@ vm_ptr(const void **rfp, ir_unit_t *iu)
   return vm_arg32(rfp) + iu->iu_mem;
 }
 
+static void *
+vm_ptr_nullchk(const void **rfp, ir_unit_t *iu)
+{
+  uint32_t vma = vm_arg32(rfp);
+  return vma ? vma + iu->iu_mem : NULL;
+}
+
 static void
 vm_retptr(void *ret, void *p, const ir_unit_t *iu)
 {
   *(uint32_t *)ret = p ? p - iu->iu_mem : 0;
 }
 
-static void
-vm_retNULL(void *ret)
-{
-  *(uint32_t *)ret = 0;
-}
 
 static void
 vm_ret32(void *ret, uint32_t v)
@@ -483,7 +485,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   void *hostmem = iu->iu_mem;
 
 #define NEXT(skip) I+=skip; opc = *I++; goto *(&&opz + opc)
-#define VMOP(x) x:
+#define VMOP(x) x: // printf("%s\n", #x);
 
   NEXT(0);
 
