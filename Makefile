@@ -4,6 +4,7 @@ SRCS  = src/main.c \
 
 DEPS = ${SRCS} \
 	Makefile \
+	src/vmir.h \
 	src/vmir_instr_parse.c \
 	src/vmir_value.c \
 	src/vmir_type.c \
