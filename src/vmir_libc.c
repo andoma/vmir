@@ -406,6 +406,32 @@ vfd_seek(ir_unit_t *iu, int fd, int64_t offset, int whence)
   return iu->iu_fsops->seek(iu->iu_opaque, vfd->fh, offset, whence);
 }
 
+/*--------------------------------------------------------------------
+ * posix io
+ */
+
+static void
+vmir_open(void *ret, const void *rf, ir_unit_t *iu)
+{
+  const char *path = vm_ptr(&rf, iu);
+  uint32_t flags = vm_arg32(&rf);
+
+  uint32_t vmir_flags = 0;
+  if(flags & 0100) // O_CREAT
+    vmir_flags |= VMIR_FS_OPEN_CREATE;
+
+  if(flags & 2)
+    vmir_flags |= VMIR_FS_OPEN_RW;
+  else if(flags & 1)
+    vmir_flags |= VMIR_FS_OPEN_WRITE;
+  else
+    vmir_flags |= VMIR_FS_OPEN_READ;
+
+  int fd = vfd_open(iu, path, flags);
+  vm_ret32(ret, fd);
+  return;
+}
+
 
 /*--------------------------------------------------------------------
  * stdio
@@ -637,6 +663,13 @@ vmir_fclose(void *ret, const void *rf, ir_unit_t *iu)
   vm_ret32(ret, 0);
 }
 
+static void
+vmir_fileno(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vm_ret32(ret, vfile->fd);
+}
+
 /*-----------------------------------------------------------------------
  * Other stdio
  */
@@ -659,6 +692,19 @@ vmir_fputc(void *ret, const void *rf, ir_unit_t *iu)
     fwrite(&c, 1, 1, vfile->fp);
   vm_ret32(ret, c);
 }
+
+static void
+vmir_fgetc(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint8_t c;
+  vFILE_t *vfile = vm_ptr(&rf, iu);
+  if(vfile == NULL || fread(&c, 1, 1, vfile->fp) != 1) {
+    vm_ret32(ret, -1);
+    return;
+  }
+  vm_ret32(ret, c);
+}
+
 
 static void
 vmir_putchar(void *ret, const void *rf, ir_unit_t *iu)
@@ -1178,6 +1224,8 @@ static const function_tab_t libc_funcs[] = {
   FN_EXT("realloc", vmir_realloc),
   FN_EXT("calloc",  vmir_calloc),
 
+  FN_EXT("open",    vmir_open),
+
   FN_EXT("fopen",   vmir_fopen),
   FN_EXT("fseek",   vmir_fseek),
   FN_EXT("fseeko",  vmir_fseeko),
@@ -1189,7 +1237,9 @@ static const function_tab_t libc_funcs[] = {
   FN_EXT("fclose",  vmir_fclose),
   FN_EXT("puts",    vmir_puts),
   FN_EXT("fputc",   vmir_fputc),
+  FN_EXT("fgetc",   vmir_fgetc),
   FN_EXT("putchar", vmir_putchar),
+  FN_EXT("fileno",  vmir_fileno),
 
   FN_EXT("vsnprintf",  vmir_vsnprintf),
   FN_EXT("snprintf",  vmir_snprintf),
