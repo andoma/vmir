@@ -561,7 +561,7 @@ types_new_rec_handler(struct ir_unit *iu, int op,
       it.it_struct.name = NULL;
 
     it.it_code = IR_TYPE_STRUCT;
-
+    it.it_struct.computed = 0;
     it.it_struct.num_elements = argc - 1;
     it.it_struct.elements = malloc(it.it_struct.num_elements *
                                    sizeof(it.it_struct.elements[0]));
