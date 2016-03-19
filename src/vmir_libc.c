@@ -444,6 +444,58 @@ typedef struct vFILE {
   LIST_ENTRY(vFILE) link;
 } vFILE_t;
 
+// http://pubs.opengroup.org/onlinepubs/9699919799/functions/fopen.html
+static const struct {
+  char mode[4];
+  vmir_openflags_t flags;
+} modetable[] = {
+  { "r",   VMIR_FS_OPEN_READ },
+  { "rb",  VMIR_FS_OPEN_READ },
+  { "w",   VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
+  { "wb",  VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
+  { "a",   VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
+  { "ab",  VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
+  { "r+",  VMIR_FS_OPEN_RW },
+  { "rb+", VMIR_FS_OPEN_RW },
+  { "r+b", VMIR_FS_OPEN_RW },
+  { "w+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
+  { "wb+", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
+  { "w+b", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
+  { "a+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
+  { "b+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
+  { "a+b", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
+};
+
+
+
+#ifdef __APPLE__
+#define USE_FUNOPEN 1
+#endif
+
+#if USE_FUNOPEN
+
+static int
+fun_read(void *fh, char *buf, int size)
+{
+  vFILE_t *vf = fh;
+  return vfd_read(vf->iu, vf->fd, buf, size);
+}
+
+static int
+fun_write(void *fh, const char *buf, int size)
+{
+  vFILE_t *vf = fh;
+  return vfd_write(vf->iu, vf->fd, buf, size);
+}
+
+static fpos_t
+fun_seek(void *fh, fpos_t offset, int whence)
+{
+  vFILE_t *vf = fh;
+  return vfd_seek(vf->iu, vf->fd, offset, whence);
+}
+
+#else
 
 static ssize_t
 cookie_read(void *fh, char *buf, size_t size)
@@ -470,8 +522,10 @@ cookie_seek(void *fh, off64_t *offsetp, int whence)
   return 0;
 }
 
+#endif
+
 static int
-cookie_close(void *fh)
+vFILE_close(void *fh)
 {
   vFILE_t *vf = fh;
   ir_unit_t *iu = vf->iu;
@@ -481,35 +535,17 @@ cookie_close(void *fh)
   return 0;
 }
 
+
+#if !USE_FUNOPEN
+
 static const cookie_io_functions_t cookiefuncs = {
   .read  = cookie_read,
   .write = cookie_write,
   .seek  = cookie_seek,
-  .close = cookie_close,
+  .close = vFILE_close,
 };
 
-
-// http://pubs.opengroup.org/onlinepubs/9699919799/functions/fopen.html
-static const struct {
-  char mode[4];
-  vmir_openflags_t flags;
-} modetable[] = {
-  { "r",   VMIR_FS_OPEN_READ },
-  { "rb",  VMIR_FS_OPEN_READ },
-  { "w",   VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
-  { "wb",  VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
-  { "a",   VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
-  { "ab",  VMIR_FS_OPEN_WRITE | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
-  { "r+",  VMIR_FS_OPEN_RW },
-  { "rb+", VMIR_FS_OPEN_RW },
-  { "r+b", VMIR_FS_OPEN_RW },
-  { "w+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
-  { "wb+", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
-  { "w+b", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_TRUNC },
-  { "a+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
-  { "b+",  VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
-  { "a+b", VMIR_FS_OPEN_RW    | VMIR_FS_OPEN_CREATE | VMIR_FS_OPEN_APPEND },
-};
+#endif
 
 
 static vFILE_t *
@@ -538,7 +574,11 @@ vFILE_open(ir_unit_t *iu, const char *path, const char *mode,
   vfile->iu = iu;
   vfile->fd = fd;
 
+#if USE_FUNOPEN
+  vfile->fp = funopen(vfile, fun_read, fun_write, fun_seek, vFILE_close);
+#else
   vfile->fp = fopencookie(vfile, mode, cookiefuncs);
+#endif
   if(vfile->fp == NULL) {
     vfd_close(iu, fd);
     vmir_heap_free(iu->iu_heap, vfile);
