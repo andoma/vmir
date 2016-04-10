@@ -77,6 +77,15 @@ ir_unit_t *vmir_create(void *membase, uint32_t memsize,
                        uint32_t rsize, uint32_t asize,
                        void *opaque);
 
+typedef void (vm_ext_function_t)(void *ret, const void *regs,
+                                 struct ir_unit *iu);
+
+typedef vm_ext_function_t *(*vmir_function_resolver_t)(const char *function, void *opaque);
+vm_ext_function_t *vmir_default_external_function_resolver(const char *function, void *opaque);
+
+vmir_function_resolver_t vmir_get_external_function_resolver(ir_unit_t *);
+void vmir_set_external_function_resolver(ir_unit_t *, vmir_function_resolver_t fn);
+
 /**
  * Override defaults functions for filesystem access
  */
@@ -98,6 +107,16 @@ vmir_errcode_t vmir_load(ir_unit_t *iu, const uint8_t *bitcode,
  */
 void vmir_run(ir_unit_t *iu, int argc, char **argv);
 
+
+typedef struct ir_function ir_function_t;
+ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
+int vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...);
+
+void *vm_ptr(const void **rfp, ir_unit_t *iu);
+void *vm_ptr_nullchk(const void **rfp, ir_unit_t *iu);
+void vm_retptr(void *ret, void *p, const ir_unit_t *iu);
+
+
 /**
  * Destroy the environment and free all resources except the memory
  * passed in to vmir_create(). THe user is responsible for freeing this
@@ -106,6 +125,7 @@ void vmir_run(ir_unit_t *iu, int argc, char **argv);
  * After this the ir_unit is also free'd and no longer available
  */
 void vmir_destroy(ir_unit_t *iu);
+
 
 
 /**

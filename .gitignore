@@ -6,3 +6,7 @@ callgrind.*
 cachegrind.*
 vmir
 shatest
+
+.DS_Store
+*.xcworkspace
+xcuserdata

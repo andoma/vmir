@@ -120,9 +120,6 @@ LIST_HEAD(ir_bb_list, ir_bb);
 LIST_HEAD(ir_bb_edge_list, ir_bb_edge);
 LIST_HEAD(ir_value_instr_list, ir_value_instr);
 
-typedef void (vm_ext_function_t)(void *ret, const void *regs,
-                                 struct ir_unit *iu);
-
 typedef struct vmir_stats {
 
   int cmp_branch_combine;
@@ -142,6 +139,8 @@ typedef struct vmir_stats {
  * Translation unit
  */
 struct ir_unit {
+  vmir_function_resolver_t iu_external_function_resolver;
+
   void *iu_mem;
   void **iu_vm_funcs;
   vm_ext_function_t **iu_ext_funcs;
@@ -713,6 +712,7 @@ vmir_create(void *membase, uint32_t memsize,
             void *opaque)
 {
   ir_unit_t *iu = calloc(1, sizeof(ir_unit_t));
+  iu->iu_external_function_resolver = vmir_default_external_function_resolver;
 
   iu->iu_opaque = opaque;
   iu->iu_mem = membase;
@@ -723,6 +723,16 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_text_alloc_memsize = 1024 * 1024;
   iu->iu_text_alloc = malloc(iu->iu_text_alloc_memsize);
   return iu;
+}
+
+vmir_function_resolver_t vmir_get_external_function_resolver(ir_unit_t *iu)
+{
+	return iu->iu_external_function_resolver;
+}
+
+void vmir_set_external_function_resolver(ir_unit_t *iu, vmir_function_resolver_t fn)
+{
+	iu->iu_external_function_resolver = fn;
 }
 
 
@@ -850,7 +860,7 @@ void
 vmir_run(ir_unit_t *iu, int argc, char **argv)
 {
   ir_function_t *f;
-  f = function_find(iu, "main");
+  f = vmir_find_function(iu, "main");
   if(f == NULL) {
     printf("main() not found\n");
     exit(1);

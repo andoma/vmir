@@ -108,8 +108,8 @@ function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
 /**
  *
  */
-static ir_function_t *
-function_find(ir_unit_t *iu, const char *name)
+ir_function_t *
+vmir_find_function(ir_unit_t *iu, const char *name)
 {
   for(int i = 0; i < VECTOR_LEN(&iu->iu_functions); i++) {
     ir_function_t *f = VECTOR_ITEM(&iu->iu_functions, i);
@@ -118,7 +118,6 @@ function_find(ir_unit_t *iu, const char *name)
   }
   return NULL;
 }
-
 
 
 /**

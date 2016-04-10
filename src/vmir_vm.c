@@ -90,20 +90,20 @@ vm_arg_flt(const void **rfp)
   return *(float *)rf;
 }
 
-static void *
+void *
 vm_ptr(const void **rfp, ir_unit_t *iu)
 {
   return vm_arg32(rfp) + iu->iu_mem;
 }
 
-static void *
+void *
 vm_ptr_nullchk(const void **rfp, ir_unit_t *iu)
 {
   uint32_t vma = vm_arg32(rfp);
   return vma ? vma + iu->iu_mem : NULL;
 }
 
-static void
+void
 vm_retptr(void *ret, void *p, const ir_unit_t *iu)
 {
   *(uint32_t *)ret = p ? p - iu->iu_mem : 0;
@@ -4358,7 +4358,7 @@ vmop_resolve(ir_function_t *f)
 /**
  *
  */
-static int
+int
 vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
 {
   va_list ap;

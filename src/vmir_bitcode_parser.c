@@ -370,7 +370,7 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
       free(iv->iv_func->if_name);
       iv->iv_func->if_name = str;
       if(!vmop_resolve(iv->iv_func)) {
-        function_resolve(iv->iv_func);
+        iv->iv_func->if_ext_func = iu->iu_external_function_resolver(iv->iv_func->if_name, iu->iu_opaque);
       }
 
       if(iu->iu_debug_flags & VMIR_DBG_LIST_FUNCTIONS) {
