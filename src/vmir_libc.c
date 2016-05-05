@@ -202,29 +202,29 @@ vmir_heap_print0(heap_t *h)
 static void
 vmir_malloc(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t size = vm_arg32(&rf);
+  uint32_t size = vmir_vm_arg32(&rf);
   MEMTRACE("malloc(%d) = ...\n", size);
   void *p = vmir_heap_malloc(iu->iu_heap, size);
-  vm_retptr(ret, p, iu);
+  vmir_vm_retptr(ret, p, iu);
   MEMTRACE("malloc(%d) = 0x%x\n", size, *(uint32_t *)ret);
 }
 
 static void
 vmir_calloc(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t nmemb = vm_arg32(&rf);
-  uint32_t size = vm_arg32(&rf);
+  uint32_t nmemb = vmir_vm_arg32(&rf);
+  uint32_t size = vmir_vm_arg32(&rf);
   MEMTRACE("calloc(%d, %d) = ...\n", nmemb, size);
   void *p = vmir_heap_malloc(iu->iu_heap, size * nmemb);
   memset(p, 0, size * nmemb);
-  vm_retptr(ret, p, iu);
+  vmir_vm_retptr(ret, p, iu);
   MEMTRACE("calloc(%d, %d) = 0x%x\n", nmemb, size, *(uint32_t *)ret);
 }
 
 static void
 vmir_free(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t ptr = vm_arg32(&rf);
+  uint32_t ptr = vmir_vm_arg32(&rf);
   if(ptr == 0)
     return;
   MEMTRACE("free(0x%x)\n", ptr);
@@ -234,12 +234,12 @@ vmir_free(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_realloc(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t ptr = vm_arg32(&rf);
-  uint32_t size = vm_arg32(&rf);
+  uint32_t ptr = vmir_vm_arg32(&rf);
+  uint32_t size = vmir_vm_arg32(&rf);
 
   MEMTRACE("realloc(0x%x, %d) = ...\n", ptr, size);
   void *p = vmir_heap_realloc(iu->iu_heap, ptr ? iu->iu_mem + ptr : NULL, size);
-  vm_retptr(ret, p, iu);
+  vmir_vm_retptr(ret, p, iu);
   MEMTRACE("realloc(0x%x, %d) = 0x%x\n", ptr, size, *(uint32_t *)ret);
 }
 
@@ -258,51 +258,51 @@ vmir_heap_print(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_toupper(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t c = vm_arg32(&rf);
+  uint32_t c = vmir_vm_arg32(&rf);
   if(c >= 'a' && c <= 'z')
     c -= 32;
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 static void
 vmir_tolower(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t c = vm_arg32(&rf);
+  uint32_t c = vmir_vm_arg32(&rf);
   if(c >= 'A' && c <= 'Z')
     c += 32;
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 static void
 vmir_isprint(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t c = vm_arg32(&rf);
+  uint32_t c = vmir_vm_arg32(&rf);
   c &= 0x7f;
   c = (c >= ' ' && c < 127);
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 
 static void
 vmir_isdigit(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t c = vm_arg32(&rf);
-  vm_ret32(ret, c >= '0' && c <= '9');
+  uint32_t c = vmir_vm_arg32(&rf);
+  vmir_vm_ret32(ret, c >= '0' && c <= '9');
 }
 
 
 static void
 vmir_atoi(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *str = vm_ptr(&rf, iu);
+  const char *str = vmir_vm_ptr(&rf, iu);
   int r = atoi(str);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_getpid(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vm_ret32(ret, 1);
+  vmir_vm_ret32(ret, 1);
 }
 
 
@@ -413,8 +413,8 @@ vfd_seek(ir_unit_t *iu, int fd, int64_t offset, int whence)
 static void
 vmir_open(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *path = vm_ptr(&rf, iu);
-  uint32_t flags = vm_arg32(&rf);
+  const char *path = vmir_vm_ptr(&rf, iu);
+  uint32_t flags = vmir_vm_arg32(&rf);
 
   uint32_t vmir_flags = 0;
   if(flags & 0100) // O_CREAT
@@ -428,7 +428,7 @@ vmir_open(void *ret, const void *rf, ir_unit_t *iu)
     vmir_flags |= VMIR_FS_OPEN_READ;
 
   int fd = vfd_open(iu, path, flags);
-  vm_ret32(ret, fd);
+  vmir_vm_ret32(ret, fd);
   return;
 }
 
@@ -594,120 +594,120 @@ vFILE_open(ir_unit_t *iu, const char *path, const char *mode,
 static void
 vmir_fopen(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *path = vm_ptr(&rf, iu);
-  const char *mode = vm_ptr(&rf, iu);
+  const char *path = vmir_vm_ptr(&rf, iu);
+  const char *mode = vmir_vm_ptr(&rf, iu);
   vFILE_t *vfile = vFILE_open(iu, path, mode, 0);
-  vm_retptr(ret, vfile, iu);
+  vmir_vm_retptr(ret, vfile, iu);
 }
 
 static void
 vmir_fseek(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr_nullchk(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
-    vm_ret32(ret, -1);
+    vmir_vm_ret32(ret, -1);
     return;
   }
-  uint32_t offset = vm_arg32(&rf);
-  uint32_t whence = vm_arg32(&rf);
+  uint32_t offset = vmir_vm_arg32(&rf);
+  uint32_t whence = vmir_vm_arg32(&rf);
   int r = fseek(vfile->fp, offset, whence);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_fseeko(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr_nullchk(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
-    vm_ret64(ret, -1);
+    vmir_vm_ret64(ret, -1);
     return;
   }
-  uint64_t offset = vm_arg64(&rf);
-  uint32_t whence = vm_arg32(&rf);
+  uint64_t offset = vmir_vm_arg64(&rf);
+  uint32_t whence = vmir_vm_arg32(&rf);
   int64_t r = fseeko(vfile->fp, offset, whence);
-  vm_ret64(ret, r);
+  vmir_vm_ret64(ret, r);
 }
 
 static void
 vmir_fread(void *ret, const void *rf, ir_unit_t *iu)
 {
-  void *buf = vm_ptr(&rf, iu);
-  uint32_t size = vm_arg32(&rf);
-  uint32_t nmemb = vm_arg32(&rf);
-  vFILE_t *vfile = vm_ptr_nullchk(&rf, iu);
+  void *buf = vmir_vm_ptr(&rf, iu);
+  uint32_t size = vmir_vm_arg32(&rf);
+  uint32_t nmemb = vmir_vm_arg32(&rf);
+  vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
-    vm_ret32(ret, -1);
+    vmir_vm_ret32(ret, -1);
     return;
   }
   int r = fread(buf, size, nmemb, vfile->fp);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_fwrite(void *ret, const void *rf, ir_unit_t *iu)
 {
-  void *buf = vm_ptr(&rf, iu);
-  uint32_t size = vm_arg32(&rf);
-  uint32_t nmemb = vm_arg32(&rf);
-  vFILE_t *vfile = vm_ptr_nullchk(&rf, iu);
+  void *buf = vmir_vm_ptr(&rf, iu);
+  uint32_t size = vmir_vm_arg32(&rf);
+  uint32_t nmemb = vmir_vm_arg32(&rf);
+  vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
-    vm_ret32(ret, -1);
+    vmir_vm_ret32(ret, -1);
     return;
   }
   int r = fwrite(buf, size, nmemb, vfile->fp);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_feof(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL) {
-    vm_ret32(ret, 1);
+    vmir_vm_ret32(ret, 1);
     return;
   }
   int r = feof(vfile->fp);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_ftell(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL) {
-    vm_ret32(ret, -1);
+    vmir_vm_ret32(ret, -1);
     return;
   }
   int r = ftell(vfile->fp);
-  vm_ret32(ret, r);
+  vmir_vm_ret32(ret, r);
 }
 
 static void
 vmir_ftello(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   uint64_t r = ftello(vfile->fp);
   if(vfile == NULL) {
-    vm_ret64(ret, -1);
+    vmir_vm_ret64(ret, -1);
     return;
   }
-  vm_ret64(ret, r);
+  vmir_vm_ret64(ret, r);
 }
 
 static void
 vmir_fclose(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile != NULL)
     fclose(vfile->fp);
-  vm_ret32(ret, 0);
+  vmir_vm_ret32(ret, 0);
 }
 
 static void
 vmir_fileno(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
-  vm_ret32(ret, vfile->fd);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
+  vmir_vm_ret32(ret, vfile->fd);
 }
 
 /*-----------------------------------------------------------------------
@@ -717,42 +717,42 @@ vmir_fileno(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_puts(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *str = vm_ptr(&rf, iu);
+  const char *str = vmir_vm_ptr(&rf, iu);
   if(iu->iu_stdout != NULL)
     fwrite(str, strlen(str), 1, iu->iu_stdout->fp);
-  vm_ret32(ret, 0);
+  vmir_vm_ret32(ret, 0);
 }
 
 static void
 vmir_fputc(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char c = vm_arg32(&rf);
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  char c = vmir_vm_arg32(&rf);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile != NULL)
     fwrite(&c, 1, 1, vfile->fp);
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 static void
 vmir_fgetc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint8_t c;
-  vFILE_t *vfile = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL || fread(&c, 1, 1, vfile->fp) != 1) {
-    vm_ret32(ret, -1);
+    vmir_vm_ret32(ret, -1);
     return;
   }
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 
 static void
 vmir_putchar(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char c = vm_arg32(&rf);
+  char c = vmir_vm_arg32(&rf);
   if(iu->iu_stdout != NULL)
     fwrite(&c, 1, 1, iu->iu_stdout->fp);
-  vm_ret32(ret, c);
+  vmir_vm_ret32(ret, c);
 }
 
 
@@ -788,16 +788,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_INT:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vm_arg32(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_arg32(va));
         break;
       case 1:
-        l1 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vm_arg32(va));
+        l1 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_arg32(va));
         break;
       case 2:
-        l1 = vm_arg32(va);
-        l2 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vm_arg32(va));
+        l1 = vmir_vm_arg32(va);
+        l2 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg32(va));
         break;
       default:
         goto done;
@@ -807,16 +807,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_INT64:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vm_arg64(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_arg64(va));
         break;
       case 1:
-        l1 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vm_arg64(va));
+        l1 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_arg64(va));
         break;
       case 2:
-        l1 = vm_arg32(va);
-        l2 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vm_arg64(va));
+        l1 = vmir_vm_arg32(va);
+        l2 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg64(va));
         break;
       default:
         goto done;
@@ -826,18 +826,18 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_PTR:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, (void *)(intptr_t)vm_arg32(va));
+        n = snprintf(dst, dz, fmt, (void *)(intptr_t)vmir_vm_arg32(va));
         break;
       case 1:
-        l1 = vm_arg32(va);
+        l1 = vmir_vm_arg32(va);
         n = snprintf(dst, dz, fmt, l1,
-                     (void *)(intptr_t)vm_arg32(va));
+                     (void *)(intptr_t)vmir_vm_arg32(va));
         break;
       case 2:
-        l1 = vm_arg32(va);
-        l2 = vm_arg32(va);
+        l1 = vmir_vm_arg32(va);
+        l2 = vmir_vm_arg32(va);
         n = snprintf(dst, dz, fmt, l1, l2,
-                     (void *)(intptr_t)vm_arg32(va));
+                     (void *)(intptr_t)vmir_vm_arg32(va));
         break;
       default:
         goto done;
@@ -847,16 +847,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_STR:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vm_ptr(va, iu));
+        n = snprintf(dst, dz, fmt, vmir_vm_ptr(va, iu));
         break;
       case 1:
-        l1 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vm_ptr(va, iu));
+        l1 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_ptr(va, iu));
         break;
       case 2:
-        l1 = vm_arg32(va);
-        l2 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vm_ptr(va, iu));
+        l1 = vmir_vm_arg32(va);
+        l2 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_ptr(va, iu));
         break;
       default:
         goto done;
@@ -866,16 +866,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_DOUBLE:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vm_arg_dbl(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_arg_dbl(va));
         break;
       case 1:
-        l1 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, vm_arg32(va), vm_arg_dbl(va));
+        l1 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, vmir_vm_arg32(va), vmir_vm_arg_dbl(va));
         break;
       case 2:
-        l1 = vm_arg32(va);
-        l2 = vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vm_arg_dbl(va));
+        l1 = vmir_vm_arg32(va);
+        l2 = vmir_vm_arg32(va);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg_dbl(va));
         break;
       default:
         goto done;
@@ -1056,10 +1056,10 @@ fmt_sn(void *opaque, const char *str, int len)
 static void
 vmir_vsnprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char *dst = vm_ptr(&rf, iu);
-  int dstlen = vm_arg32(&rf);
-  const char *fmt = vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vm_ptr(&rf, iu);
+  char *dst = vmir_vm_ptr(&rf, iu);
+  int dstlen = vmir_vm_arg32(&rf);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
+  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1069,15 +1069,15 @@ vmir_vsnprintf(void *ret, const void *rf, ir_unit_t *iu)
   // Nul termination
   if(aux.remain)
     *aux.dst = 0;
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 static void
 vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char *dst = vm_ptr(&rf, iu);
-  int dstlen = vm_arg32(&rf);
-  const char *fmt = vm_ptr(&rf, iu);
+  char *dst = vmir_vm_ptr(&rf, iu);
+  int dstlen = vmir_vm_arg32(&rf);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1089,7 +1089,7 @@ vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
   // Nul termination
   if(aux.remain)
     *aux.dst = 0;
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
@@ -1097,9 +1097,9 @@ vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_vsprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char *dst = vm_ptr(&rf, iu);
-  const char *fmt = vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vm_ptr(&rf, iu);
+  char *dst = vmir_vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
+  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1110,14 +1110,14 @@ vmir_vsprintf(void *ret, const void *rf, ir_unit_t *iu)
   // Nul termination
   if(aux.remain)
     *aux.dst = 0;
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 static void
 vmir_sprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  char *dst = vm_ptr(&rf, iu);
-  const char *fmt = vm_ptr(&rf, iu);
+  char *dst = vmir_vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1128,7 +1128,7 @@ vmir_sprintf(void *ret, const void *rf, ir_unit_t *iu)
   // Nul termination
   if(aux.remain)
     *aux.dst = 0;
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
@@ -1152,60 +1152,60 @@ fmt_file(void *opaque, const char *str, int len)
 static void
 vmir_vprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *fmt = vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
+  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = iu->iu_stdout;
   aux.total = 0;
   dofmt(fmt_file, &aux, fmt, va_rf, iu);
 
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
 static void
 vmir_printf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  const char *fmt = vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = iu->iu_stdout;
   aux.total = 0;
   dofmt(fmt_file, &aux, fmt, rf, iu);
 
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
 static void
 vmir_vfprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
-  const char *fmt = vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
+  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = vfile;
   aux.total = 0;
   dofmt(fmt_file, &aux, fmt, va_rf, iu);
 
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
 static void
 vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vFILE_t *vfile = vm_ptr(&rf, iu);
-  const char *fmt = vm_ptr(&rf, iu);
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
+  const char *fmt = vmir_vm_ptr(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = vfile;
   aux.total = 0;
   dofmt(fmt_file, &aux, fmt, rf, iu);
 
-  vm_ret32(ret, aux.total);
+  vmir_vm_ret32(ret, aux.total);
 }
 
 
@@ -1213,7 +1213,7 @@ vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_getenv(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vm_ret32(ret, 0);
+  vmir_vm_ret32(ret, 0);
 }
 
 
@@ -1224,12 +1224,12 @@ vmir_getenv(void *ret, const void *rf, ir_unit_t *iu)
 static void
 vmir_cxa_guard_acquire(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint8_t *p = vm_ptr(&rf, iu);
+  uint8_t *p = vmir_vm_ptr(&rf, iu);
   if(*p == 0) {
     *p = 1;
-    vm_ret32(ret, 1);
+    vmir_vm_ret32(ret, 1);
   } else {
-    vm_ret32(ret, 0);
+    vmir_vm_ret32(ret, 0);
   }
 }
 

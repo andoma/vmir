@@ -127,6 +127,17 @@ void vmir_set_fsops(ir_unit_t *iu, const vmir_fsops_t *ops);
 vmir_errcode_t vmir_load(ir_unit_t *iu, const uint8_t *bitcode,
                          int bitcode_len);
 
+
+/**
+ * Destroy the environment and free all resources except the memory
+ * passed in to vmir_create(). THe user is responsible for freeing this
+ * memory.
+ *
+ * After this the ir_unit is also free'd and no longer available
+ */
+void vmir_destroy(ir_unit_t *iu);
+
+
 /**
  * Run will call main() with argc and argv as given by this call.
  *
@@ -138,23 +149,83 @@ void vmir_run(ir_unit_t *iu, int argc, char **argv);
 
 
 typedef struct ir_function ir_function_t;
-ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
-int vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...);
 
-void *vm_ptr(const void **rfp, ir_unit_t *iu);
-void *vm_ptr_nullchk(const void **rfp, ir_unit_t *iu);
-void vm_retptr(void *ret, void *p, const ir_unit_t *iu);
+/**
+ * Lookup a vmir function that can be called with vmir_vm_function_call()
+ */
+ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
 
 
 /**
- * Destroy the environment and free all resources except the memory
- * passed in to vmir_create(). THe user is responsible for freeing this
- * memory.
- *
- * After this the ir_unit is also free'd and no longer available
+ * Return values frmo vmir_vm_function_call()
  */
-void vmir_destroy(ir_unit_t *iu);
+#define VM_STOP_OK          0      // Returned normally
+#define VM_STOP_EXIT        1      // exit() was called
+#define VM_STOP_ABORT       2      // abort() was called
+#define VM_STOP_UNREACHABLE 3      // Ran the 'unreachable' LLVM instruction
+#define VM_STOP_BAD_INSTRUCTION 4  // Invalid instruction encoding
+                                   // This is an internal error in the VM
+#define VM_STOP_BAD_FUNCTION 5     // Unresolved function was called
 
+/**
+ * Call a vmir function
+ *
+ * out is a pointer to where the return value from the function will be stored
+ * Should hold 64 or 32 bit depending on the function signature.
+ *
+ * Rest of arguments are parsed in based on the function signature
+ *
+ * See VM_STOP_ defines above for return value of this function
+ */
+int vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...);
+
+/**
+ * Pop 32bit function argument.
+ */
+uint32_t vmir_vm_arg32(const void **rfp);
+
+/**
+ * Pop 64bit function argument.
+ */
+uint64_t vmir_vm_arg64(const void **rfp);
+
+/**
+ * Pop double function argument.
+ */
+double vmir_vm_arg_dbl(const void **rfp);
+
+/**
+ * Pop float function argument.
+ */
+float vmir_vm_arg_flt(const void **rfp);
+
+/**
+ * Pop pointer function argument and convert it from VMIR address
+ * space to host address.
+ */
+void *vmir_vm_ptr(const void **rfp, ir_unit_t *iu);
+
+/**
+ * Pop pointer function argument and convert it from VMIR address
+ * space to host address. If the pointer is NULL it will still be NULL
+ * after conversion.
+ */
+void *vmir_vm_ptr_nullchk(const void **rfp, ir_unit_t *iu);
+
+/**
+ * Return a pointer inside the VM heap and adjust it to VMIR local address
+ */
+void vmir_vm_retptr(void *ret, void *p, const ir_unit_t *iu);
+
+/**
+ * Return a 32bit value from an external function
+ */
+void vmir_vm_ret32(void *ret, uint32_t v);
+
+/**
+ * Return a 64bit value from an external function
+ */
+void vmir_vm_ret64(void *ret, uint64_t v);
 
 
 /**

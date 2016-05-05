@@ -874,7 +874,7 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
   } ret;
 
   int64_t ts = get_ts();
-  int r = vm_function_call(iu, f, &ret, argc, vm_argv);
+  int r = vmir_vm_function_call(iu, f, &ret, argc, vm_argv);
   ts = get_ts() - ts;
   libc_terminate(iu);
   if(r == 0)

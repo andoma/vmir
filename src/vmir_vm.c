@@ -62,62 +62,61 @@ vm_stop(ir_unit_t *iu, int reason, int code)
 }
 
 
-static uint32_t
-vm_arg32(const void **rfp)
+uint32_t
+vmir_vm_arg32(const void **rfp)
 {
   const void *rf = *rfp = *rfp - 4;
   return *(uint32_t *)rf;
 }
 
-static uint64_t
-vm_arg64(const void **rfp)
+uint64_t
+vmir_vm_arg64(const void **rfp)
 {
   const void *rf = *rfp = *rfp - 8;
   return *(uint64_t *)rf;
 }
 
-static double
-vm_arg_dbl(const void **rfp)
+double
+vmir_vm_arg_dbl(const void **rfp)
 {
   const void *rf = *rfp = *rfp - 8;
   return *(double *)rf;
 }
 
-static float __attribute__((unused))
-vm_arg_flt(const void **rfp)
+float
+vmir_vm_arg_flt(const void **rfp)
 {
   const void *rf = *rfp = *rfp - 4;
   return *(float *)rf;
 }
 
 void *
-vm_ptr(const void **rfp, ir_unit_t *iu)
+vmir_vm_ptr(const void **rfp, ir_unit_t *iu)
 {
-  return vm_arg32(rfp) + iu->iu_mem;
+  return vmir_vm_arg32(rfp) + iu->iu_mem;
 }
 
 void *
-vm_ptr_nullchk(const void **rfp, ir_unit_t *iu)
+vmir_vm_ptr_nullchk(const void **rfp, ir_unit_t *iu)
 {
-  uint32_t vma = vm_arg32(rfp);
+  uint32_t vma = vmir_vm_arg32(rfp);
   return vma ? vma + iu->iu_mem : NULL;
 }
 
 void
-vm_retptr(void *ret, void *p, const ir_unit_t *iu)
+vmir_vm_retptr(void *ret, void *p, const ir_unit_t *iu)
 {
   *(uint32_t *)ret = p ? p - iu->iu_mem : 0;
 }
 
-
-static void
-vm_ret32(void *ret, uint32_t v)
+void
+vmir_vm_ret32(void *ret, uint32_t v)
 {
   *(uint32_t *)ret = v;
 }
 
-static void
-vm_ret64(void *ret, uint64_t v)
+void
+vmir_vm_ret64(void *ret, uint64_t v)
 {
   *(uint64_t *)ret = v;
 }
@@ -126,7 +125,7 @@ vm_ret64(void *ret, uint64_t v)
 static void
 vm_exit(void *ret, const void *rf, ir_unit_t *iu)
 {
-  uint32_t exit_code = vm_arg32(&rf);
+  uint32_t exit_code = vmir_vm_arg32(&rf);
   vm_stop(iu, VM_STOP_EXIT, exit_code);
 }
 
@@ -4359,7 +4358,7 @@ vmop_resolve(ir_function_t *f)
  *
  */
 int
-vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
+vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
 {
   va_list ap;
   const ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, f->if_type);

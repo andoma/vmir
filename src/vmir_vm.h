@@ -22,13 +22,6 @@
  * SOFTWARE.
  */
 
-#define VM_STOP_OK          0
-#define VM_STOP_EXIT        1
-#define VM_STOP_ABORT       2
-#define VM_STOP_UNREACHABLE 3
-#define VM_STOP_BAD_INSTRUCTION 4
-#define VM_STOP_BAD_FUNCTION 5
-
 typedef enum {
   VM_JIT_CALL,
   VM_RET_VOID,
