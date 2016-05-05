@@ -77,14 +77,43 @@ ir_unit_t *vmir_create(void *membase, uint32_t memsize,
                        uint32_t rsize, uint32_t asize,
                        void *opaque);
 
-typedef void (vm_ext_function_t)(void *ret, const void *regs,
+
+/**
+ * Signature for external function (as returned by
+ * vmir_function_resolver_t callback)
+ */
+typedef void (vm_ext_function_t)(void *ret,
+                                 const void *regs,
                                  struct ir_unit *iu);
 
-typedef vm_ext_function_t *(*vmir_function_resolver_t)(const char *function, void *opaque);
-vm_ext_function_t *vmir_default_external_function_resolver(const char *function, void *opaque);
 
+/**
+ * Signature for overriding the default external function resolver
+ */
+typedef vm_ext_function_t *(*vmir_function_resolver_t)(const char *function,
+                                                       void *opaque);
+
+/**
+ * The default external function resolver for resolving a function into
+ * VMIR's built-in libc.
+ */
+vm_ext_function_t *vmir_default_external_function_resolver(const char *function,
+                                                           void *opaque);
+
+/**
+ *
+ */
 vmir_function_resolver_t vmir_get_external_function_resolver(ir_unit_t *);
-void vmir_set_external_function_resolver(ir_unit_t *, vmir_function_resolver_t fn);
+
+/**
+ * Set function to call for resolving unresolved function symbols.
+ *
+ * Note that if using this and you want to keep the internal libc functions,
+ * this function should call vmir_default_external_function_resolver() as
+ * last resort to make VMIR use the built-in function for the given lookup.
+ */
+void vmir_set_external_function_resolver(ir_unit_t * iu,
+                                         vmir_function_resolver_t fn);
 
 /**
  * Override defaults functions for filesystem access
