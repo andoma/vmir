@@ -267,7 +267,7 @@ typedef struct ir_attrset {
 /**
  *
  */
-typedef struct ir_function {
+struct ir_function {
   TAILQ_ENTRY(ir_function) if_body_link;
   unsigned int if_type;
   char *if_name;
@@ -291,7 +291,7 @@ typedef struct ir_function {
   struct ir_instr_backref *if_instr_backrefs;
   int if_instr_backref_size;
 
-} ir_function_t;
+};
 
 
 /**
