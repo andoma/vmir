@@ -2393,12 +2393,14 @@ static void
 emit_load1(ir_unit_t *iu, const ir_value_t *src,
            const ir_value_t *ret, const ir_type_t *retty,
            const ir_value_t *roff,
-           int immediate_offset, int value_offset_multiply)
+           int immediate_offset, int value_offset_multiply,
+           const ir_instr_load_t *ii)
 {
   const int has_offset = immediate_offset != 0 || roff != NULL;
 
   switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
 
+  case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT1, 0):
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 0):
     emit_op2(iu, VM_LOAD8, value_reg(ret), value_reg(src));
     return;
@@ -2476,9 +2478,10 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
     break;
 
   default:
-    parser_error(iu, "Can't load from class %d %s immediate-offset:%d",
+    parser_error(iu, "Can't load from class %d %s immediate-offset:%d (%s)",
                  src->iv_class, type_str(iu, retty),
-                 has_offset);
+                 has_offset,
+                 instr_str(iu, &ii->super, 0));
   }
   if(roff != NULL) {
     emit_i16(iu, value_reg(roff));
@@ -2507,7 +2510,7 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
       const ir_type_t *retty = type_get(iu, ii->super.ii_rets[i].type);
       int offset = aggty->it_struct.elements[i].offset;
       emit_load1(iu, src, ret, retty, roff, ii->immediate_offset + offset,
-                 ii->value_offset_multiply);
+                 ii->value_offset_multiply, ii);
     }
     return;
   }
@@ -2558,7 +2561,7 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
   }
 
   emit_load1(iu, src, ret, retty, roff, ii->immediate_offset,
-             ii->value_offset_multiply);
+             ii->value_offset_multiply, ii);
 }
 
 
@@ -2603,6 +2606,8 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     emit_i32(iu, value_get_const32(iu, ptr));
     return;
 
+  case COMBINE4(IR_TYPE_INT1, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
+  case COMBINE4(IR_TYPE_INT1, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE8C_OFF, value_reg(ptr));
@@ -2769,10 +2774,11 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
 
   default:
-    parser_error(iu, "Can't store (type %s class %d) ptr class %d off:%d",
+    parser_error(iu, "Can't store (type %s class %d) ptr class %d off:%d (%s)",
                  type_str_index(iu, ii->value.type),
                  val->iv_class,
-                 ptr->iv_class, has_offset);
+                 ptr->iv_class, has_offset,
+                 instr_str(iu, &ii->super, 0));
   }
 }
 
