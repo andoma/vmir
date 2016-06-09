@@ -134,6 +134,14 @@ typedef struct vmir_stats {
 } vmir_stats_t;
 
 
+typedef struct vmir_exception {
+  uint32_t exception;
+  uint32_t type_info;
+  uint32_t uncaught;
+  uint32_t caught;
+} vmir_exception_t;
+
+
 
 /**
  * Translation unit
@@ -150,6 +158,8 @@ struct ir_unit {
   void *iu_jit_mem;
   int iu_jit_mem_alloced;
   int iu_jit_ptr;
+
+  vmir_exception_t iu_exception;
 
   uint32_t iu_data_ptr;
   uint32_t iu_heap_start;
@@ -375,11 +385,15 @@ typedef enum {
   IR_IC_BR,
   IR_IC_PHI,
   IR_IC_CALL,
+  IR_IC_INVOKE, // http://llvm.org/docs/LangRef.html#invoke-instruction
   IR_IC_SWITCH,
   IR_IC_ALLOCA,
   IR_IC_SELECT,
   IR_IC_VAARG,
   IR_IC_EXTRACTVAL,
+  IR_IC_INSERTVAL, // http://llvm.org/docs/LangRef.html#insertvalue-instruction
+  IR_IC_LANDINGPAD, // http://llvm.org/docs/LangRef.html#landingpad-instruction
+  IR_IC_RESUME, // http://llvm.org/docs/LangRef.html#resume-instruction
 
   // VMIR special instructions
   IR_IC_LEA,
@@ -876,10 +890,32 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
   int64_t ts = get_ts();
   int r = vmir_vm_function_call(iu, f, &ret, argc, vm_argv);
   ts = get_ts() - ts;
+  printf("main() took %"PRId64"\n", ts);
   libc_terminate(iu);
-  if(r == 0)
-    printf("main() returned %d\n", ret.u32);
-  printf("stopcode=%d call took %"PRId64"\n", r, ts);
+
+  switch(r) {
+  case 0:
+    printf("Program returned normally: 0x%x\n", ret.u32);
+    break;
+  case VM_STOP_EXIT:
+    printf("Program exit(): 0x%x\n", iu->iu_exit_code);
+    break;
+  case VM_STOP_ABORT:
+    printf("Program abort\n");
+    break;
+  case VM_STOP_UNREACHABLE:
+    printf("Unreachable instruction\n");
+    break;
+  case VM_STOP_BAD_INSTRUCTION:
+    printf("Bad instruction\n");
+    break;
+  case VM_STOP_BAD_FUNCTION:
+    printf("Bad function %d\n", iu->iu_exit_code);
+    break;
+  case VM_STOP_UNCAUGHT_EXCEPTION:
+    printf("Uncaught exception\n");
+    break;
+  }
 
   vmir_dump_instrumentation(iu);
 

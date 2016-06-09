@@ -30,7 +30,7 @@
 
 //#define VM_TRACE
 
-#ifdef VM_TRACE
+#if defined(VM_TRACE) && !defined(VM_DONT_USE_COMPUTED_GOTO)
 #define VM_DONT_USE_COMPUTED_GOTO
 #endif
 
@@ -122,17 +122,19 @@ vmir_vm_ret64(void *ret, uint64_t v)
 }
 
 
-static void
+static int
 vm_exit(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t exit_code = vmir_vm_arg32(&rf);
   vm_stop(iu, VM_STOP_EXIT, exit_code);
+  return 0;
 }
 
-static void
+static int
 vm_abort(void *ret, const void *rf, ir_unit_t *iu)
 {
   vm_stop(iu, VM_STOP_ABORT, 0);
+  return 0;
 }
 
 
@@ -476,6 +478,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #endif
 )
 {
+  int r;
   int16_t opc;
 
 #ifndef VM_DONT_USE_COMPUTED_GOTO
@@ -541,34 +544,83 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
   VMOP(B)     I = (void *)I + (int16_t)I[0]; NEXT(0);
   VMOP(BCOND) I = (void *)I + (int16_t)(R32(0) ? I[1] : I[2]); NEXT(0);
+
   VMOP(JSR_VM)
     vm_printf("Calling %s\n", vm_funcname(I[0], iu));
-    vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
+    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
 #ifdef VM_TRACE
-            , vm_getfunc(I[0], iu)
+                , vm_getfunc(I[0], iu)
 #endif
-);
+                );
+    if(r)
+      return r;
     NEXT(3);
 
   VMOP(JSR_EXT)
     vm_printf("Calling %s (internal)\n", vm_funcname(I[0], iu));
-    iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    if(r)
+      return r;
     NEXT(3);
 
   VMOP(JSR_R)
     vm_printf("Calling indirect %s (%d)\n", vm_funcname(R32(0), iu), R32(0));
-    if(iu->iu_vm_funcs[R32(0)])
-      vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1
+    if(iu->iu_vm_funcs[R32(0)]) {
+      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu,
+                  rf + I[2], allocaptr, -1
+#ifdef VM_TRACE
+                  , vm_getfunc(R32(0), iu)
+#endif
+                  );
+    if(r)
+      return r;
+    } else if(iu->iu_ext_funcs[R32(0)]) {
+      iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+    } else {
+      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+    }
+    NEXT(3);
+
+
+
+  VMOP(INVOKE_VM)
+    vm_printf("Invoking %s\n", vm_funcname(I[0], iu));
+    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
+#ifdef VM_TRACE
+                , vm_getfunc(I[0], iu)
+#endif
+                );
+    I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
+
+  VMOP(INVOKE_EXT)
+    vm_printf("Calling %s (internal)\n", vm_funcname(I[0], iu));
+    r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
+
+  VMOP(INVOKE_R)
+    vm_printf("Calling indirect %s (%d)\n", vm_funcname(R32(0), iu), R32(0));
+    if(iu->iu_vm_funcs[R32(0)]) {
+      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1
 #ifdef VM_TRACE
               , vm_getfunc(R32(0), iu)
 #endif
               );
-    else if(iu->iu_ext_funcs[R32(0)])
-      iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
-    else
+    } else if(iu->iu_ext_funcs[R32(0)]) {
+      r = iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+    } else {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
-    NEXT(3);
+    }
+    I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
+  VMOP(LANDINGPAD)
+    AR32(0, iu->iu_exception.exception);
+    AR32(1, iu->iu_exception.type_info);
+    NEXT(2);
+
+  VMOP(RESUME)
+    iu->iu_exception.exception = R32(0);
+    iu->iu_exception.type_info = R32(1);
+    return 1;
 
   VMOP(SDIV_R8) AR32(0,  S8(1) /  S8(2)); NEXT(3);
   VMOP(SREM_R8) AR32(0,  S8(1) %  S8(2)); NEXT(3);
@@ -1828,6 +1880,13 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_JSR_VM:    return &&JSR_VM   - &&opz;     break;
   case VM_JSR_EXT:   return &&JSR_EXT  - &&opz;     break;
   case VM_JSR_R:     return &&JSR_R    - &&opz;     break;
+
+  case VM_INVOKE_VM: return &&INVOKE_VM - &&opz;    break;
+  case VM_INVOKE_EXT: return &&INVOKE_EXT - &&opz;    break;
+  case VM_INVOKE_R:  return &&INVOKE_R  - &&opz;    break;
+
+  case VM_LANDINGPAD:return &&LANDINGPAD - &&opz;        break;
+  case VM_RESUME:    return &&RESUME - &&opz;       break;
 
   case VM_MOV32:     return &&MOV32    - &&opz;     break;
   case VM_MOV64:     return &&MOV64    - &&opz;     break;
@@ -3799,6 +3858,55 @@ emit_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
  *
  */
 static void
+emit_invoke(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
+{
+  const int textpos = iu->iu_text_ptr - iu->iu_text_alloc;
+  VECTOR_PUSH_BACK(&iu->iu_branch_fixups, textpos);
+
+  int rf_offset = f->if_regframe_size;
+  int return_reg;
+
+  if(ii->super.ii_ret.value != -1) {
+    const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
+    return_reg = value_reg(ret);
+  } else {
+    return_reg = 0;
+  }
+  ir_function_t *callee = value_function(iu, ii->callee.value);
+  if(callee != NULL) {
+    vm_op_t op;
+
+    if(callee->if_ext_func != NULL) {
+      op = VM_INVOKE_EXT;
+    } else {
+      op = VM_INVOKE_VM;
+    }
+
+    emit_i16(iu, op);
+    emit_i16(iu, callee->if_gfid);
+
+  } else {
+
+    const ir_value_t *iv = value_get(iu, ii->callee.value);
+
+    if(iv->iv_class != IR_VC_REGFRAME)
+      parser_error(iu, "Invoke via incompatible value class %d",
+                   iv->iv_class);
+    emit_i16(iu, VM_INVOKE_R);
+    emit_i16(iu, value_reg(iv));
+
+  }
+  emit_i16(iu, rf_offset);
+  emit_i16(iu, return_reg);
+  emit_i16(iu, ii->normal_dest);
+  emit_i16(iu, ii->unwind_dest);
+}
+
+
+/**
+ *
+ */
+static void
 emit_alloca(ir_unit_t *iu, ir_instr_alloca_t *ii)
 {
   const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
@@ -3929,8 +4037,7 @@ emit_select(ir_unit_t *iu, ir_instr_select_t *ii)
 static void
 emit_vmop(ir_unit_t *iu, ir_instr_call_t *ii)
 {
-  ir_function_t *f = value_function(iu, ii->callee.value);
-  int vmop = f->if_vmop;
+  int vmop = ii->vmop;
   assert(vmop != 0);
   emit_op(iu, vmop);
 
@@ -4024,6 +4131,40 @@ emit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii)
  *
  */
 static void
+emit_landingpad(ir_unit_t *iu, ir_instr_landingpad_t *ii)
+{
+  if(ii->super.ii_ret.value == -2) {
+    const ir_value_t *ret;
+    emit_op(iu, VM_LANDINGPAD);
+    ret = value_get(iu, ii->super.ii_rets[0].value);
+    emit_i16(iu, value_reg(ret));
+    ret = value_get(iu, ii->super.ii_rets[1].value);
+    emit_i16(iu, value_reg(ret));
+  } else {
+    parser_error(iu, "Unable to emit landingpad");
+  }
+}
+
+
+/**
+ *
+ */
+static void
+emit_resume(ir_unit_t *iu, ir_instr_resume_t *r)
+{
+  if(r->num_values != 2) {
+    parser_error(iu, "Unable to emit resume with %d args", r->num_values);
+  }
+  emit_op(iu, VM_RESUME);
+  emit_i16(iu, value_reg(value_get(iu, r->values[0].value)));
+  emit_i16(iu, value_reg(value_get(iu, r->values[1].value)));
+}
+
+
+/**
+ *
+ */
+static void
 instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
 {
   ir_instr_t *ii;
@@ -4095,6 +4236,9 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
     case IR_IC_CALL:
       emit_call(iu, (ir_instr_call_t *)ii, f);
       break;
+    case IR_IC_INVOKE:
+      emit_invoke(iu, (ir_instr_call_t *)ii, f);
+      break;
     case IR_IC_SWITCH:
       emit_switch(iu, (ir_instr_switch_t *)ii);
       break;
@@ -4109,6 +4253,12 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
       break;
     case IR_IC_VMOP:
       emit_vmop(iu, (ir_instr_call_t *)ii);
+      break;
+    case IR_IC_LANDINGPAD:
+      emit_landingpad(iu, (ir_instr_landingpad_t *)ii);
+      break;
+    case IR_IC_RESUME:
+      emit_resume(iu, (ir_instr_resume_t *)ii);
       break;
     case IR_IC_STACKCOPY:
       emit_stackcopy(iu, (ir_instr_stackcopy_t *)ii);
@@ -4179,6 +4329,12 @@ branch_fixup(ir_unit_t *iu)
     case VM_BCOND:
       I[2] = bb_to_offset_delta(f, I[2], off);
       I[3] = bb_to_offset_delta(f, I[3], off);
+      break;
+    case VM_INVOKE_VM:
+    case VM_INVOKE_EXT:
+    case VM_INVOKE_R:
+      I[4] = bb_to_offset_delta(f, I[4], off);
+      I[5] = bb_to_offset_delta(f, I[5], off);
       break;
     case VM_EQ8_BR ... VM_SLE32_C_BR:
       I[1] = bb_to_offset_delta(f, I[1], off);
@@ -4398,32 +4554,18 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   }
 
   int r = setjmp(iu->iu_err_jmpbuf);
-  if(r) {
-    switch(r) {
-    case VM_STOP_EXIT:
-      printf("Program exit: 0x%x\n", iu->iu_exit_code);
-      break;
-    case VM_STOP_ABORT:
-      printf("Program abort\n");
-      break;
-    case VM_STOP_UNREACHABLE:
-      printf("Unreachable instruction\n");
-      break;
-    case VM_STOP_BAD_INSTRUCTION:
-      printf("Bad instruction\n");
-      break;
-    case VM_STOP_BAD_FUNCTION:
-      printf("Bad function %d\n", iu->iu_exit_code);
-      break;
-    }
+  if(r)
     return r;
-  }
 
-  vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
+  r = vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
 #ifdef VM_TRACE
           , f
 #endif
           );
+
+  if(r == 1)
+    r = VM_STOP_UNCAUGHT_EXCEPTION;
+
   return r;
 }
 

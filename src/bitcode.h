@@ -107,6 +107,7 @@
 #define FUNC_CODE_INST_RET              10
 #define FUNC_CODE_INST_BR               11
 #define FUNC_CODE_INST_SWITCH           12
+#define FUNC_CODE_INST_INVOKE           13
 #define FUNC_CODE_INST_UNREACHABLE      15
 #define FUNC_CODE_INST_PHI              16
 #define FUNC_CODE_INST_ALLOCA           19
@@ -114,15 +115,19 @@
 #define FUNC_CODE_INST_VAARG            23
 #define FUNC_CODE_INST_STORE_OLD        24
 #define FUNC_CODE_INST_EXTRACTVAL       26
+#define FUNC_CODE_INST_INSERTVAL        27
 #define FUNC_CODE_INST_CMP2             28
 #define FUNC_CODE_INST_VSELECT          29
 #define FUNC_CODE_INST_INBOUNDS_GEP_OLD 30
 #define FUNC_CODE_INST_CALL             34
+#define FUNC_CODE_INST_RESUME           39
+#define FUNC_CODE_INST_LANDINGPAD_OLD   40
 #define FUNC_CODE_INST_LOADATOMIC       41
 #define FUNC_CODE_INST_STOREATOMIC_OLD  42
 #define FUNC_CODE_INST_GEP              43
 #define FUNC_CODE_INST_STORE            44
 #define FUNC_CODE_INST_STOREATOMIC      45
+#define FUNC_CODE_INST_LANDINGPAD       47
 
 
 #define FCMP_FALSE  0

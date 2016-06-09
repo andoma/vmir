@@ -81,10 +81,14 @@ ir_unit_t *vmir_create(void *membase, uint32_t memsize,
 /**
  * Signature for external function (as returned by
  * vmir_function_resolver_t callback)
+ *
+ * Return 0 - Normal return
+ *        1 - Exception thrown
+ *   Others - Undefined
  */
-typedef void (vm_ext_function_t)(void *ret,
-                                 const void *regs,
-                                 struct ir_unit *iu);
+typedef int (vm_ext_function_t)(void *ret,
+                                const void *regs,
+                                struct ir_unit *iu);
 
 
 /**
@@ -166,6 +170,7 @@ ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
 #define VM_STOP_BAD_INSTRUCTION 4  // Invalid instruction encoding
                                    // This is an internal error in the VM
 #define VM_STOP_BAD_FUNCTION 5     // Unresolved function was called
+#define VM_STOP_UNCAUGHT_EXCEPTION 6
 
 /**
  * Call a vmir function

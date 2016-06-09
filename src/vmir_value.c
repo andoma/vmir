@@ -525,6 +525,22 @@ value_create_const32(ir_unit_t *iu, int v)
   return (ir_valuetype_t) {.value = ret, .type = type};
 }
 
+
+/**
+ *
+ */
+static ir_valuetype_t
+value_create_zero(ir_unit_t *iu, int type)
+{
+  int ret = value_append(iu);
+  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, ret);
+
+  iv->iv_class = IR_VC_CONSTANT;
+  iv->iv_type = type;
+  iv->iv_u64 = 0;
+  return (ir_valuetype_t) {.value = ret, .type = type};
+}
+
 static int value_print_id(char **dstp, ir_unit_t *iu, int id);
 static int value_print_vt(char **dstp, ir_unit_t *iu, ir_valuetype_t vt);
 
@@ -631,8 +647,11 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
     case IR_TYPE_DOUBLE:
       snprintf(tmpbuf, sizeof(tmpbuf), "#%f", iv->iv_double);
       break;
+    case IR_TYPE_STRUCT:
+      snprintf(tmpbuf, sizeof(tmpbuf), "#struct");
+      break;
     default:
-      snprintf(tmpbuf, sizeof(tmpbuf), "#??");
+      snprintf(tmpbuf, sizeof(tmpbuf), "#?(code-%d)", it->it_code);
       break;
     }
     len += addstr(dstp, tmpbuf);

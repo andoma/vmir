@@ -261,18 +261,18 @@ replace_single_path_phi(ir_unit_t *iu, ir_instr_phi_t *ii)
  *
  */
 static ir_instr_t *
-replace_call_with_intrinsic(ir_unit_t *iu, ir_instr_call_t *ii,
-                            ir_function_t *self)
+replace_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *self)
 {
-  ir_function_t *f = value_function(iu, ii->callee.value);
+  const ir_function_t *f = value_function(iu, ii->callee.value);
   if(f == NULL)
     return &ii->super;
 
   int op = f->if_vmop;
 
-  if(op == 0)
+  if(op == 0) {
+    // Not VMOP
     return &ii->super;
-
+  }
   switch(op) {
   case VM_NOP:
     {
@@ -311,8 +311,18 @@ replace_call_with_intrinsic(ir_unit_t *iu, ir_instr_call_t *ii,
     }
     registerify(iu, &ii->super, &ii->argv[i].value);
   }
+  ii->vmop = f->if_vmop;
 
-  // We just reuse the call struct for this
+  if(ii->super.ii_class == IR_IC_INVOKE) {
+    // VMOPs never throws so the invoke needs to get an unconditional
+    // branch to the true block
+    ir_instr_br_t *br =
+      instr_add_after(sizeof(ir_instr_br_t), IR_IC_BR, &ii->super);
+    br->true_branch = ii->normal_dest;
+    br->condition.value = -1;
+  }
+
+  // We just reuse the call struct for the VMOP call
   ii->super.ii_class = IR_IC_VMOP;
   return &ii->super;
 }
@@ -385,8 +395,8 @@ replace_instructions(ir_unit_t *iu, ir_function_t *f)
         merge_lea_into_load(iu, (ir_instr_load_t *)ii);
       if(ii->ii_class == IR_IC_PHI)
         ii = replace_single_path_phi(iu, (ir_instr_phi_t *)ii);
-      if(ii->ii_class == IR_IC_CALL)
-        ii = replace_call_with_intrinsic(iu, (ir_instr_call_t *)ii, f);
+      if(ii->ii_class == IR_IC_CALL || ii->ii_class == IR_IC_INVOKE)
+        ii = replace_call(iu, (ir_instr_call_t *)ii, f);
       if(ii->ii_class == IR_IC_BINOP)
         binop_prep_args(iu, (ir_instr_binary_t *)ii);
       if(ii->ii_class == IR_IC_CAST)
@@ -494,6 +504,7 @@ function_bind_instr_inputs(ir_unit_t *iu, ir_function_t *f)
         break;
       case IR_IC_CALL:
       case IR_IC_VMOP:
+      case IR_IC_INVOKE:
         {
           ir_instr_call_t *p = (ir_instr_call_t *)ii;
           instr_bind_input(iu, p->callee, ii);
@@ -526,6 +537,23 @@ function_bind_instr_inputs(ir_unit_t *iu, ir_function_t *f)
           instr_bind_input(iu, e->value, ii);
         }
         break;
+      case IR_IC_RESUME:
+        {
+          ir_instr_resume_t *e = (ir_instr_resume_t *)ii;
+          for (int i=0; i<e->num_values; ++i)
+            instr_bind_input(iu, e->values[i], ii);
+        }
+        break;
+      case IR_IC_INSERTVAL:
+        {
+          ir_instr_insertval_t *e = (ir_instr_insertval_t *)ii;
+          instr_bind_input(iu, e->src, ii);
+          instr_bind_input(iu, e->replacement, ii);
+        }
+        break;
+      case IR_IC_LANDINGPAD:
+        break;
+
       default:
         parser_error(iu, "Unable to bind input values on instr-class %d",
                      ii->ii_class);
@@ -551,7 +579,8 @@ eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
       if(ii->ii_ret.value == -1 ||
          ii->ii_class == IR_IC_VMOP ||
          ii->ii_class == IR_IC_VAARG ||
-         ii->ii_class == IR_IC_CALL)
+         ii->ii_class == IR_IC_CALL ||
+         ii->ii_class == IR_IC_INVOKE)
         continue;
 
       if(ii->ii_ret.value < 1)
@@ -617,9 +646,21 @@ bb_change_branch(ir_bb_t *from, ir_bb_t *to, ir_bb_t *nb, ir_function_t *f)
           s->paths[i].block = nb->ib_id;
     }
     break;
+  case IR_IC_INVOKE:
+    {
+      ir_instr_invoke_t *s = (ir_instr_invoke_t *)ii;
+      if(s->normal_dest == to->ib_id)
+        s->normal_dest = nb->ib_id;
+
+      if(s->unwind_dest == to->ib_id)
+        s->unwind_dest = nb->ib_id;
+    }
+    break;
   case IR_IC_RET:
     break;
   default:
+    printf("Unable to transform branch for instruction class %d\n",
+           ii->ii_class);
     abort();
   }
 
@@ -940,8 +981,17 @@ construct_cfg(ir_function_t *f)
           cfg_add_edge(f, bb, s->paths[i].block, 1);
       }
       break;
+    case IR_IC_INVOKE:
+      {
+        ir_instr_invoke_t *s = (ir_instr_invoke_t *)ii;
+        cfg_add_edge(f, bb, s->normal_dest, 1);
+        cfg_add_edge(f, bb, s->unwind_dest, 1);
+      }
+      break;
+
     case IR_IC_RET:
     case IR_IC_UNREACHABLE:
+    case IR_IC_RESUME:
       break;
     default:
       abort();
@@ -1031,6 +1081,7 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
   switch(ii->ii_class) {
   case IR_IC_RET:
   case IR_IC_UNREACHABLE:
+  case IR_IC_RESUME:
     ii->ii_num_succ = 0;
     break;
 
@@ -1050,6 +1101,8 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
   case IR_IC_STACKCOPY:
   case IR_IC_STACKSHRINK:
   case IR_IC_MLA:
+  case IR_IC_LANDINGPAD:
+  case IR_IC_EXTRACTVAL:
     /* -1 just means that we have one successor and it's the next instruction
      * Note that this is different from ii_num_suc == 1 where we have one
      * successor and it's NOT the next instruction (unconditional branch)
@@ -1096,6 +1149,17 @@ liveness_set_succ(ir_function_t *f, ir_instr_t *ii)
     }
     break;
 
+  case IR_IC_INVOKE:
+    {
+      ir_instr_invoke_t *icb = (ir_instr_invoke_t *)ii;
+
+      ii->ii_num_succ = 2;
+      ii->ii_succ = malloc(sizeof(ir_bb_t *) * ii->ii_num_succ);
+      ii->ii_succ[0] = bb_find(f, icb->normal_dest);
+      ii->ii_succ[1] = bb_find(f, icb->unwind_dest);
+    }
+    break;
+
   default:
     printf("Cant set successor for op %d\n", ii->ii_class);
     abort();
@@ -1122,6 +1186,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
   switch(ii->ii_class) {
   case IR_IC_UNREACHABLE:
   case IR_IC_STACKSHRINK:
+  case IR_IC_LANDINGPAD:
     break;
 
   case IR_IC_RET:
@@ -1180,6 +1245,7 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
     break;
   case IR_IC_CALL:
   case IR_IC_VMOP:
+  case IR_IC_INVOKE:
     {
       ir_instr_call_t *p = (ir_instr_call_t *)ii;
       liveness_set_value(bs, iu, p->callee);
@@ -1212,6 +1278,14 @@ liveness_set_gen(ir_instr_t *ii, ir_unit_t *iu, uint32_t *bs)
       liveness_set_value(bs, iu, ((ir_instr_ternary_t *)ii)->arg3);
     }
     break;
+  case IR_IC_RESUME:
+    {
+      ir_instr_resume_t *icr = (ir_instr_resume_t *)ii;
+      for(int i=0; i<icr->num_values; ++i)
+        liveness_set_value(bs, iu, ((ir_instr_resume_t *)ii)->values[i]);
+    }
+    break;
+
   default:
     printf("liveness_set_gen: can't handle instruction class %d\n",
            ii->ii_class);
@@ -1248,6 +1322,7 @@ instr_replace_values(ir_instr_t *ii, ir_unit_t *iu, int from, int to)
   switch(ii->ii_class) {
   case IR_IC_UNREACHABLE:
   case IR_IC_STACKSHRINK:
+  case IR_IC_LANDINGPAD:
     break;
 
   case IR_IC_RET:
@@ -1290,6 +1365,7 @@ instr_replace_values(ir_instr_t *ii, ir_unit_t *iu, int from, int to)
     break;
   case IR_IC_CALL:
   case IR_IC_VMOP:
+  case IR_IC_INVOKE:
     {
       ir_instr_call_t *p = (ir_instr_call_t *)ii;
       instr_replace_value(iu, &p->callee, from, to);
@@ -1326,6 +1402,14 @@ instr_replace_values(ir_instr_t *ii, ir_unit_t *iu, int from, int to)
     instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->lhs_value, from, to);
     instr_replace_value(iu, &((ir_instr_cmp_select_t *)ii)->rhs_value, from, to);
     break;
+  case IR_IC_RESUME:
+    {
+      ir_instr_resume_t *irc = (ir_instr_resume_t *)ii;
+      for (int i=0; i<irc->num_values; ++i)
+        instr_replace_value(iu, &irc->values[i], from, to);
+    }
+    break;
+
   default:
     printf("liveness_replace_values: can't handle instruction class %d\n",
            ii->ii_class);
@@ -2001,7 +2085,7 @@ prepare_calls(ir_unit_t *iu, ir_function_t *f)
   TAILQ_FOREACH(bb, &f->if_bbs, ib_link) {
     ir_instr_t *ii;
     TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
-    if(ii->ii_class == IR_IC_CALL) {
+    if(ii->ii_class == IR_IC_CALL || ii->ii_class == IR_IC_INVOKE) {
       prepare_call(iu, f, (ir_instr_call_t *)ii,
                    call_arg_base, &num_call_args,
                    callargtype);
@@ -2377,6 +2461,35 @@ legalize_aggregate_select(ir_unit_t *iu, ir_instr_select_t *ii)
 }
 
 
+static void
+legalize_aggregate_insertval(ir_unit_t *iu, ir_instr_insertval_t *ins)
+{
+  if(ins->num_indicies != 1) {
+    parser_error(iu, "Unable to legalize insertval with %d indicies",
+                 ins->num_indicies);
+  }
+
+  const ir_value_t *src = value_get(iu, ins->src.value);
+  const ir_value_t *dst = value_get(iu, ins->super.ii_ret.value);
+
+  assert(src->iv_num_values == 0 ||
+         src->iv_num_values == dst->iv_num_values);
+  const ir_valuetype_t *sv = src->iv_data;
+  const ir_valuetype_t *dv = dst->iv_data;
+  for(int i = 0; i < dst->iv_num_values; i++) {
+    if(i == ins->indicies[0]) {
+      insert_move(iu, dv[i], ins->replacement, &ins->super);
+    } else if(src->iv_num_values == 0) {
+      ir_valuetype_t z = value_create_zero(iu, dv[i].type);
+      insert_move(iu, dv[i], z, &ins->super);
+    } else {
+      insert_move(iu, dv[i], sv[i], &ins->super);
+    }
+  }
+  instr_destroy(&ins->super);
+}
+
+
 /**
  *
  */
@@ -2397,6 +2510,9 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
     case IR_IC_MOVE:
       legalize_aggregate_move(iu, (ir_instr_move_t *)ii);
       continue;
+    case IR_IC_INSERTVAL:
+      legalize_aggregate_insertval(iu, (ir_instr_insertval_t *)ii);
+      continue;
     case IR_IC_SELECT:
       legalize_aggregate_select(iu, (ir_instr_select_t *)ii);
       continue;
@@ -2416,10 +2532,10 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
       break;
 
     case IVI_INPUT:
-      // Deal with instructions reading from this value, currently
-      // we only deal with extractval by transforming it into a move
-      // (which in turn will most likely get eliminated by register coalescing
-      // later on)
+      // Deal with instructions reading from this value
+      // Typically transform operations into moves (which in turn will
+      // most likely get eliminated by register coalescing later on)
+
       switch(ii->ii_class) {
       case IR_IC_EXTRACTVAL:
         {
@@ -2453,6 +2569,21 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
             value_bind_instr(value_get(iu, st2->value.value), ii, IVI_INPUT);
             st2->ptr = st->ptr;
             st2->offset = st->offset + aggty->it_struct.elements[i].offset;
+          }
+        }
+        break;
+
+      case IR_IC_RESUME:
+        {
+          ir_instr_resume_t *st = (ir_instr_resume_t *)ii;
+          const ir_type_t *aggty = type_get(iu, st->values[0].type);
+          assert(aggty->it_code == IR_TYPE_STRUCT);
+          assert(aggty->it_struct.num_elements == num_values);
+          st->num_values = num_values;
+          assert(num_values < MAX_RESUME_VALUES);
+          for(int i = 0; i < num_values; i++) {
+            st->values[i] = values[i];
+            value_bind_instr(value_get(iu, st->values[i].value), ii, IVI_INPUT);
           }
         }
         break;
@@ -2526,9 +2657,9 @@ transform_function(ir_unit_t *iu, ir_function_t *f)
   int call_arg_base = iu->iu_next_value;
   int num_call_args = prepare_calls(iu, f);
 
-  eliminate_dead_code(iu, f);
-
   legalize_values(iu, f);
+
+  eliminate_dead_code(iu, f);
 
   liveness_analysis(iu, f);
 

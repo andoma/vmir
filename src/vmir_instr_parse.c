@@ -188,6 +188,15 @@ typedef struct ir_instr_store {
 } ir_instr_store_t;
 
 
+typedef struct ir_instr_insertval {
+  ir_instr_t super;
+  ir_valuetype_t src;
+  ir_valuetype_t replacement;
+  int num_indicies;
+  int indicies[0];
+} ir_instr_insertval_t;
+
+
 /**
  *
  */
@@ -293,10 +302,41 @@ typedef struct ir_instr_arg {
 typedef struct ir_instr_call {
   ir_instr_t super;
   ir_valuetype_t callee;
+  int vmop;
+
+  // the destination of the call.
+  // if the instr_call is an invoke, then there are two possible destinations
+  // the normal_dest which is jumped to if there is not exception thrown
+  // or the unwind_dest which is jumped to if there was an exception thrown
+  // if the instr_call is not an invoke, these member variables are not used.
+  unsigned int normal_dest, unwind_dest;
+
   int argc;
   ir_instr_arg_t argv[0];
 } ir_instr_call_t;
 
+typedef ir_instr_call_t ir_instr_invoke_t;
+
+// it is unclear exactly what this does or if it is even necessary
+// the actual exception switching code is handled via BR on the type of exception
+// not some language intrinsic
+typedef struct ir_instr_landingpad_clause {
+  unsigned int is_catch;
+  unsigned int clause;
+} ir_instr_landingpad_clause_t;
+
+typedef struct ir_instr_landingpad {
+  ir_instr_t super;
+  unsigned int type;
+
+  // unclear what this does
+  unsigned int personality;
+
+  // unclear what this does
+  unsigned int is_clean_up;
+  int num_clauses;
+  ir_instr_landingpad_clause_t clauses[0];
+} ir_instr_landingpad_t;
 
 /**
  *
@@ -404,6 +444,15 @@ typedef struct ir_instr_extractval {
   int num_indicies;
   int indicies[0];
 } ir_instr_extractval_t;
+
+
+#define MAX_RESUME_VALUES 8
+typedef struct ir_instr_resume {
+  ir_instr_t super;
+
+  int num_values;
+  ir_valuetype_t values[0];
+} ir_instr_resume_t;
 
 /**
  *
@@ -583,6 +632,32 @@ parse_store(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
 
 }
 
+static void
+parse_insertval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+{
+  ir_bb_t *ib = iu->iu_current_bb;
+
+  ir_valuetype_t src = instr_get_vtp(iu, &argc, &argv);
+  ir_valuetype_t replacement = instr_get_vtp(iu, &argc, &argv);
+
+  int num_indices = argc;
+
+  ir_instr_insertval_t *i =
+    instr_add(ib, sizeof(ir_instr_insertval_t) +
+              sizeof(int) * num_indices, IR_IC_INSERTVAL);
+
+  i->src = src;
+  i->replacement = replacement;
+  i->num_indicies = num_indices;
+
+  for(int j = 0; j < num_indices; j++) {
+    i->indicies[j] = instr_get_uint(iu, &argc, &argv);
+  }
+
+  value_alloc_instr_ret(iu, i->src.type, &i->super);
+}
+
+
 
 /**
  *
@@ -744,21 +819,41 @@ parse_phi(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   value_alloc_instr_ret(iu, type, &i->super);
 }
 
-
 /**
  *
  */
 static void
-parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_call_or_invoke(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
+                     int ii_class)
 {
+  // http://llvm.org/docs/LangRef.html#call-instruction
+  // http://llvm.org/docs/LangRef.html#invoke-instruction
+
   ir_bb_t *ib = iu->iu_current_bb;
 
   unsigned int attribute_set = instr_get_uint(iu, &argc, &argv) - 1;
   int cc            = instr_get_uint(iu, &argc, &argv);
 
-  if(cc & 0x8000) {
-    argc--;
-    argv++;
+
+
+  int normal_dest            = -1;
+  int unwind_dest            = -1;
+
+  if(ii_class == IR_IC_INVOKE) {
+    normal_dest = instr_get_uint(iu, &argc, &argv);
+    unwind_dest = instr_get_uint(iu, &argc, &argv);
+
+    if(cc & 0x2000) {
+      argc--;
+      argv++;
+    }
+
+  } else {
+    if(cc & 0x8000) {
+      argc--;
+      argv++;
+    }
+
   }
 
   ir_valuetype_t fnidx = instr_get_vtp(iu, &argc, &argv);
@@ -774,7 +869,6 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
     }
     break;
   }
-
 
   switch(fn->iv_class) {
   case IR_VC_FUNCTION:
@@ -829,9 +923,11 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   }
   ir_instr_call_t *i =
     instr_add(ib, sizeof(ir_instr_call_t) +
-              sizeof(ir_instr_arg_t) * n, IR_IC_CALL);
+              sizeof(ir_instr_arg_t) * n, ii_class);
 
   i->callee = fnidx;
+  i->normal_dest = normal_dest;
+  i->unwind_dest = unwind_dest;
   i->argc = n;
 
 
@@ -870,6 +966,58 @@ parse_call(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
     return;
 
   value_alloc_instr_ret(iu, fnty->it_function.return_type, &i->super);
+}
+
+
+/**
+ *
+ */
+static void
+parse_landingpad(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
+                 int old)
+{
+  ir_bb_t *ib = iu->iu_current_bb;
+
+  unsigned int type = instr_get_uint(iu, &argc, &argv);
+
+  if(old) {
+    instr_get_vtp(iu, &argc, &argv);
+  }
+  unsigned int is_clean_up = instr_get_uint(iu, &argc, &argv);
+  unsigned int num_clauses = instr_get_uint(iu, &argc, &argv);
+
+  ir_instr_landingpad_t *i =
+    instr_add(ib, sizeof(ir_instr_landingpad_t) +
+              sizeof(ir_instr_landingpad_clause_t) * num_clauses,
+              IR_IC_LANDINGPAD);
+
+  i->type = type;
+  //  i->personality = personality;
+  i->is_clean_up = is_clean_up;
+  i->num_clauses = num_clauses;
+
+  for(int j = 0; j < num_clauses; j++) {
+    i->clauses[j].clause = instr_get_uint(iu, &argc, &argv);
+    i->clauses[j].is_catch = instr_get_uint(iu, &argc, &argv);
+  }
+
+  value_alloc_instr_ret(iu, i->type, &i->super);
+}
+
+/**
+ *
+ */
+
+static void
+parse_resume(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+{
+  ir_bb_t *ib = iu->iu_current_bb;
+
+  ir_instr_resume_t *i =
+    instr_add(ib, sizeof(ir_instr_resume_t) + MAX_RESUME_VALUES * sizeof(ir_valuetype_t), IR_IC_RESUME);
+
+  i->values[0] = instr_get_vtp(iu, &argc, &argv);
+  i->num_values = 1;
 }
 
 
@@ -1099,8 +1247,14 @@ function_rec_handler(ir_unit_t *iu, int op,
   case FUNC_CODE_INST_PHI:
     return parse_phi(iu, argc, argv);
 
+  case FUNC_CODE_INST_INVOKE:
+    parse_call_or_invoke(iu, argc, argv, IR_IC_INVOKE);
+    iu->iu_current_bb = TAILQ_NEXT(iu->iu_current_bb, ib_link);
+    break;
+
   case FUNC_CODE_INST_CALL:
-    return parse_call(iu, argc, argv);
+    parse_call_or_invoke(iu, argc, argv, IR_IC_CALL);
+    break;
 
   case FUNC_CODE_INST_SWITCH:
     parse_switch(iu, argc, argv);
@@ -1128,14 +1282,28 @@ function_rec_handler(ir_unit_t *iu, int op,
     parse_extractval(iu, argc, argv);
     break;
 
+  case FUNC_CODE_INST_LANDINGPAD_OLD:
+    parse_landingpad(iu, argc, argv, 1);
+    break;
+
+  case FUNC_CODE_INST_LANDINGPAD:
+    parse_landingpad(iu, argc, argv, 0);
+    break;
+
+  case FUNC_CODE_INST_INSERTVAL:
+    parse_insertval(iu, argc, argv);
+    break;
+
+  case FUNC_CODE_INST_RESUME:
+    parse_resume(iu, argc, argv);
+    iu->iu_current_bb = TAILQ_NEXT(iu->iu_current_bb, ib_link);
+    break;
+
   default:
     printargs(argv, argc);
     parser_error(iu, "Can't handle functioncode %d", op);
   }
 }
-
-
-
 
 
 
@@ -1396,18 +1564,26 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
       }
     }
     break;
+  case IR_IC_INVOKE:
   case IR_IC_CALL:
   case IR_IC_VMOP:
     {
       ir_instr_call_t *p = (ir_instr_call_t *)ii;
       ir_function_t *f = value_function(iu, p->callee.value);
 
+      if(ii->ii_class == IR_IC_INVOKE) {
+        len += addstrf(dstp, "invoke normal:.%d unwind:.%d ",
+                       p->normal_dest, p->unwind_dest);
+      } else {
+
+        len += addstr(dstp, ii->ii_class == IR_IC_CALL ? "call" : "vmop");
+      }
+
       if(f != NULL) {
-        len += addstr(dstp, f->if_vmop ? "vmop" : "call");
         len += addstr(dstp, " ");
         len += addstr(dstp, f->if_name);
       } else {
-        len += addstr(dstp, "fptr in ");
+        len += addstr(dstp, " fptr in ");
         len += value_print_vt(dstp, iu, p->callee);
       }
       len += addstr(dstp, " (");
@@ -1470,6 +1646,35 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
         len += addstrf(dstp, ":%d", jj->indicies[i]);
 
       len += addstr(dstp, "]");
+    }
+    break;
+  case IR_IC_INSERTVAL:
+    {
+      ir_instr_insertval_t *jj = (ir_instr_insertval_t *)ii;
+      len += addstr(dstp, "insertval ");
+      len += value_print_vt(dstp, iu, jj->src);
+      len += addstr(dstp, ", ");
+      len += value_print_vt(dstp, iu, jj->replacement);
+      len += addstr(dstp, " [");
+      for(int i = 0; i < jj->num_indicies; i++)
+        len += addstrf(dstp, ":%d", jj->indicies[i]);
+      len += addstr(dstp, "]");
+    }
+    break;
+  case IR_IC_LANDINGPAD:
+    {
+      len += addstr(dstp, "landingpad");
+    }
+    break;
+  case IR_IC_RESUME:
+    {
+      ir_instr_resume_t *r = (ir_instr_resume_t *)ii;
+      len += addstr(dstp, "resume ");
+      for(int i = 0; i < r->num_values; i++) {
+        if(i)
+          len += addstr(dstp, ", ");
+        len += value_print_vt(dstp, iu, r->values[i]);
+      }
     }
     break;
   case IR_IC_LEA:

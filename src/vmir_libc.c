@@ -199,7 +199,7 @@ vmir_heap_print0(heap_t *h)
 
 #define MEMTRACE(fmt...) printf(fmt)
 
-static void
+static int
 vmir_malloc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t size = vmir_vm_arg32(&rf);
@@ -207,9 +207,10 @@ vmir_malloc(void *ret, const void *rf, ir_unit_t *iu)
   void *p = vmir_heap_malloc(iu->iu_heap, size);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("malloc(%d) = 0x%x\n", size, *(uint32_t *)ret);
+  return 0;
 }
 
-static void
+static int
 vmir_calloc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t nmemb = vmir_vm_arg32(&rf);
@@ -219,19 +220,21 @@ vmir_calloc(void *ret, const void *rf, ir_unit_t *iu)
   memset(p, 0, size * nmemb);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("calloc(%d, %d) = 0x%x\n", nmemb, size, *(uint32_t *)ret);
+  return 0;
 }
 
-static void
+static int
 vmir_free(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t ptr = vmir_vm_arg32(&rf);
   if(ptr == 0)
-    return;
+    return 0;
   MEMTRACE("free(0x%x)\n", ptr);
   vmir_heap_free(iu->iu_heap, iu->iu_mem + ptr);
+  return 0;
 }
 
-static void
+static int
 vmir_realloc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t ptr = vmir_vm_arg32(&rf);
@@ -241,12 +244,14 @@ vmir_realloc(void *ret, const void *rf, ir_unit_t *iu)
   void *p = vmir_heap_realloc(iu->iu_heap, ptr ? iu->iu_mem + ptr : NULL, size);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("realloc(0x%x, %d) = 0x%x\n", ptr, size, *(uint32_t *)ret);
+  return 0;
 }
 
-static void
+static int
 vmir_heap_print(void *ret, const void *rf, ir_unit_t *iu)
 {
   vmir_heap_print0(iu->iu_heap);
+  return 0;
 }
 
 
@@ -255,54 +260,60 @@ vmir_heap_print(void *ret, const void *rf, ir_unit_t *iu)
  */
 
 
-static void
+static int
 vmir_toupper(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t c = vmir_vm_arg32(&rf);
   if(c >= 'a' && c <= 'z')
     c -= 32;
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
-static void
+static int
 vmir_tolower(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t c = vmir_vm_arg32(&rf);
   if(c >= 'A' && c <= 'Z')
     c += 32;
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
-static void
+static int
 vmir_isprint(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t c = vmir_vm_arg32(&rf);
   c &= 0x7f;
   c = (c >= ' ' && c < 127);
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
 
-static void
+static int
 vmir_isdigit(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t c = vmir_vm_arg32(&rf);
   vmir_vm_ret32(ret, c >= '0' && c <= '9');
+  return 0;
 }
 
 
-static void
+static int
 vmir_atoi(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *str = vmir_vm_ptr(&rf, iu);
   int r = atoi(str);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_getpid(void *ret, const void *rf, ir_unit_t *iu)
 {
   vmir_vm_ret32(ret, 1);
+  return 0;
 }
 
 
@@ -410,7 +421,7 @@ vfd_seek(ir_unit_t *iu, int fd, int64_t offset, int whence)
  * posix io
  */
 
-static void
+static int
 vmir_open(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *path = vmir_vm_ptr(&rf, iu);
@@ -429,7 +440,7 @@ vmir_open(void *ret, const void *rf, ir_unit_t *iu)
 
   int fd = vfd_open(iu, path, flags);
   vmir_vm_ret32(ret, fd);
-  return;
+  return 0;
 }
 
 
@@ -591,44 +602,47 @@ vFILE_open(ir_unit_t *iu, const char *path, const char *mode,
 }
 
 
-static void
+static int
 vmir_fopen(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *path = vmir_vm_ptr(&rf, iu);
   const char *mode = vmir_vm_ptr(&rf, iu);
   vFILE_t *vfile = vFILE_open(iu, path, mode, 0);
   vmir_vm_retptr(ret, vfile, iu);
+  return 0;
 }
 
-static void
+static int
 vmir_fseek(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret32(ret, -1);
-    return;
+    return 0;
   }
   uint32_t offset = vmir_vm_arg32(&rf);
   uint32_t whence = vmir_vm_arg32(&rf);
   int r = fseek(vfile->fp, offset, whence);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_fseeko(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret64(ret, -1);
-    return;
+    return 0;
   }
   uint64_t offset = vmir_vm_arg64(&rf);
   uint32_t whence = vmir_vm_arg32(&rf);
   int64_t r = fseeko(vfile->fp, offset, whence);
   vmir_vm_ret64(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_fread(void *ret, const void *rf, ir_unit_t *iu)
 {
   void *buf = vmir_vm_ptr(&rf, iu);
@@ -637,13 +651,14 @@ vmir_fread(void *ret, const void *rf, ir_unit_t *iu)
   vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret32(ret, -1);
-    return;
+    return 0;
   }
   int r = fread(buf, size, nmemb, vfile->fp);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_fwrite(void *ret, const void *rf, ir_unit_t *iu)
 {
   void *buf = vmir_vm_ptr(&rf, iu);
@@ -652,78 +667,85 @@ vmir_fwrite(void *ret, const void *rf, ir_unit_t *iu)
   vFILE_t *vfile = vmir_vm_ptr_nullchk(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret32(ret, -1);
-    return;
+    return 0;
   }
   int r = fwrite(buf, size, nmemb, vfile->fp);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_feof(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret32(ret, 1);
-    return;
+    return 0;
   }
   int r = feof(vfile->fp);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_ftell(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL) {
     vmir_vm_ret32(ret, -1);
-    return;
+    return 0;
   }
   int r = ftell(vfile->fp);
   vmir_vm_ret32(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_ftello(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   uint64_t r = ftello(vfile->fp);
   if(vfile == NULL) {
     vmir_vm_ret64(ret, -1);
-    return;
+    return 0;
   }
   vmir_vm_ret64(ret, r);
+  return 0;
 }
 
-static void
+static int
 vmir_fclose(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile != NULL)
     fclose(vfile->fp);
   vmir_vm_ret32(ret, 0);
+  return 0;
 }
 
-static void
+static int
 vmir_fileno(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   vmir_vm_ret32(ret, vfile->fd);
+  return 0;
 }
 
 /*-----------------------------------------------------------------------
  * Other stdio
  */
 
-static void
+static int
 vmir_puts(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *str = vmir_vm_ptr(&rf, iu);
   if(iu->iu_stdout != NULL)
     fwrite(str, strlen(str), 1, iu->iu_stdout->fp);
   vmir_vm_ret32(ret, 0);
+  return 0;
 }
 
-static void
+static int
 vmir_fputc(void *ret, const void *rf, ir_unit_t *iu)
 {
   char c = vmir_vm_arg32(&rf);
@@ -731,28 +753,31 @@ vmir_fputc(void *ret, const void *rf, ir_unit_t *iu)
   if(vfile != NULL)
     fwrite(&c, 1, 1, vfile->fp);
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
-static void
+static int
 vmir_fgetc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint8_t c;
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   if(vfile == NULL || fread(&c, 1, 1, vfile->fp) != 1) {
     vmir_vm_ret32(ret, -1);
-    return;
+    return 0;
   }
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
 
-static void
+static int
 vmir_putchar(void *ret, const void *rf, ir_unit_t *iu)
 {
   char c = vmir_vm_arg32(&rf);
   if(iu->iu_stdout != NULL)
     fwrite(&c, 1, 1, iu->iu_stdout->fp);
   vmir_vm_ret32(ret, c);
+  return 0;
 }
 
 
@@ -1053,7 +1078,7 @@ fmt_sn(void *opaque, const char *str, int len)
 }
 
 
-static void
+static int
 vmir_vsnprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
@@ -1070,9 +1095,10 @@ vmir_vsnprintf(void *ret, const void *rf, ir_unit_t *iu)
   if(aux.remain)
     *aux.dst = 0;
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
-static void
+static int
 vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
@@ -1090,11 +1116,12 @@ vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
   if(aux.remain)
     *aux.dst = 0;
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
 
 
-static void
+static int
 vmir_vsprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
@@ -1111,9 +1138,11 @@ vmir_vsprintf(void *ret, const void *rf, ir_unit_t *iu)
   if(aux.remain)
     *aux.dst = 0;
   vmir_vm_ret32(ret, aux.total);
+  return 0;
+
 }
 
-static void
+static int
 vmir_sprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
@@ -1129,6 +1158,8 @@ vmir_sprintf(void *ret, const void *rf, ir_unit_t *iu)
   if(aux.remain)
     *aux.dst = 0;
   vmir_vm_ret32(ret, aux.total);
+  return 0;
+
 }
 
 
@@ -1149,7 +1180,7 @@ fmt_file(void *opaque, const char *str, int len)
     fwrite(str, len, 1, aux->vfile->fp);
 }
 
-static void
+static int
 vmir_vprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *fmt = vmir_vm_ptr(&rf, iu);
@@ -1161,10 +1192,11 @@ vmir_vprintf(void *ret, const void *rf, ir_unit_t *iu)
   dofmt(fmt_file, &aux, fmt, va_rf, iu);
 
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
 
-static void
+static int
 vmir_printf(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *fmt = vmir_vm_ptr(&rf, iu);
@@ -1175,10 +1207,11 @@ vmir_printf(void *ret, const void *rf, ir_unit_t *iu)
   dofmt(fmt_file, &aux, fmt, rf, iu);
 
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
 
-static void
+static int
 vmir_vfprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
@@ -1191,10 +1224,11 @@ vmir_vfprintf(void *ret, const void *rf, ir_unit_t *iu)
   dofmt(fmt_file, &aux, fmt, va_rf, iu);
 
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
 
-static void
+static int
 vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
@@ -1206,22 +1240,24 @@ vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
   dofmt(fmt_file, &aux, fmt, rf, iu);
 
   vmir_vm_ret32(ret, aux.total);
+  return 0;
 }
 
 
 
-static void
+static int
 vmir_getenv(void *ret, const void *rf, ir_unit_t *iu)
 {
   vmir_vm_ret32(ret, 0);
+  return 0;
 }
 
 
 /*-----------------------------------------------------------------------
- * c++
+ * C++
  */
 
-static void
+static int
 vmir_cxa_guard_acquire(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint8_t *p = vmir_vm_ptr(&rf, iu);
@@ -1231,11 +1267,107 @@ vmir_cxa_guard_acquire(void *ret, const void *rf, ir_unit_t *iu)
   } else {
     vmir_vm_ret32(ret, 0);
   }
+  return 0;
 }
 
-static void
+static int
 vmir_cxa_guard_release(void *ret, const void *rf, ir_unit_t *iu)
 {
+  return 0;
+}
+
+
+/*-----------------------------------------------------------------------
+ * C++ exception handling
+ */
+
+typedef struct vmir_cxx_exception {
+  uint32_t next;
+  int handlers;
+  uint32_t destructor;
+
+} vmir_cxx_exception_t;
+
+static int
+vmir_llvm_eh_typeid_for(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vmir_vm_ret32(ret, vmir_vm_arg32(&rf));
+  return 0;
+}
+
+static int
+vmir___cxa_allocate_exception(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t size = vmir_vm_arg32(&rf);
+  void *p = vmir_heap_malloc(iu->iu_heap, size + sizeof(vmir_cxx_exception_t));
+  memset(p, 0, sizeof(vmir_cxx_exception_t));
+  vmir_vm_retptr(ret, p + sizeof(vmir_cxx_exception_t), iu);
+  printf("allocate exception ret = 0x%x\n", *(int *)ret);
+  return 0;
+}
+
+static int
+vmir___cxa_free_exception(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t x = vmir_vm_arg32(&rf) - sizeof(vmir_cxx_exception_t);
+  vmir_heap_free(iu->iu_heap, iu->iu_mem + x);
+  return 0;
+}
+
+static int
+vmir___cxa_begin_catch(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t x = vmir_vm_arg32(&rf);
+  uint32_t x2 = x - sizeof(vmir_cxx_exception_t);
+  vmir_cxx_exception_t *exc = iu->iu_mem + x2;
+
+  if(exc->handlers < 0) {
+    exc->handlers = -exc->handlers + 1;
+  } else {
+    exc->handlers++;
+    iu->iu_exception.uncaught--;
+  }
+
+  exc->next = iu->iu_exception.caught;
+  iu->iu_exception.caught = x2;
+  vmir_vm_ret32(ret, x);
+  return 0;
+}
+
+
+static int
+vmir___cxa_end_catch(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vmir_cxx_exception_t *exc = iu->iu_mem + iu->iu_exception.caught;
+
+  if(--exc->handlers == 0) {
+    iu->iu_exception.caught = exc->next;
+    vmir_heap_free(iu->iu_heap, exc);
+  }
+  return 0;
+}
+
+static int
+vmir___cxa_throw(void *ret, const void *rf, ir_unit_t *iu)
+{
+  iu->iu_exception.exception = vmir_vm_arg32(&rf);
+  printf("throw(%x)\n", iu->iu_exception.exception);
+  iu->iu_exception.type_info = vmir_vm_arg32(&rf);
+
+  vmir_cxx_exception_t *exc =
+    iu->iu_mem + iu->iu_exception.exception  - sizeof(vmir_cxx_exception_t);
+  exc->destructor = vmir_vm_arg32(&rf);
+  assert(exc->destructor == 0); // Not really supported (yet)
+  iu->iu_exception.uncaught++;
+  return 1;
+}
+
+
+static int
+vmir_std_terminate(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vm_stop(iu, VM_STOP_UNCAUGHT_EXCEPTION, 0);
+  return 0;
 }
 
 
@@ -1301,6 +1433,13 @@ static const function_tab_t libc_funcs[] = {
 
   FN_EXT("_ZdlPv",  vmir_free),    // operator delete(void*)
   FN_EXT("_Znwj",   vmir_malloc),  // operator new(unsigned int)
+  FN_EXT("__cxa_allocate_exception", vmir___cxa_allocate_exception),
+  FN_EXT("__cxa_free_exception", vmir___cxa_free_exception),
+  FN_EXT("__cxa_begin_catch", vmir___cxa_begin_catch),
+  FN_EXT("__cxa_end_catch", vmir___cxa_end_catch),
+  FN_EXT("__cxa_throw", vmir___cxa_throw),
+  FN_EXT("llvm.eh.typeid.for", vmir_llvm_eh_typeid_for),
+  FN_EXT("_ZSt9terminatev", vmir_std_terminate),
 };
 
 
