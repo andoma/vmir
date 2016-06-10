@@ -1446,15 +1446,16 @@ static const function_tab_t libc_funcs[] = {
 /**
  *
  */
-vm_ext_function_t *vmir_default_external_function_resolver(const char *function, void *opaque)
+vm_ext_function_t *
+vmir_default_external_function_resolver(const char *function, void *opaque)
 {
   for(int i = 0; i < VMIR_ARRAYSIZE(libc_funcs); i++) {
     const function_tab_t *ft = &libc_funcs[i];
     if(!strcmp(function, ft->name)) {
-		return ft->extfunc;
+      return ft->extfunc;
     }
   }
-  return 0; // what is current C these days 0 or NULL?
+  return NULL;
 }
 
 
