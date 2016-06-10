@@ -1302,7 +1302,6 @@ vmir___cxa_allocate_exception(void *ret, const void *rf, ir_unit_t *iu)
   void *p = vmir_heap_malloc(iu->iu_heap, size + sizeof(vmir_cxx_exception_t));
   memset(p, 0, sizeof(vmir_cxx_exception_t));
   vmir_vm_retptr(ret, p + sizeof(vmir_cxx_exception_t), iu);
-  printf("allocate exception ret = 0x%x\n", *(int *)ret);
   return 0;
 }
 
@@ -1351,7 +1350,6 @@ static int
 vmir___cxa_throw(void *ret, const void *rf, ir_unit_t *iu)
 {
   iu->iu_exception.exception = vmir_vm_arg32(&rf);
-  printf("throw(%x)\n", iu->iu_exception.exception);
   iu->iu_exception.type_info = vmir_vm_arg32(&rf);
 
   vmir_cxx_exception_t *exc =
