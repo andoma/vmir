@@ -34,6 +34,7 @@ typedef enum {
   IR_VC_CE,   // Const expression
   IR_VC_AGGREGATE,
   IR_VC_ALIAS,
+  IR_VC_ZERO_INITIALIZER,
   IR_VC_DEAD, // Value is not used
 } ir_value_class_t;
 
@@ -647,14 +648,15 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
     case IR_TYPE_DOUBLE:
       snprintf(tmpbuf, sizeof(tmpbuf), "#%f", iv->iv_double);
       break;
-    case IR_TYPE_STRUCT:
-      snprintf(tmpbuf, sizeof(tmpbuf), "#struct");
-      break;
     default:
       snprintf(tmpbuf, sizeof(tmpbuf), "#?(code-%d)", it->it_code);
       break;
     }
     len += addstr(dstp, tmpbuf);
+    break;
+
+  case IR_VC_ZERO_INITIALIZER:
+    len += addstr(dstp, "zeroinitializer");
     break;
 
   case IR_VC_REGFRAME:

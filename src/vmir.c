@@ -590,7 +590,7 @@ initialize_global(ir_unit_t *iu, void *addr,
     case IR_VC_DATA:
       memcpy(addr, c->iv_data, size);
       break;
-    case IR_VC_CONSTANT:
+    case IR_VC_ZERO_INITIALIZER:
       memset(addr, 0, size);
       break;
     case IR_VC_AGGREGATE:
@@ -614,7 +614,7 @@ initialize_global(ir_unit_t *iu, void *addr,
   case IR_TYPE_STRUCT:
     size = type_sizeof(iu, dstty_index);
     switch(c->iv_class) {
-    case IR_VC_CONSTANT:
+    case IR_VC_ZERO_INITIALIZER:
       memset(addr, 0, size);
       break;
     case IR_VC_AGGREGATE:

@@ -391,6 +391,7 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
       break;
 
     case IR_VC_CONSTANT:
+    case IR_VC_ZERO_INITIALIZER:
     case IR_VC_TEMPORARY:
     case IR_VC_REGFRAME:
     case IR_VC_ALIAS:
@@ -438,20 +439,22 @@ constants_rec_handler(ir_unit_t *iu, int op,
 
   case CST_CODE_UNDEF:
   case CST_CODE_NULL:
-    iv->iv_class = IR_VC_CONSTANT;
     switch(type_get(iu, iv->iv_type)->it_code) {
     case IR_TYPE_INT1:
     case IR_TYPE_INT8:
     case IR_TYPE_INT16:
     case IR_TYPE_INT32:
     case IR_TYPE_POINTER:
-    case IR_TYPE_ARRAY:
-    case IR_TYPE_STRUCT:
     case IR_TYPE_DOUBLE:
     case IR_TYPE_INT64:
     case IR_TYPE_FLOAT:
     case IR_TYPE_INTx:
+      iv->iv_class = IR_VC_CONSTANT;
       iv->iv_u64 = 0;
+      break;
+    case IR_TYPE_ARRAY:
+    case IR_TYPE_STRUCT:
+      iv->iv_class = IR_VC_ZERO_INITIALIZER;
       break;
     default:
       parser_error(iu, "Bad type (%s) for NULL integer constant",
@@ -490,7 +493,7 @@ constants_rec_handler(ir_unit_t *iu, int op,
       iv->iv_u32 = argv[0].i64; // iv_u32 is union with iv_float
       break;
     case IR_TYPE_DOUBLE:
-      iv->iv_u64 = argv[0].i64; // iv_u32 is union with iv_float
+      iv->iv_u64 = argv[0].i64; // iv_u64 is union with iv_double
       break;
     default:
       parser_error(iu, "Bad type (%s) for float constant",

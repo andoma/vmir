@@ -202,7 +202,7 @@ merge_lea_into_store(ir_unit_t *iu, ir_instr_store_t *ii)
     return;
 
   ii->offset += lea->immediate_offset;
-  ii->ptr = lea->baseptr;
+  ii->ptr.value = lea->baseptr.value;
 }
 
 
@@ -229,7 +229,7 @@ merge_lea_into_load(ir_unit_t *iu, ir_instr_load_t *ii)
   assert(ii->value_offset.value < 0);
   ii->value_offset = lea->value_offset;
   ii->value_offset_multiply = lea->value_offset_multiply;
-  ii->ptr = lea->baseptr;
+  ii->ptr.value = lea->baseptr.value;
 
   iu->iu_stats.lea_load_combined++;
 }
@@ -380,6 +380,50 @@ binop_transform_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 /**
  *
  */
+static ir_instr_t *
+split_const_store_aggregate(ir_unit_t *iu, ir_instr_store_t *ii)
+{
+  const ir_value_t *iv = value_get(iu, ii->value.value);
+  const ir_valuetype_t *values;
+
+  switch(iv->iv_class) {
+  case IR_VC_AGGREGATE:
+    values = iv->iv_data;
+    break;
+  case IR_VC_ZERO_INITIALIZER:
+    values = NULL;
+    break;
+
+  default:
+    return &ii->super;
+  }
+
+  ir_instr_t *ret = &ii->super;
+  const ir_type_t *it = type_get(iu, ii->value.type);
+  const int offset = ii->offset;
+
+  ii->ptr.type = type_make_pointer(iu, it->it_struct.elements[0].type, 1);
+  ii->offset = offset + it->it_struct.elements[0].offset;
+  ii->value = values ? values[0] :
+    value_create_zero(iu, it->it_struct.elements[0].type);
+  for(int i = 1; i < it->it_struct.num_elements; i++) {
+    ir_instr_store_t *str = instr_add_after(sizeof(ir_instr_store_t),
+                                            IR_IC_STORE, ret);
+    str->offset = offset + it->it_struct.elements[i].offset;
+    str->ptr.value = ii->ptr.value;
+    str->ptr.type = type_make_pointer(iu, it->it_struct.elements[i].type, 1);
+    str->value = values ? values[i] :
+      value_create_zero(iu, it->it_struct.elements[i].type);
+    ret = &str->super;
+  }
+  return ret;
+}
+
+
+
+/**
+ *
+ */
 static void
 replace_instructions(ir_unit_t *iu, ir_function_t *f)
 {
@@ -389,8 +433,10 @@ replace_instructions(ir_unit_t *iu, ir_function_t *f)
     TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
       if(ii->ii_class == IR_IC_GEP)
         ii = replace_gep_with_lea(iu, (ir_instr_gep_t *)ii);
-      if(ii->ii_class == IR_IC_STORE)
+      if(ii->ii_class == IR_IC_STORE) {
         merge_lea_into_store(iu, (ir_instr_store_t *)ii);
+        ii = split_const_store_aggregate(iu, (ir_instr_store_t *)ii);
+      }
       if(ii->ii_class == IR_IC_LOAD)
         merge_lea_into_load(iu, (ir_instr_load_t *)ii);
       if(ii->ii_class == IR_IC_PHI)
@@ -2556,7 +2602,7 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
       case IR_IC_STORE:
         {
           ir_instr_store_t *st = (ir_instr_store_t *)ii;
-          const ir_type_t *aggty = type_get(iu, type_get_pointee(iu, st->ptr.type));
+          const ir_type_t *aggty = type_get(iu, st->value.type);
           assert(aggty->it_code == IR_TYPE_STRUCT);
           assert(aggty->it_struct.num_elements == num_values);
 
@@ -2601,7 +2647,7 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
  * This function transforms temporary values which the VM does not support
  */
 static void
-legalize_values(ir_unit_t *iu, ir_function_t *f)
+legalize_temporary_values(ir_unit_t *iu, ir_function_t *f)
 {
   SLIST_HEAD(, ir_value) vals;
   SLIST_INIT(&vals);
@@ -2636,6 +2682,17 @@ legalize_values(ir_unit_t *iu, ir_function_t *f)
 }
 
 
+
+/**
+ *
+ */
+static void
+legalize_instructions(ir_unit_t *iu, ir_function_t *f)
+{
+  
+}
+
+
 /**
  *
  */
@@ -2657,7 +2714,9 @@ transform_function(ir_unit_t *iu, ir_function_t *f)
   int call_arg_base = iu->iu_next_value;
   int num_call_args = prepare_calls(iu, f);
 
-  legalize_values(iu, f);
+  legalize_temporary_values(iu, f);
+
+  legalize_instructions(iu, f);
 
   eliminate_dead_code(iu, f);
 
