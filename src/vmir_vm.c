@@ -3326,6 +3326,7 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
 
   switch(legalize_type(cty)) {
 
+  case IR_TYPE_INT1:
   case IR_TYPE_INT8:
 
     width = type_bitwidth(iu, cty);
@@ -3422,8 +3423,8 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
     break;
 
   default:
-    parser_error(iu, "Bad type in switch (%d paths)",
-                 ii->num_paths);
+    parser_error(iu, "Bad type in switch (%d paths): %s",
+                 ii->num_paths, instr_str(iu, &ii->super, 0));
   }
 }
 
