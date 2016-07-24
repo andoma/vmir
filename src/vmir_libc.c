@@ -382,6 +382,7 @@ vfd_close(ir_unit_t *iu, int fd)
   vmir_fd_t *vfd = vfd_get(iu, fd);
   if(vfd == NULL)
     return;
+  iu->iu_fsops->close(iu->iu_opaque, vfd->fh);
   vfd->iu = NULL;
   vfd->freelist = iu->iu_vfd_free;
   iu->iu_vfd_free = fd;
