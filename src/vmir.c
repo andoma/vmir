@@ -152,12 +152,13 @@ struct ir_unit {
   void *iu_mem;
   void **iu_vm_funcs;
   vm_ext_function_t **iu_ext_funcs;
-  jmp_buf iu_err_jmpbuf;
+  jmp_buf *iu_err_jmpbuf;
   int iu_exit_code;
   void *iu_opaque;
   void *iu_jit_mem;
   int iu_jit_mem_alloced;
   int iu_jit_ptr;
+  void *iu_rf;
 
   vmir_exception_t iu_exception;
 
@@ -222,7 +223,7 @@ struct ir_unit {
 
   // Parser
 
-  jmp_buf      iu_err_jmp;
+  jmp_buf iu_parser_jmp;
 
   void *iu_text_alloc;
   void *iu_text_ptr;
@@ -473,8 +474,7 @@ parser_error0(ir_unit_t *iu, const char *file, int line,
     }
   }
 
-  abort();
-  longjmp(iu->iu_err_jmp, 1);
+  longjmp(iu->iu_parser_jmp, 1);
 }
 
 /**
@@ -731,6 +731,7 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_opaque = opaque;
   iu->iu_mem = membase;
   iu->iu_memsize = memsize;
+  iu->iu_rf = membase;
   iu->iu_rsize = rsize;
   iu->iu_alloca_ptr = rsize;
   iu->iu_asize = asize;
@@ -738,6 +739,13 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_text_alloc = malloc(iu->iu_text_alloc_memsize);
   return iu;
 }
+
+void *
+vmir_get_opaque(ir_unit_t *iu)
+{
+  return iu->iu_opaque;
+}
+
 
 vmir_function_resolver_t vmir_get_external_function_resolver(ir_unit_t *iu)
 {
@@ -770,14 +778,12 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   TAILQ_INIT(&iu->iu_functions_with_bodies);
   iu->iu_data_ptr = iu->iu_rsize + iu->iu_asize;
 
-  if(setjmp(iu->iu_err_jmp)) {
+  if(setjmp(iu->iu_parser_jmp)) {
     iu_cleanup(iu);
     return VMIR_ERR_LOAD_ERROR;
   }
 
-  //  int64_t ts = get_ts();
   ir_parse_blocks(iu, 2, len - 4, NULL, NULL);
-  //  printf("Parse took %"PRId64"us\n", get_ts() - ts);
   free(iu->iu_text_alloc);
 
 #ifdef VMIR_VM_JIT
@@ -838,14 +844,50 @@ vmir_dump_instrumentation(ir_unit_t *iu)
   }
 }
 
-static uint32_t
-vmir_alloca_str(ir_unit_t *iu, const char *str)
+
+/**
+ *
+ */
+uint32_t
+vmir_astack_mark(ir_unit_t *iu)
 {
-  int len = strlen(str) + 1;
+  return iu->iu_alloca_ptr;
+}
+
+
+/**
+ *
+ */
+void
+vmir_astack_restore(ir_unit_t *iu, uint32_t a)
+{
+  iu->iu_alloca_ptr = a;
+}
+
+
+/**
+ *
+ */
+uint32_t
+vmir_astack_copy_buf(ir_unit_t *iu, const void *buf, size_t len, void **hptr)
+{
   uint32_t r = iu->iu_alloca_ptr;
-  memcpy(iu->iu_mem + r, str, len);
-  iu->iu_alloca_ptr += len;
+  void *m = iu->iu_mem + r;
+  if(buf != NULL)
+    memcpy(m, buf, len);
+  if(hptr != NULL)
+    *hptr = m;
+  iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr + len, 8);
   return r;
+}
+
+/**
+ *
+ */
+uint32_t
+vmir_astack_copy_str(ir_unit_t *iu, const char *str)
+{
+  return vmir_astack_copy_buf(iu, str, strlen(str) + 1, NULL);
 }
 
 
@@ -860,7 +902,7 @@ vmir_copy_argv(ir_unit_t *iu, int argc, char **argv)
   iu->iu_alloca_ptr += (argc + 1) * sizeof(uint32_t);
 
   for(int i = 0; i < argc; i++) {
-    uint32_t str = vmir_alloca_str(iu, argv[i]);
+    uint32_t str = vmir_astack_copy_str(iu, argv[i]);
     mem_wr32(vm_argv_host + i * sizeof(uint32_t), str);
   }
   iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr, 8);
@@ -880,6 +922,8 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
     exit(1);
   }
 
+  uint32_t astack = vmir_astack_mark(iu);
+
   int vm_argv = vmir_copy_argv(iu, argc, argv);
 
   union {
@@ -889,9 +933,11 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
 
   int64_t ts = get_ts();
   int r = vmir_vm_function_call(iu, f, &ret, argc, vm_argv);
+  vmir_astack_restore(iu, astack);
   ts = get_ts() - ts;
   printf("main() took %"PRId64"\n", ts);
-  libc_terminate(iu);
+  if(0)
+    libc_terminate(iu);
 
   switch(r) {
   case 0:

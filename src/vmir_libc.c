@@ -322,19 +322,17 @@ vmir_getpid(void *ret, const void *rf, ir_unit_t *iu)
  */
 
 typedef struct vmir_fd {
-  ir_unit_t *iu;
-
   union {
-    struct {
-      intptr_t fh;
-    };
+    intptr_t fh;
     int freelist;
   };
+  vmir_fd_release_t *release;
+  uint8_t type;
 } vmir_fd_t;
 
 
 static int
-vfd_create(ir_unit_t *iu)
+vfd_create(ir_unit_t *iu, int type)
 {
   int fd = iu->iu_vfd_free;
 
@@ -345,20 +343,56 @@ vfd_create(ir_unit_t *iu)
     vmir_fd_t vfd = {};
     VECTOR_PUSH_BACK(&iu->iu_vfds, vfd);
   }
-  VECTOR_ITEM(&iu->iu_vfds, fd).iu = iu;
+  VECTOR_ITEM(&iu->iu_vfds, fd).type = type;
   return fd;
 }
 
 
 static vmir_fd_t *
-vfd_get(ir_unit_t *iu, unsigned int fd)
+vfd_get(ir_unit_t *iu, unsigned int fd, int type)
 {
   if(fd >= VECTOR_LEN(&iu->iu_vfds))
     return NULL;
   vmir_fd_t *vfd = &VECTOR_ITEM(&iu->iu_vfds, fd);
-  if(vfd->iu == NULL)
-    return NULL; // Closed fd
+  if(vfd->type == 0 || (type != -1 && vfd->type != type))
+    return NULL; // Bad/Closed fd
   return vfd;
+}
+
+intptr_t
+vmir_fd_get(ir_unit_t *iu, int fd, int type)
+{
+  vmir_fd_t *vfd = vfd_get(iu, fd, type);
+  if(vfd == NULL)
+    return 0;
+  return vfd->fh;
+}
+
+
+int
+vmir_fd_create(ir_unit_t *iu, intptr_t handle, int type,
+               vmir_fd_release_t *relfunc)
+{
+  int fd = vfd_create(iu, type);
+  vmir_fd_t *vfd = &VECTOR_ITEM(&iu->iu_vfds, fd);
+  vfd->fh = handle;
+  vfd->release = relfunc;
+  return fd;
+}
+
+
+static void
+vmir_fd_release_fh(ir_unit_t *iu, intptr_t handle)
+{
+  iu->iu_fsops->close(iu->iu_opaque, handle);
+}
+
+
+int
+vmir_fd_create_fh(ir_unit_t *iu, intptr_t handle, int closable)
+{
+  return vmir_fd_create(iu, handle, VMIR_FD_TYPE_FILEHANDLE,
+                        closable ? vmir_fd_release_fh : NULL);
 }
 
 
@@ -369,21 +403,18 @@ vfd_open(ir_unit_t *iu, const char *path, vmir_openflags_t flags)
   vmir_errcode_t err = iu->iu_fsops->open(iu->iu_opaque, path, flags, &fh);
   if(err)
     return -1;
-
-  int fd = vfd_create(iu);
-  VECTOR_ITEM(&iu->iu_vfds, fd).fh = fh;
-  return fd;
+  return vmir_fd_create_fh(iu, fh, 1);
 }
 
-
-static void
-vfd_close(ir_unit_t *iu, int fd)
+void
+vmir_fd_close(ir_unit_t *iu, int fd)
 {
-  vmir_fd_t *vfd = vfd_get(iu, fd);
+  vmir_fd_t *vfd = vfd_get(iu, fd, -1);
   if(vfd == NULL)
     return;
-  iu->iu_fsops->close(iu->iu_opaque, vfd->fh);
-  vfd->iu = NULL;
+  if(vfd->release)
+    vfd->release(iu, vfd->fh);
+  vfd->type = 0;
   vfd->freelist = iu->iu_vfd_free;
   iu->iu_vfd_free = fd;
 }
@@ -392,7 +423,7 @@ vfd_close(ir_unit_t *iu, int fd)
 static ssize_t
 vfd_read(ir_unit_t *iu, int fd, char *buf, size_t size)
 {
-  vmir_fd_t *vfd = vfd_get(iu, fd);
+  vmir_fd_t *vfd = vfd_get(iu, fd, VMIR_FD_TYPE_FILEHANDLE);
   if(vfd == NULL)
     return -1;
   return iu->iu_fsops->read(iu->iu_opaque, vfd->fh, buf, size);
@@ -402,7 +433,7 @@ vfd_read(ir_unit_t *iu, int fd, char *buf, size_t size)
 static ssize_t
 vfd_write(ir_unit_t *iu, int fd, const char *buf, size_t size)
 {
-  vmir_fd_t *vfd = vfd_get(iu, fd);
+  vmir_fd_t *vfd = vfd_get(iu, fd, VMIR_FD_TYPE_FILEHANDLE);
   if(vfd == NULL)
     return -1;
   return iu->iu_fsops->write(iu->iu_opaque, vfd->fh, buf, size);
@@ -412,7 +443,7 @@ vfd_write(ir_unit_t *iu, int fd, const char *buf, size_t size)
 static int64_t
 vfd_seek(ir_unit_t *iu, int fd, int64_t offset, int whence)
 {
-  vmir_fd_t *vfd = vfd_get(iu, fd);
+  vmir_fd_t *vfd = vfd_get(iu, fd, VMIR_FD_TYPE_FILEHANDLE);
   if(vfd == NULL)
     return -1;
   return iu->iu_fsops->seek(iu->iu_opaque, vfd->fh, offset, whence);
@@ -444,6 +475,45 @@ vmir_open(void *ret, const void *rf, ir_unit_t *iu)
   return 0;
 }
 
+
+static int
+vmir_read(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t fd = vmir_vm_arg32(&rf);
+  void *buf = vmir_vm_ptr(&rf, iu);
+  uint32_t nbyte = vmir_vm_arg32(&rf);
+  vmir_vm_ret32(ret, vfd_read(iu, fd, buf, nbyte));
+  return 0;
+}
+
+static int
+vmir_write(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t fd = vmir_vm_arg32(&rf);
+  const void *buf = vmir_vm_ptr(&rf, iu);
+  uint32_t nbyte = vmir_vm_arg32(&rf);
+  vmir_vm_ret32(ret, vfd_write(iu, fd, buf, nbyte));
+  return 0;
+}
+
+static int
+vmir_lseek(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t fd = vmir_vm_arg32(&rf);
+  int64_t offset = vmir_vm_arg64(&rf);
+  uint32_t whence = vmir_vm_arg32(&rf);
+  vmir_vm_ret64(ret, vfd_seek(iu, fd, offset, whence));
+  return 0;
+}
+
+static int
+vmir_close(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t fd = vmir_vm_arg32(&rf);
+  vmir_fd_close(iu, fd);
+  vmir_vm_ret32(ret, 0);
+  return 0;
+}
 
 /*--------------------------------------------------------------------
  * stdio
@@ -541,7 +611,7 @@ vFILE_close(void *fh)
 {
   vFILE_t *vf = fh;
   ir_unit_t *iu = vf->iu;
-  vfd_close(vf->iu, vf->fd);
+  vmir_fd_close(vf->iu, vf->fd);
   LIST_REMOVE(vf, link);
   vmir_heap_free(iu->iu_heap, vf);
   return 0;
@@ -558,6 +628,35 @@ static const cookie_io_functions_t cookiefuncs = {
 };
 
 #endif
+
+
+
+static void *
+vFILE_open_fd(ir_unit_t *iu, int fd, int line_buffered)
+{
+  vFILE_t *vfile = vmir_heap_malloc(iu->iu_heap, sizeof(vFILE_t));
+  if(vfile == NULL) {
+    vmir_fd_close(iu, fd);
+    return NULL;
+  }
+  vfile->iu = iu;
+  vfile->fd = fd;
+
+#if USE_FUNOPEN
+  vfile->fp = funopen(vfile, fun_read, fun_write, fun_seek, vFILE_close);
+#else
+  vfile->fp = fopencookie(vfile, mode, cookiefuncs);
+#endif
+  if(vfile->fp == NULL) {
+    vmir_fd_close(iu, fd);
+    vmir_heap_free(iu->iu_heap, vfile);
+    return NULL;
+  }
+  if(line_buffered)
+    setlinebuf(vfile->fp);
+  LIST_INSERT_HEAD(&iu->iu_vfiles, vfile, link);
+  return vfile;
+}
 
 
 static vFILE_t *
@@ -577,29 +676,7 @@ vFILE_open(ir_unit_t *iu, const char *path, const char *mode,
   int fd = vfd_open(iu, path, flags);
   if(fd == -1)
     return NULL;
-
-  vFILE_t *vfile = vmir_heap_malloc(iu->iu_heap, sizeof(vFILE_t));
-  if(vfile == NULL) {
-    vfd_close(iu, fd);
-    return NULL;
-  }
-  vfile->iu = iu;
-  vfile->fd = fd;
-
-#if USE_FUNOPEN
-  vfile->fp = funopen(vfile, fun_read, fun_write, fun_seek, vFILE_close);
-#else
-  vfile->fp = fopencookie(vfile, mode, cookiefuncs);
-#endif
-  if(vfile->fp == NULL) {
-    vfd_close(iu, fd);
-    vmir_heap_free(iu->iu_heap, vfile);
-    return NULL;
-  }
-  if(line_buffered)
-    setlinebuf(vfile->fp);
-  LIST_INSERT_HEAD(&iu->iu_vfiles, vfile, link);
-  return vfile;
+  return vFILE_open_fd(iu, fd, line_buffered);
 }
 
 
@@ -609,6 +686,15 @@ vmir_fopen(void *ret, const void *rf, ir_unit_t *iu)
   const char *path = vmir_vm_ptr(&rf, iu);
   const char *mode = vmir_vm_ptr(&rf, iu);
   vFILE_t *vfile = vFILE_open(iu, path, mode, 0);
+  vmir_vm_retptr(ret, vfile, iu);
+  return 0;
+}
+
+static int
+vmir_fdopen(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t fd = vmir_vm_arg32(&rf);
+  vFILE_t *vfile = vFILE_open_fd(iu, fd, 0);
   vmir_vm_retptr(ret, vfile, iu);
   return 0;
 }
@@ -1369,15 +1455,9 @@ vmir_std_terminate(void *ret, const void *rf, ir_unit_t *iu)
   return 0;
 }
 
-
-typedef struct {
-  const char *name;
-  vm_ext_function_t *extfunc;
-} function_tab_t;
-
 #define FN_EXT(a, b)   { .name = a, .extfunc = b }
 
-static const function_tab_t libc_funcs[] = {
+static const vmir_function_tab_t libc_funcs[] = {
 
   FN_EXT("exit", vm_exit),
   FN_EXT("abort", vm_abort),
@@ -1396,8 +1476,13 @@ static const function_tab_t libc_funcs[] = {
   FN_EXT("calloc",  vmir_calloc),
 
   FN_EXT("open",    vmir_open),
+  FN_EXT("read",    vmir_read),
+  FN_EXT("write",   vmir_write),
+  FN_EXT("lseek",   vmir_lseek),
+  FN_EXT("close",   vmir_close),
 
   FN_EXT("fopen",   vmir_fopen),
+  FN_EXT("fdopen",  vmir_fdopen),
   FN_EXT("fseek",   vmir_fseek),
   FN_EXT("fseeko",  vmir_fseeko),
   FN_EXT("fread",   vmir_fread),
@@ -1442,19 +1527,31 @@ static const function_tab_t libc_funcs[] = {
 };
 
 
+
+/**
+ *
+ */
+vm_ext_function_t *
+vmir_function_tab_lookup(const char *function,
+                         const vmir_function_tab_t *array, int length)
+{
+  for(int i = 0; i < length; i++) {
+    const vmir_function_tab_t *ft = array + i;
+    if(!strcmp(function, ft->name)) {
+      return ft->extfunc;
+    }
+  }
+  return NULL;
+}
+
 /**
  *
  */
 vm_ext_function_t *
 vmir_default_external_function_resolver(const char *function, void *opaque)
 {
-  for(int i = 0; i < VMIR_ARRAYSIZE(libc_funcs); i++) {
-    const function_tab_t *ft = &libc_funcs[i];
-    if(!strcmp(function, ft->name)) {
-      return ft->extfunc;
-    }
-  }
-  return NULL;
+  return vmir_function_tab_lookup(function, libc_funcs,
+                                  VMIR_ARRAYSIZE(libc_funcs));
 }
 
 
@@ -1527,16 +1624,22 @@ static const vmir_fsops_t vmir_sysio_fsops = {
 };
 
 
+void
+vmir_set_fsops(ir_unit_t *iu, const vmir_fsops_t *ops)
+{
+  iu->iu_fsops = ops;
+}
+
 /**
  *
  */
 static void
 libc_initialize(ir_unit_t *iu)
 {
+  iu->iu_vfd_free = -1;
+
   if(iu->iu_fsops == NULL)
     iu->iu_fsops = &vmir_sysio_fsops;
-
-  iu->iu_vfd_free = -1;
 
   iu->iu_stdin  = vFILE_open(iu, "/dev/stdin",  "r", 1);
   iu->iu_stdout = vFILE_open(iu, "/dev/stdout", "w", 1);

@@ -58,7 +58,7 @@ static void __attribute__((noinline)) __attribute__((noreturn))
 vm_stop(ir_unit_t *iu, int reason, int code)
 {
   iu->iu_exit_code = code;
-  longjmp(iu->iu_err_jmpbuf, reason);
+  longjmp(*iu->iu_err_jmpbuf, reason);
 }
 
 
@@ -101,6 +101,15 @@ vmir_vm_ptr_nullchk(const void **rfp, ir_unit_t *iu)
 {
   uint32_t vma = vmir_vm_arg32(rfp);
   return vma ? vma + iu->iu_mem : NULL;
+}
+
+ir_function_t *
+vmir_vm_arg_func(const void **rfp, ir_unit_t *iu)
+{
+  uint32_t fnid = vmir_vm_arg32(rfp);
+  if(fnid >= VECTOR_LEN(&iu->iu_functions))
+    return NULL;
+  return VECTOR_ITEM(&iu->iu_functions, fnid);
 }
 
 void
@@ -557,7 +566,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(3);
 
   VMOP(JSR_EXT)
-    vm_printf("Calling %s (internal)\n", vm_funcname(I[0], iu));
+    vm_printf("Calling %s (external)\n", vm_funcname(I[0], iu));
+    iu->iu_rf = rf + I[1];
+    iu->iu_alloca_ptr = allocaptr;
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
     if(r)
       return r;
@@ -575,6 +586,8 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     if(r)
       return r;
     } else if(iu->iu_ext_funcs[R32(0)]) {
+      iu->iu_rf = rf + I[1];
+      iu->iu_alloca_ptr = allocaptr;
       iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
     } else {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
@@ -593,7 +606,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_EXT)
-    vm_printf("Calling %s (internal)\n", vm_funcname(I[0], iu));
+    vm_printf("Calling %s (external)\n", vm_funcname(I[0], iu));
+    iu->iu_rf = rf + I[1];
+    iu->iu_alloca_ptr = allocaptr;
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
@@ -606,6 +621,8 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #endif
               );
     } else if(iu->iu_ext_funcs[R32(0)]) {
+      iu->iu_rf = rf + I[1];
+      iu->iu_alloca_ptr = allocaptr;
       r = iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
     } else {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
@@ -4543,11 +4560,14 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   const ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, f->if_type);
   uint32_t u32;
   int argpos = 0;
-  void *rf = iu->iu_mem;
+  jmp_buf jb;
+  uint64_t dummy;
+
   va_start(ap, out);
 
   argpos += it->it_function.num_parameters * sizeof(uint32_t);
 
+  void *rf = iu->iu_rf;
   void *rfa = rf + argpos;
 
   for(int i = 0; i < it->it_function.num_parameters; i++) {
@@ -4569,20 +4589,26 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       return 0;
     }
   }
+  jmp_buf *prevjb = iu->iu_err_jmpbuf;
+  iu->iu_err_jmpbuf = &jb;
+  const uint32_t alloca_ptr = iu->iu_alloca_ptr;
+  int r = setjmp(jb);
+  if(!r) {
+    if(out == NULL)
+      out = &dummy;
 
-  int r = setjmp(iu->iu_err_jmpbuf);
-  if(r)
-    return r;
-
-  r = vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
+    r = vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
 #ifdef VM_TRACE
-          , f
+                , f
 #endif
-          );
+                );
 
-  if(r == 1)
-    r = VM_STOP_UNCAUGHT_EXCEPTION;
-
+    if(r == 1)
+      r = VM_STOP_UNCAUGHT_EXCEPTION;
+  }
+  iu->iu_rf = rf;
+  iu->iu_err_jmpbuf = prevjb;
+  iu->iu_alloca_ptr = alloca_ptr;
   return r;
 }
 

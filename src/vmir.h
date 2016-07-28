@@ -78,6 +78,9 @@ ir_unit_t *vmir_create(void *membase, uint32_t memsize,
                        void *opaque);
 
 
+void *vmir_get_opaque(ir_unit_t *iu);
+
+
 /**
  * Signature for external function (as returned by
  * vmir_function_resolver_t callback)
@@ -218,6 +221,11 @@ void *vmir_vm_ptr(const void **rfp, ir_unit_t *iu);
 void *vmir_vm_ptr_nullchk(const void **rfp, ir_unit_t *iu);
 
 /**
+ * Pop pointer function argument that is a function
+ */
+ir_function_t *vmir_vm_arg_func(const void **rfp, ir_unit_t *iu);
+
+/**
  * Return a pointer inside the VM heap and adjust it to VMIR local address
  */
 void vmir_vm_retptr(void *ret, void *p, const ir_unit_t *iu);
@@ -231,6 +239,52 @@ void vmir_vm_ret32(void *ret, uint32_t v);
  * Return a 64bit value from an external function
  */
 void vmir_vm_ret64(void *ret, uint64_t v);
+
+
+/**
+ * Copy a string to the alloca stack
+ */
+
+uint32_t vmir_astack_mark(ir_unit_t *iu);
+
+void vmir_astack_restore(ir_unit_t *iu, uint32_t value);
+
+uint32_t vmir_astack_copy_str(ir_unit_t *iu, const char *str);
+
+uint32_t vmir_astack_copy_buf(ir_unit_t *iu, const void *buf, size_t len,
+                              void **hptr);
+
+
+/**
+ * Filedescriptors
+ */
+#define VMIR_FD_TYPE_FILEHANDLE 1
+#define VMIR_FD_TYPE_SOCKET     2
+#define VMIR_FD_TYPE_USER       128
+
+typedef void (vmir_fd_release_t)(ir_unit_t *iu, intptr_t handle);
+
+int vmir_fd_create(ir_unit_t *iu, intptr_t handle, int type,
+                   vmir_fd_release_t *relfunc);
+
+int vmir_fd_create_fh(ir_unit_t *iu, intptr_t fh, int closable);
+
+void vmir_fd_close(ir_unit_t *iu, int fd);
+
+intptr_t vmir_fd_get(ir_unit_t *iu, int fd, int type);
+
+
+/**
+ *
+ */
+typedef struct {
+  const char *name;
+  vm_ext_function_t *extfunc;
+} vmir_function_tab_t;
+
+vm_ext_function_t *vmir_function_tab_lookup(const char *function,
+                                            const vmir_function_tab_t *array,
+                                            int length);
 
 
 /**
