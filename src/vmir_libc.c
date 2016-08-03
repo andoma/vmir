@@ -22,6 +22,22 @@
  * SOFTWARE.
  */
 
+static __inline void mem_wrptr(ir_unit_t *iu, uint32_t offset, void *ptr)
+{
+  mem_wr32(iu->iu_mem + offset, ptr ? ptr - iu->iu_mem : 0);
+}
+
+static __inline void *mem_rdptr(ir_unit_t *iu, uint32_t offset)
+{
+  uint32_t p = mem_rd32(iu->iu_mem + offset);
+  if(p)
+    return iu->iu_mem + p;
+  return NULL;
+}
+
+
+
+
 #ifdef VMIR_USE_TLSF
 
 #include "tlsf.h"
@@ -1342,6 +1358,67 @@ vmir_getenv(void *ret, const void *rf, ir_unit_t *iu)
 
 
 /*-----------------------------------------------------------------------
+ * libc string functions
+ */
+static int
+vmir_strtok_r(void *retreg, const void *rf, ir_unit_t *iu)
+{
+  char *str         = vmir_vm_ptr(&rf, iu);
+  const char *delim = vmir_vm_ptr(&rf, iu);
+  uint32_t nextp = vmir_vm_arg32(&rf);
+
+  if(str == NULL)
+    str = mem_rdptr(iu, nextp);
+
+  str += strspn(str, delim);
+
+  if(*str == '\0') {
+    vmir_vm_ret32(retreg, 0);
+    return 0;
+  }
+
+  char *ret = str;
+  str += strcspn(str, delim);
+  if(*str)
+    *str++ = '\0';
+
+  mem_wrptr(iu, nextp, str);
+
+  vmir_vm_retptr(retreg, ret, iu);
+  return 0;
+}
+
+
+static int
+vmir_strtok(void *retreg, const void *rf, ir_unit_t *iu)
+{
+  char *str         = vmir_vm_ptr(&rf, iu);
+  const char *delim = vmir_vm_ptr(&rf, iu);
+
+  if(str == NULL)
+    str = iu->iu_strtok_tmp;
+
+  str += strspn(str, delim);
+
+  if(*str == '\0') {
+    vmir_vm_ret32(retreg, 0);
+    return 0;
+  }
+
+  char *ret = str;
+  str += strcspn(str, delim);
+  if(*str)
+    *str++ = '\0';
+
+  iu->iu_strtok_tmp = str;
+
+  vmir_vm_retptr(retreg, ret, iu);
+  return 0;
+}
+
+
+
+/*-----------------------------------------------------------------------
  * C++
  */
 
@@ -1506,6 +1583,9 @@ static const vmir_function_tab_t libc_funcs[] = {
   FN_EXT("printf",  vmir_printf),
   FN_EXT("vfprintf",  vmir_vfprintf),
   FN_EXT("fprintf",  vmir_fprintf),
+
+  FN_EXT("strtok_r", vmir_strtok_r),
+  FN_EXT("strtok", vmir_strtok),
 
   FN_EXT("getenv",  vmir_getenv),
 

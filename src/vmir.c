@@ -177,6 +177,10 @@ struct ir_unit {
   VECTOR_HEAD(, struct vmir_fd) iu_vfds;
   int iu_vfd_free;  // Point to first free FD (-1 == nothing free)
   LIST_HEAD(, vFILE) iu_vfiles;
+  char *iu_strtok_tmp;
+
+
+
 
   uint32_t iu_debug_flags;
   uint32_t iu_debug_flags_func;
