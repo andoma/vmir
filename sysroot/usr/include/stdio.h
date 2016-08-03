@@ -45,7 +45,7 @@ int feof(FILE *stream);
 int fclose(FILE *fp);
 int fseeko(FILE *stream, off_t offset, int whence);
 off_t ftello(FILE *stream);
-
+int fileno(FILE *stream);
 
 int fflush(FILE *stream);
 void setbuf(FILE *stream, char *buf);
@@ -60,7 +60,7 @@ int vsscanf(const char *s, const char *format, va_list arg);
 int vscanf(const char *format, va_list arg);
 
 int fgetc(FILE *stream);
-int fputc(const char *s, FILE *stream);
+int fputc(int c, FILE *stream);
 
 char *fgets(char * str, int size, FILE * stream);
 
