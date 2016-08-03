@@ -197,7 +197,7 @@ vmir_heap_print0(heap_t *h)
 #endif
 
 
-#define MEMTRACE(fmt...) printf(fmt)
+#define MEMTRACE(fmt...) // printf(fmt)
 
 static int
 vmir_malloc(void *ret, const void *rf, ir_unit_t *iu)
