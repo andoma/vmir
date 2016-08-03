@@ -217,7 +217,8 @@ vmir_calloc(void *ret, const void *rf, ir_unit_t *iu)
   uint32_t size = vmir_vm_arg32(&rf);
   MEMTRACE("calloc(%d, %d) = ...\n", nmemb, size);
   void *p = vmir_heap_malloc(iu->iu_heap, size * nmemb);
-  memset(p, 0, size * nmemb);
+  if(p != NULL)
+    memset(p, 0, size * nmemb);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("calloc(%d, %d) = 0x%x\n", nmemb, size, *(uint32_t *)ret);
   return 0;
