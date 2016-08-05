@@ -548,6 +548,9 @@ typedef enum {
   VM_LOG,
   VM_LOG10,
   VM_ROUND,
+  VM_SQRT,
+  VM_CEIL,
+  VM_EXP,
 
   VM_FLOORF,
   VM_SINF,
@@ -558,6 +561,9 @@ typedef enum {
   VM_LOGF,
   VM_LOG10F,
   VM_ROUNDF,
+  VM_SQRTF,
+  VM_CEILF,
+  VM_EXPF,
 
   // Other misc
   VM_ALLOCA,
@@ -608,6 +614,7 @@ typedef enum {
   VM_POP64,
 
   VM_UADDO32,
+  VM_UMULO32,
 
   VM_NOP,
 

@@ -1045,6 +1045,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(LOG)       ADBL(0, log(RDBL(1)));            NEXT(2);
   VMOP(LOG10)     ADBL(0, log10(RDBL(1)));          NEXT(2);
   VMOP(ROUND)     ADBL(0, round(RDBL(1)));          NEXT(2);
+  VMOP(SQRT)      ADBL(0, sqrt(RDBL(1)));           NEXT(2);
+  VMOP(EXP)       ADBL(0, exp(RDBL(1)));            NEXT(2);
+  VMOP(CEIL)      ADBL(0, ceil(RDBL(1)));           NEXT(2);
 
   VMOP(FLOORF)    AFLT(0, floorf(RFLT(1)));          NEXT(2);
   VMOP(SINF)      AFLT(0,   sinf(RFLT(1)));          NEXT(2);
@@ -1055,6 +1058,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(LOGF)      AFLT(0,   logf(RFLT(1)));          NEXT(2);
   VMOP(LOG10F)    AFLT(0, log10f(RFLT(1)));          NEXT(2);
   VMOP(ROUNDF)    AFLT(0, roundf(RFLT(1)));          NEXT(2);
+  VMOP(SQRTF)     AFLT(0, sqrtf(RFLT(1)));           NEXT(2);
+  VMOP(EXPF)      AFLT(0, expf(RFLT(1)));            NEXT(2);
+  VMOP(CEILF)     AFLT(0, ceilf(RFLT(1)));           NEXT(2);
 
     // ---
 
@@ -1461,6 +1467,18 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(4);
   }
 
+  VMOP(UMULO32)
+  {
+    uint32_t r;
+#if __has_builtin(__builtin_uadd_overflow)
+    AR32(1, __builtin_umul_overflow(R32(2), R32(3), &r));
+#else
+    #error fix this
+#endif
+    AR32(0, r);
+    NEXT(4);
+  }
+
   VMOP(INSTRUMENT_COUNT)
 #ifdef VM_TRACE
   {
@@ -1605,6 +1623,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_LOG: return &&LOG - &&opz; break;
   case VM_LOG10: return &&LOG10 - &&opz; break;
   case VM_ROUND: return &&ROUND - &&opz; break;
+  case VM_SQRT: return &&SQRT - &&opz; break;
+  case VM_CEIL: return &&CEIL - &&opz; break;
+  case VM_EXP:  return &&EXP - &&opz; break;
 
   case VM_FLOORF: return &&FLOORF - &&opz; break;
   case VM_SINF: return &&SINF - &&opz; break;
@@ -1615,6 +1636,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_LOGF: return &&LOGF - &&opz; break;
   case VM_LOG10F: return &&LOG10F - &&opz; break;
   case VM_ROUNDF: return &&ROUNDF - &&opz; break;
+  case VM_SQRTF: return &&SQRTF - &&opz; break;
+  case VM_CEILF: return &&CEILF - &&opz; break;
+  case VM_EXPF:  return &&EXPF - &&opz; break;
 
   case VM_LOAD8:     return &&LOAD8      - &&opz;     break;
   case VM_LOAD8_G:   return &&LOAD8_G    - &&opz;     break;
@@ -2015,6 +2039,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_POP64: return &&POP64 - &&opz; break;
 
   case VM_UADDO32: return &&UADDO32 - &&opz; break;
+  case VM_UMULO32: return &&UMULO32 - &&opz; break;
 
   case VM_MEMMOVE:  return &&MEMMOVE - &&opz; break;
   case VM_MEMCMP:   return &&MEMCMP  - &&opz; break;
@@ -4484,6 +4509,7 @@ static const vmop_tab_t vmop_map[] = {
   FN_VMOP("llvm.ctlz.i64", VM_CLZ64, 1),
   FN_VMOP("llvm.ctpop.i64", VM_POP64, 1),
   FN_VMOP("llvm.uadd.with.overflow.i32", VM_UADDO32, 2),
+  FN_VMOP("llvm.umul.with.overflow.i32", VM_UMULO32, 2),
 
   FN_VMOP("memcpy",  VM_MEMCPY, 3),
   FN_VMOP("memmove", VM_MEMMOVE, 3),
@@ -4516,6 +4542,9 @@ static const vmop_tab_t vmop_map[] = {
   FN_VMOP("log",   VM_LOG,   1),
   FN_VMOP("log10", VM_LOG10, 1),
   FN_VMOP("round", VM_ROUND, 1),
+  FN_VMOP("sqrt",  VM_SQRT,  1),
+  FN_VMOP("exp",   VM_EXP,   1),
+  FN_VMOP("ceil",  VM_CEIL,  1),
 
   FN_VMOP("floorf", VM_FLOORF, 1),
   FN_VMOP("sinf",   VM_SINF,   1),
@@ -4526,6 +4555,9 @@ static const vmop_tab_t vmop_map[] = {
   FN_VMOP("logf",   VM_LOGF,   1),
   FN_VMOP("log10f", VM_LOG10F, 1),
   FN_VMOP("roundf", VM_ROUNDF, 1),
+  FN_VMOP("sqrtf",  VM_SQRTF,  1),
+  FN_VMOP("expf",   VM_EXPF,   1),
+  FN_VMOP("ceilf",  VM_CEILF,  1),
 };
 
 
