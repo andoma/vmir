@@ -184,7 +184,7 @@ typedef struct ir_instr_store {
   ir_instr_t super;
   ir_valuetype_t ptr;
   ir_valuetype_t value;
-  int offset;
+  int immediate_offset;
 } ir_instr_store_t;
 
 
@@ -622,7 +622,7 @@ parse_store(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
   ir_bb_t *ib = iu->iu_current_bb;
 
   ir_instr_store_t *i = instr_add(ib, sizeof(ir_instr_store_t), IR_IC_STORE);
-  i->offset = 0;
+  i->immediate_offset = 0;
   i->ptr   = instr_get_vtp(iu, &argc, &argv);
   if(old)
     i->value = instr_get_value(iu, &argc, &argv,
@@ -1418,8 +1418,8 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
       ir_instr_store_t *s = (ir_instr_store_t *)ii;
       len += addstr(dstp, "store ");
       len += value_print_vt(dstp, iu, s->ptr);
-      if(s->offset)
-        len += addstrf(dstp, " + #%x", s->offset);
+      if(s->immediate_offset)
+        len += addstrf(dstp, " + #%x", s->immediate_offset);
       len += addstr(dstp, ", ");
       len += value_print_vt(dstp, iu, s->value);
     }

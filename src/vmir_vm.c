@@ -2690,7 +2690,9 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 {
   const ir_value_t *ptr = value_get(iu, ii->ptr.value);
   const ir_value_t *val = value_get(iu, ii->value.value);
-  int has_offset = ii->offset != 0;
+  int has_offset = ii->immediate_offset != 0;
+  assert(ii->immediate_offset >= INT16_MIN &&
+         ii->immediate_offset <= INT16_MAX);
 
   switch(COMBINE4(legalize_type(type_get(iu, ii->value.type)),
                   val->iv_class,
@@ -2705,7 +2707,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE8_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
@@ -2728,7 +2730,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE8C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     emit_i8(iu, value_get_const32(iu, val));
     return;
 
@@ -2747,13 +2749,13 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
   case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE16_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE16C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     emit_i16(iu, value_get_const32(iu, val));
     return;
 
@@ -2810,7 +2812,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_GLOBALVAR, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_GLOBALVAR, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE32C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     emit_i32(iu, value_get_const32(iu, val));
     return;
 
@@ -2819,7 +2821,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE32_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_REGFRAME, 0):
@@ -2856,14 +2858,14 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     vm_align32(iu, 1);
     emit_op1(iu, VM_STORE64C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     emit_i64(iu, value_get_const64(iu, val));
     return;
 
   case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE64_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_REGFRAME, 0):
@@ -2877,7 +2879,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_FUNCTION, IR_VC_FUNCTION, IR_VC_REGFRAME, 0):
   case COMBINE4(IR_TYPE_FUNCTION, IR_VC_FUNCTION, IR_VC_REGFRAME, 1):
     emit_op1(iu, VM_STORE32C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->offset);
+    emit_i16(iu, ii->immediate_offset);
     emit_i32(iu, value_function_addr(val));
     return;
 

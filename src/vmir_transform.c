@@ -201,7 +201,13 @@ merge_lea_into_store(ir_unit_t *iu, ir_instr_store_t *ii)
   if(lea == NULL || lea->value_offset.value != -1)
     return;
 
-  ii->offset += lea->immediate_offset;
+  assert(ii->immediate_offset == 0);
+  int off = lea->immediate_offset;
+  if(off < INT16_MIN || off > INT16_MAX) {
+    return;
+  }
+
+  ii->immediate_offset = lea->immediate_offset;
   ii->ptr.value = lea->baseptr.value;
 }
 
@@ -400,16 +406,16 @@ split_const_store_aggregate(ir_unit_t *iu, ir_instr_store_t *ii)
 
   ir_instr_t *ret = &ii->super;
   const ir_type_t *it = type_get(iu, ii->value.type);
-  const int offset = ii->offset;
+  const int offset = ii->immediate_offset;
 
   ii->ptr.type = type_make_pointer(iu, it->it_struct.elements[0].type, 1);
-  ii->offset = offset + it->it_struct.elements[0].offset;
+  ii->immediate_offset = offset + it->it_struct.elements[0].offset;
   ii->value = values ? values[0] :
     value_create_zero(iu, it->it_struct.elements[0].type);
   for(int i = 1; i < it->it_struct.num_elements; i++) {
     ir_instr_store_t *str = instr_add_after(sizeof(ir_instr_store_t),
                                             IR_IC_STORE, ret);
-    str->offset = offset + it->it_struct.elements[i].offset;
+    str->immediate_offset = offset + it->it_struct.elements[i].offset;
     str->ptr.value = ii->ptr.value;
     str->ptr.type = type_make_pointer(iu, it->it_struct.elements[i].type, 1);
     str->value = values ? values[i] :
@@ -2614,7 +2620,7 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
             st2->value = values[i];
             value_bind_instr(value_get(iu, st2->value.value), ii, IVI_INPUT);
             st2->ptr = st->ptr;
-            st2->offset = st->offset + aggty->it_struct.elements[i].offset;
+            st2->immediate_offset = st->immediate_offset + aggty->it_struct.elements[i].offset;
           }
         }
         break;
