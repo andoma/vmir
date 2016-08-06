@@ -1441,6 +1441,12 @@ vmir_cxa_guard_release(void *ret, const void *rf, ir_unit_t *iu)
   return 0;
 }
 
+static int
+vmir__cxa_at_exit(void *ret, const void *rf, ir_unit_t *iu)
+{
+  return 0;
+}
+
 
 /*-----------------------------------------------------------------------
  * C++ exception handling
@@ -1573,6 +1579,7 @@ static const vmir_function_tab_t libc_funcs[] = {
   FN_EXT("exit", vm_exit),
   FN_EXT("abort", vm_abort),
   FN_EXT("llvm.trap", vm_abort),
+  FN_EXT("__cxa_guard_abort", vm_abort),
 
   FN_EXT("getpid", vmir_getpid),
   FN_EXT("atoi", vmir_atoi),
@@ -1634,6 +1641,11 @@ static const vmir_function_tab_t libc_funcs[] = {
 
   FN_EXT("_ZdlPv",  vmir_free),    // operator delete(void*)
   FN_EXT("_Znwj",   vmir_malloc),  // operator new(unsigned int)
+  FN_EXT("_ZdaPv",  vmir_free),    // operator delete[](void*)
+  FN_EXT("_Znaj",   vmir_malloc),  // operator new[](unsigned int)
+
+  FN_EXT("__cxa_atexit", vmir__cxa_at_exit),
+
   FN_EXT("__cxa_allocate_exception", vmir___cxa_allocate_exception),
   FN_EXT("__cxa_free_exception", vmir___cxa_free_exception),
   FN_EXT("__cxa_begin_catch", vmir___cxa_begin_catch),
