@@ -528,20 +528,20 @@ constants_rec_handler(ir_unit_t *iu, int op,
         case IR_TYPE_DOUBLE:
           iv->iv_data = malloc(sizeof(uint64_t) * argc);
           for(int i = 0; i < argc; i++)
-            mem_wr64(iv->iv_data + i * sizeof(uint64_t), argv[i].i64);
+            host_wr64(iv->iv_data + i * sizeof(uint64_t), argv[i].i64);
           return;
 
         case IR_TYPE_INT32:
         case IR_TYPE_FLOAT:
           iv->iv_data = malloc(sizeof(uint32_t) * argc);
           for(int i = 0; i < argc; i++)
-            mem_wr32(iv->iv_data + i * sizeof(uint32_t), argv[i].i64);
+            host_wr32(iv->iv_data + i * sizeof(uint32_t), argv[i].i64);
           return;
 
         case IR_TYPE_INT16:
           iv->iv_data = malloc(sizeof(uint16_t) * argc);
           for(int i = 0; i < argc; i++)
-            mem_wr16(iv->iv_data + i * sizeof(uint16_t), argv[i].i64);
+            host_wr16(iv->iv_data + i * sizeof(uint16_t), argv[i].i64);
           return;
 
         default:

@@ -24,12 +24,12 @@
 
 static __inline void mem_wrptr(ir_unit_t *iu, uint32_t offset, void *ptr)
 {
-  mem_wr32(iu->iu_mem + offset, ptr ? ptr - iu->iu_mem : 0);
+  mem_wr32(iu->iu_mem + offset, ptr ? ptr - iu->iu_mem : 0, iu);
 }
 
 static __inline void *mem_rdptr(ir_unit_t *iu, uint32_t offset)
 {
-  uint32_t p = mem_rd32(iu->iu_mem + offset);
+  uint32_t p = mem_rd32(iu->iu_mem + offset, iu);
   if(p)
     return iu->iu_mem + p;
   return NULL;
@@ -1741,11 +1741,11 @@ libc_initialize(ir_unit_t *iu)
 
     const char *name = ig->ig_name;
     if(!strcmp(name, "stdin")) {
-      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stdin);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stdin, iu);
     } else if(!strcmp(name, "stdout")) {
-      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stdout);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stdout, iu);
     } else if(!strcmp(name, "stderr")) {
-      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stderr);
+      mem_wr32(iu->iu_mem + ig->ig_addr, vm_stderr, iu);
     }
   }
 }

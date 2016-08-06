@@ -149,6 +149,10 @@ typedef struct vmir_exception {
 struct ir_unit {
   vmir_function_resolver_t iu_external_function_resolver;
 
+  void *iu_mem_low;
+  void *iu_mem_high;
+  void *iu_data_breakpoint;
+
   void *iu_mem;
   void **iu_vm_funcs;
   vm_ext_function_t **iu_ext_funcs;
@@ -529,7 +533,7 @@ addstrf(char **dst, const char *fmt, ...)
   return len;
 }
 
-
+#include "vmir_mem.c"
 #include "vmir_type.c"
 #include "vmir_value.c"
 #include "vmir_vm.h"
@@ -558,28 +562,28 @@ initialize_global(ir_unit_t *iu, void *addr,
   switch(dstty->it_code) {
   case IR_TYPE_INT1:
   case IR_TYPE_INT8:
-    mem_wr8(addr, value_get_const32(iu, c));
+    mem_wr8(addr, value_get_const32(iu, c), iu);
     break;
   case IR_TYPE_INT16:
-    mem_wr16(addr, value_get_const32(iu, c));
+    mem_wr16(addr, value_get_const32(iu, c), iu);
     break;
   case IR_TYPE_INT32:
   case IR_TYPE_FLOAT:
-    mem_wr32(addr, value_get_const32(iu, c));
+    mem_wr32(addr, value_get_const32(iu, c), iu);
     break;
   case IR_TYPE_INT64:
   case IR_TYPE_DOUBLE:
-    mem_wr64(addr, value_get_const64(iu, c));
+    mem_wr64(addr, value_get_const64(iu, c), iu);
     break;
 
   case IR_TYPE_POINTER:
     switch(c->iv_class) {
     case IR_VC_GLOBALVAR:
     case IR_VC_CONSTANT:
-      mem_wr32(addr, value_get_const32(iu, c));
+      mem_wr32(addr, value_get_const32(iu, c), iu);
       break;
     case IR_VC_FUNCTION:
-      mem_wr32(addr, value_function_addr(c));
+      mem_wr32(addr, value_function_addr(c), iu);
       break;
 
     default:
@@ -741,6 +745,10 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_asize = asize;
   iu->iu_text_alloc_memsize = 1024 * 1024;
   iu->iu_text_alloc = malloc(iu->iu_text_alloc_memsize);
+
+  iu->iu_mem_low = iu->iu_mem + rsize;
+  iu->iu_mem_high = iu->iu_mem + memsize;
+
   return iu;
 }
 
@@ -907,7 +915,7 @@ vmir_copy_argv(ir_unit_t *iu, int argc, char **argv)
 
   for(int i = 0; i < argc; i++) {
     uint32_t str = vmir_astack_copy_str(iu, argv[i]);
-    mem_wr32(vm_argv_host + i * sizeof(uint32_t), str);
+    mem_wr32(vm_argv_host + i * sizeof(uint32_t), str, iu);
   }
   iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr, 8);
   return vm_argv;

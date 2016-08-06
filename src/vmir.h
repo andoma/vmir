@@ -174,6 +174,7 @@ ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
                                    // This is an internal error in the VM
 #define VM_STOP_BAD_FUNCTION 5     // Unresolved function was called
 #define VM_STOP_UNCAUGHT_EXCEPTION 6
+#define VM_STOP_ACCESS_VIOLATION 7
 
 /**
  * Call a vmir function
