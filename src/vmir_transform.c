@@ -2709,7 +2709,6 @@ emit_partial_load(ir_unit_t *iu, ir_instr_load_t *orig, int offset,
   instr_bind_input(iu, n->ptr, &n->super);
   if(n->value_offset.value >= 0)
     instr_bind_input(iu, n->value_offset, &n->super);
-  printf("      %s\n", instr_str(iu, &n->super, 1));
   return &n->super;
 }
 
@@ -2718,10 +2717,6 @@ split_aggregated_load(ir_unit_t *iu, ir_instr_load_t *ii)
 {
   ir_instr_load_t *orig = ii;
   ir_instr_t *r = &ii->super;
-
-  printf("-----------------\n");
-  printf("Split aggregate load\n");
-  printf("ORIG: %s\n", instr_str(iu, r, 1));
 
   int esize;
   // Combined loads
