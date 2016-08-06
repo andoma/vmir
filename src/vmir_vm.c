@@ -2573,6 +2573,9 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
 {
   const int has_offset = immediate_offset != 0 || roff != NULL;
 
+  assert(immediate_offset >= INT16_MIN &&
+         immediate_offset <= INT16_MAX);
+
   switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
 
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT1, 0):
