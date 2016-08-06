@@ -4670,6 +4670,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   va_list ap;
   const ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, f->if_type);
   uint32_t u32;
+  uint64_t u64;
   int argpos = 0;
   jmp_buf jb;
   uint64_t dummy;
@@ -4692,6 +4693,11 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       argpos -= 4;
       u32 = va_arg(ap, int);
       *(uint32_t *)(rf + argpos) = u32;
+      break;
+    case IR_TYPE_INT64:
+      argpos -= 8;
+      u64 = va_arg(ap, uint64_t);
+      *(uint64_t *)(rf + argpos) = u64;
       break;
 
     default:
