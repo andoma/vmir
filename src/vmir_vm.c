@@ -1307,7 +1307,12 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(CAST_DBL_UITOFP_64)   ADBL(0, R64(1)); NEXT(2);
 
   VMOP(JUMPTABLE)
-    I = (void *)I + (int16_t)I[2 + R8(0)]; NEXT(0);
+    if(R8(0) >= I[1]) {
+      I = (void *)I + (int16_t)I[2];
+    } else {
+      I = (void *)I + (int16_t)I[3 + R8(0)];
+    }
+    NEXT(0);
 
   VMOP(SWITCH8_BS) {
       const uint8_t u8 = R8(0);
@@ -3531,6 +3536,7 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
     emit_i16(iu, VM_JUMPTABLE);
     emit_i16(iu, reg);
     emit_i16(iu, jumptable_size);
+    emit_i16(iu, ii->defblock);
     const int mask = jumptable_size - 1;
     int16_t *table = emit_data(iu, jumptable_size * 2);
 
@@ -4479,7 +4485,7 @@ branch_fixup(ir_unit_t *iu)
       I[2] = bb_to_offset_delta(f, I[2], off);
       break;
     case VM_JUMPTABLE:
-      for(int j = 0; j < I[2]; j++)
+      for(int j = 0; j < I[2] + 1; j++) // one extra for default path (first)
         I[3 + j] = bb_to_offset_delta(f, I[3 + j], off);
       break;
 
