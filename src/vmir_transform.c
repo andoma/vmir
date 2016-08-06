@@ -2689,13 +2689,82 @@ legalize_temporary_values(ir_unit_t *iu, ir_function_t *f)
 
 
 
+static ir_instr_t *
+emit_partial_load(ir_unit_t *iu, ir_instr_load_t *orig, int offset,
+                  ir_instr_t *after, ir_valuetype_t ret)
+{
+  assert(orig->cast == -1);
+
+  ir_instr_load_t *n =
+    instr_add_after(sizeof(ir_instr_load_t), IR_IC_LOAD, after);
+  n->immediate_offset = orig->immediate_offset + offset;
+  n->ptr = orig->ptr;
+  n->value_offset = orig->value_offset;
+  n->value_offset_multiply = orig->value_offset_multiply;
+  n->super.ii_ret = ret;
+  n->cast = -1;
+
+  value_bind_return_value(iu, &n->super);
+
+  instr_bind_input(iu, n->ptr, &n->super);
+  if(n->value_offset.value >= 0)
+    instr_bind_input(iu, n->value_offset, &n->super);
+  printf("      %s\n", instr_str(iu, &n->super, 1));
+  return &n->super;
+}
+
+static ir_instr_t *
+split_aggregated_load(ir_unit_t *iu, ir_instr_load_t *ii)
+{
+  ir_instr_load_t *orig = ii;
+  ir_instr_t *r = &ii->super;
+
+  printf("-----------------\n");
+  printf("Split aggregate load\n");
+  printf("ORIG: %s\n", instr_str(iu, r, 1));
+
+  int esize;
+  // Combined loads
+  const ir_type_t *aggty = type_get(iu, type_get_pointee(iu, ii->ptr.type));
+  switch(aggty->it_code) {
+  case IR_TYPE_STRUCT:
+    assert(aggty->it_struct.num_elements == -ii->super.ii_ret.value);
+    for(int i = 0; i < -ii->super.ii_ret.value; i++) {
+      int offset = aggty->it_struct.elements[i].offset;
+      r = emit_partial_load(iu, orig, offset, r, ii->super.ii_rets[i]);
+    }
+    break;
+  case IR_TYPE_ARRAY:
+    esize = type_sizeof(iu, aggty->it_array.element_type);
+    for(int i = 0; i < -ii->super.ii_ret.value; i++) {
+      int offset = esize * i;
+      r = emit_partial_load(iu, orig, offset, r, ii->super.ii_rets[i]);
+    }
+    break;
+  default:
+    abort();
+  }
+  instr_destroy(&orig->super);
+  return r;
+}
+
 /**
  *
  */
 static void
 legalize_instructions(ir_unit_t *iu, ir_function_t *f)
 {
-  
+  ir_bb_t *bb;
+  TAILQ_FOREACH(bb, &f->if_bbs, ib_link) {
+    ir_instr_t *ii;
+    TAILQ_FOREACH(ii, &bb->ib_instrs, ii_link) {
+      if(ii->ii_class == IR_IC_LOAD) {
+        if(ii->ii_ret.value < -1) {
+          ii = split_aggregated_load(iu, (ir_instr_load_t *)ii);
+        }
+      }
+    }
+  }
 }
 
 
