@@ -1533,6 +1533,39 @@ vmir_std_terminate(void *ret, const void *rf, ir_unit_t *iu)
   return 0;
 }
 
+
+
+static int
+vmir_set_data_breakpoint(void *ret, const void *rf, ir_unit_t *iu)
+{
+  iu->iu_data_breakpoint = vmir_vm_ptr_nullchk(&rf, iu);
+  printf("Data breakpoint: 0x%zx\n", iu->iu_data_breakpoint - iu->iu_mem);
+  return 0;
+}
+
+
+
+static int
+vmir_libc_hexdump(void *ret, const void *rf, ir_unit_t *iu)
+{
+  uint32_t addr = vmir_vm_arg32(&rf);
+  uint32_t size = vmir_vm_arg32(&rf);
+  printf("Hexdump of 0x%x\n", addr);
+  vmir_hexdump("hexdump", iu->iu_mem + addr, size);
+  return 0;
+}
+
+
+static int
+vmir_libc_traceback(void *ret, const void *rf, ir_unit_t *iu)
+{
+#ifdef VM_TRACE_FUNCTION
+  vmir_traceback(iu);
+#endif
+  return 0;
+}
+
+
 #define FN_EXT(a, b)   { .name = a, .extfunc = b }
 
 static const vmir_function_tab_t libc_funcs[] = {
@@ -1590,6 +1623,9 @@ static const vmir_function_tab_t libc_funcs[] = {
   FN_EXT("getenv",  vmir_getenv),
 
   FN_EXT("__vmir_heap_print",  vmir_heap_print),
+  FN_EXT("__vmir_set_data_breakpoint",  vmir_set_data_breakpoint),
+  FN_EXT("__vmir_hexdump",  vmir_libc_hexdump),
+  FN_EXT("__vmir_traceback",  vmir_libc_traceback),
 
   // C++ low level stuff
 

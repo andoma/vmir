@@ -303,6 +303,7 @@ vm_ext_function_t *vmir_function_tab_lookup(const char *function,
 
 void vmir_set_debug_flags(ir_unit_t *iu, int flags);
 
+void vmir_set_traced_function(ir_unit_t *iu, const char *fname);
 
 /**
  * Debug only a specific function. If unset (or set to NULL) any debugging

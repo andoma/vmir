@@ -42,8 +42,33 @@
 
 #include "vmir.h"
 
+// #define VM_TRACE
+
+
+#if defined(VM_TRACE) && !defined(VM_DONT_USE_COMPUTED_GOTO)
+#define VM_DONT_USE_COMPUTED_GOTO
+#endif
+
+#if defined(VM_TRACE)
+#define VM_TRACE_FUNCTION
+#endif
+
+
+
+#ifdef VM_TRACE_FUNCTION
+static void vmir_traceback(struct ir_unit *iu);
+#endif
+
+#ifdef VM_TRACE
+static void vmir_access_violation(struct ir_unit *iu, const void *p,
+                                  const char *func);
+static void vmir_access_trap(struct ir_unit *iu, const void *p,
+                             const char *func);
+#endif
+
 #include "vmir_support.c"
 #include "vmir_bitstream.c"
+
 
 TAILQ_HEAD(ir_abbrev_queue, ir_abbrev);
 LIST_HEAD(ir_blockinfo_list, ir_blockinfo);
@@ -165,6 +190,10 @@ struct ir_unit {
   void *iu_rf;
 
   vmir_exception_t iu_exception;
+
+  struct vm_stack_frame *iu_current_frame;
+  int iu_trace_on;
+  char *iu_traced_function;
 
   uint32_t iu_data_ptr;
   uint32_t iu_heap_start;
@@ -467,7 +496,7 @@ parser_error0(ir_unit_t *iu, const char *file, int line,
   iu->iu_err_file = file;
   iu->iu_err_line = line;
 
-  printf("%s:%d : Parser error: %s\n", file, line, iu->iu_err_buf);
+  printf("%s:%d : Error: %s\n", file, line, iu->iu_err_buf);
 
   if(iu->iu_failed) {
     printf("Double failure\n");
@@ -1001,6 +1030,14 @@ vmir_set_debugged_function(ir_unit_t *iu, const char *function)
 {
   free(iu->iu_debugged_function);
   iu->iu_debugged_function = function ? strdup(function) : NULL;
+}
+
+
+void
+vmir_set_traced_function(ir_unit_t *iu, const char *fname)
+{
+  free(iu->iu_traced_function);
+  iu->iu_traced_function = fname ? strdup(fname) : NULL;
 }
 
 

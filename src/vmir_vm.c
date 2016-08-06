@@ -27,21 +27,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 
-//#define VM_TRACE
 
-#if defined(VM_TRACE) && !defined(VM_DONT_USE_COMPUTED_GOTO)
-#define VM_DONT_USE_COMPUTED_GOTO
-#endif
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
 #endif
 
 #ifdef VM_TRACE
-#define vm_printf(fmt...) printf("\t\t"fmt)
+#define vm_tracef(iu, fmt, ...) do {             \
+    if(iu->iu_trace_on)                          \
+      printf(fmt"\n", ##__VA_ARGS__);            \
+  } while(0)
+
 #else
-#define vm_printf(fmt...)
+#define vm_tracef(iu, fmt...)
 #endif
 
 #ifdef VM_TRACE
@@ -54,10 +55,57 @@ typedef struct ir_instr_backref {
 
 #endif
 
+#ifdef VM_TRACE_FUNCTION
+
+typedef struct vm_stack_frame {
+  const ir_function_t *f;
+  struct vm_stack_frame *prev;
+  struct ir_unit *iu;
+  int traceflags;
+} vm_stack_frame_t;
+
+static void
+restoreframe(vm_stack_frame_t *f)
+{
+  if(f->iu) {
+    f->iu->iu_current_frame = f->prev;
+    f->iu->iu_trace_on = f->traceflags;
+  }
+}
+
+
+static ir_function_t *
+vm_getfunc(int callee, ir_unit_t *iu)
+{
+  if(callee >= VECTOR_LEN(&iu->iu_functions))
+    return NULL;
+  return VECTOR_ITEM(&iu->iu_functions, callee);
+}
+
+
+static void
+vmir_traceback(struct ir_unit *iu)
+{
+  vm_stack_frame_t *f;
+
+  printf("traceback\n");
+  for(f = iu->iu_current_frame; f != NULL; f = f->prev) {
+    printf("  %s()\n", f->f->if_name);
+  }
+}
+
+
+
+
+#endif
+
 static void __attribute__((noinline)) __attribute__((noreturn))
 vm_stop(ir_unit_t *iu, int reason, int code)
 {
   iu->iu_exit_code = code;
+#ifdef VM_TRACE_FUNCTION
+  vmir_traceback(iu);
+#endif
   longjmp(*iu->iu_err_jmpbuf, reason);
 }
 
@@ -153,7 +201,6 @@ vm_strchr(uint32_t a, int b, void *mem)
   void *s = mem + a;
   void *r = strchr(s, b);
   int ret = r ? r - mem : 0;
-  vm_printf("strchr(%s (@ 0x%x), %c) = 0x%x\n", (char *)s, a, b, ret);
   return ret;
 }
 
@@ -171,7 +218,6 @@ vm_strrchr(uint32_t a, int b, void *mem)
   void *s = mem + a;
   void *r = strrchr(s, b);
   int ret = r ? r - mem : 0;
-  vm_printf("strrchr(%s (@ 0x%x), %c) = 0x%x\n", (char *)s, a, b, ret);
   return ret;
 }
 
@@ -452,7 +498,7 @@ static int vm_find_backref(const void *A, const void *B)
 
 
 static void
-vm_trace_instruction(ir_unit_t *iu, ir_function_t *f, const uint16_t *I,
+vm_trace_instruction(ir_unit_t *iu, const ir_function_t *f, const uint16_t *I,
                      const char *opname)
 {
   int pc = (int)((void *)I - (void *)f->if_vm_text) - 2;
@@ -463,11 +509,10 @@ vm_trace_instruction(ir_unit_t *iu, ir_function_t *f, const uint16_t *I,
                                     sizeof(ir_instr_backref_t),
                                     vm_find_backref);
   if(iib != NULL)
-    printf("%s().%d: %s [vmop:%s]\n", f->if_name, iib->bb, iib->str, opname);
+    vm_tracef(iu, "%s().%d: %s [vmop:%s]",
+              f->if_name, iib->bb, iib->str, opname);
   else
-    printf("%s(): %s @ %d\n", f->if_name, opname, pc);
-
-
+    vm_tracef(iu, "%s(): %s @ %d", f->if_name, opname, pc);
 }
 #endif
 
@@ -475,14 +520,29 @@ vm_trace_instruction(ir_unit_t *iu, ir_function_t *f, const uint16_t *I,
 static int __attribute__((noinline))
 vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
         uint32_t allocaptr, vm_op_t op
-#ifdef VM_TRACE
+#ifdef VM_TRACE_FUNCTION
         , ir_function_t *f
 #endif
 )
 {
+
+#ifdef VM_TRACE_FUNCTION
+  vm_stack_frame_t frame __attribute__((cleanup(restoreframe)));
+  frame.f = f;
+  frame.iu = iu;
+  if(iu != NULL) {
+    frame.prev = iu->iu_current_frame;
+    frame.traceflags = iu->iu_trace_on;
+
+    iu->iu_current_frame = &frame;
+
+    iu->iu_trace_on = iu->iu_traced_function &&
+      !strcmp(f->if_name, iu->iu_traced_function);
+  }
+#endif
+
   int r;
   int16_t opc;
-
 #ifndef VM_DONT_USE_COMPUTED_GOTO
   if((int)op != -1)
     goto resolve;
@@ -506,13 +566,27 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #define NEXT(skip) I+=skip; opc = *I++; goto reswitch
 
 #ifdef VM_TRACE
-#define VMOP(x) case VM_ ## x : vm_trace_instruction(iu, f, I, #x);
+#define VMOP(x) case VM_ ## x : do { if(iu->iu_trace_on) { vm_trace_instruction(iu, f, I, #x);} } while(0);
 #else
 #define VMOP(x) case VM_ ## x :
 #endif
 
   opc = *I++;
  reswitch:
+
+  #if 0
+  if(traceaddr != -1) {
+    static uint32_t cmpval;
+    uint32_t v = *(uint32_t *)(iu->iu_mem + traceaddr);
+    if(v != cmpval) {
+      printf("Traced address %x changed from %x to %x\n",
+             traceaddr, cmpval, v);
+      cmpval = v;
+      vmir_traceback(iu);
+    }
+  }
+#endif
+
   switch(opc) {
   default:
     vm_stop(iu, VM_STOP_BAD_INSTRUCTION, 0);
@@ -548,9 +622,9 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(BCOND) I = (void *)I + (int16_t)(R32(0) ? I[1] : I[2]); NEXT(0);
 
   VMOP(JSR_VM)
-    vm_printf("Calling %s\n", vm_funcname(I[0], iu));
+    vm_tracef(iu, "Calling %s", vm_funcname(I[0], iu));
     r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE
+#ifdef VM_TRACE_FUNCTION
                 , vm_getfunc(I[0], iu)
 #endif
                 );
@@ -559,7 +633,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(3);
 
   VMOP(JSR_EXT)
-    vm_printf("Calling %s (external)\n", vm_funcname(I[0], iu));
+    vm_tracef(iu, "Calling %s (external)", vm_funcname(I[0], iu));
     iu->iu_rf = rf + I[1];
     iu->iu_alloca_ptr = allocaptr;
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
@@ -568,11 +642,15 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     NEXT(3);
 
   VMOP(JSR_R)
-    vm_printf("Calling indirect %s (%d)\n", vm_funcname(R32(0), iu), R32(0));
+    vm_tracef(iu, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
+    if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
+      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+    }
+
     if(iu->iu_vm_funcs[R32(0)]) {
       r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu,
                   rf + I[2], allocaptr, -1
-#ifdef VM_TRACE
+#ifdef VM_TRACE_FUNCTION
                   , vm_getfunc(R32(0), iu)
 #endif
                   );
@@ -590,27 +668,30 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
 
   VMOP(INVOKE_VM)
-    vm_printf("Invoking %s\n", vm_funcname(I[0], iu));
+    vm_tracef(iu, "Invoking %s", vm_funcname(I[0], iu));
     r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE
+#ifdef VM_TRACE_FUNCTION
                 , vm_getfunc(I[0], iu)
 #endif
                 );
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_EXT)
-    vm_printf("Calling %s (external)\n", vm_funcname(I[0], iu));
+    vm_tracef(iu, "Calling %s (external)", vm_funcname(I[0], iu));
     iu->iu_rf = rf + I[1];
     iu->iu_alloca_ptr = allocaptr;
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_R)
-    vm_printf("Calling indirect %s (%d)\n", vm_funcname(R32(0), iu), R32(0));
+    vm_tracef(iu, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
+    if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
+      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+    }
     if(iu->iu_vm_funcs[R32(0)]) {
       r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE
-              , vm_getfunc(R32(0), iu)
+#ifdef VM_TRACE_FUNCTION
+                  , vm_getfunc(R32(0), iu)
 #endif
               );
     } else if(iu->iu_ext_funcs[R32(0)]) {
@@ -2065,8 +2146,8 @@ static int16_t
 vm_resolve(int op)
 {
   int o = vm_exec(NULL, NULL, NULL, NULL, 0, op
-#ifdef VM_TRACE
-, NULL
+#ifdef VM_TRACE_FUNCTION
+                  , NULL
 #endif
                   );
   assert(o <= INT16_MAX);
@@ -4625,7 +4706,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       out = &dummy;
 
     r = vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
-#ifdef VM_TRACE
+#ifdef VM_TRACE_FUNCTION
                 , f
 #endif
                 );
