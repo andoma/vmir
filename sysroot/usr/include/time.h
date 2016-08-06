@@ -2,6 +2,14 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+#if 0
+}
+#endif
+
 struct tm {
   int tm_sec;
   int tm_min;
@@ -30,3 +38,8 @@ time_t mktime(struct tm *tm);
 
 size_t strftime(char *s, size_t max, const char *format,
                 const struct tm *tm);
+
+
+#ifdef __cplusplus
+}
+#endif
