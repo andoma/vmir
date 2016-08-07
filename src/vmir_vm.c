@@ -1549,10 +1549,14 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(UMULO32)
   {
     uint32_t r;
-#if __has_builtin(__builtin_uadd_overflow)
+#if __has_builtin(__builtin_umul_overflow)
     AR32(1, __builtin_umul_overflow(R32(2), R32(3), &r));
 #else
-    #error fix this
+    uint32_t a = R32(2);
+    uint32_t b = R32(3);
+    uint64_t p = a * b;
+    r = p;
+    AR32(1, (p >> 32) != 0);
 #endif
     AR32(0, r);
     NEXT(4);
