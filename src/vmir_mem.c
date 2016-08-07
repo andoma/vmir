@@ -34,7 +34,7 @@ static __inline void mem_wr8(void *p, uint8_t v, ir_unit_t *iu)
 #if defined(__BIG_ENDIAN__)
 
 
-static __inline uint16_t swap16(uint16_t val, ir_unit_t *iu)
+static __inline uint16_t swap16(uint16_t val)
 {
   return ((val >> 8) & 0xff) | ((val << 8) & 0xff00);
 }
