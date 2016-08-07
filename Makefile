@@ -33,4 +33,4 @@ vmir.armv7: ${DEPS}
 	arm-linux-gnueabihf-gcc -O2 -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
 
 vmir.ppc64: ${DEPS}
-	powerpc-linux-gnu-gcc -O2 -m64 -static ${CFLAGS} -g ${SRCS} -lm -o $@
+	powerpc64-linux-gnu-gcc -O2 -static ${CFLAGS} -g ${SRCS} -lm -o $@
