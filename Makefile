@@ -34,3 +34,5 @@ vmir.armv7: ${DEPS}
 
 vmir.ppc64: ${DEPS}
 	powerpc64-linux-gnu-gcc -O2 -static ${CFLAGS} -g ${SRCS} -lm -o $@
+
+all: vmir vmir.armv7 vmir.ppc64
