@@ -649,7 +649,7 @@ static const cookie_io_functions_t cookiefuncs = {
 
 
 static void *
-vFILE_open_fd(ir_unit_t *iu, int fd, int line_buffered)
+vFILE_open_fd(ir_unit_t *iu, int fd, int line_buffered, const char *mode)
 {
   vFILE_t *vfile = vmir_heap_malloc(iu->iu_heap, sizeof(vFILE_t));
   if(vfile == NULL) {
@@ -693,7 +693,7 @@ vFILE_open(ir_unit_t *iu, const char *path, const char *mode,
   int fd = vfd_open(iu, path, flags);
   if(fd == -1)
     return NULL;
-  return vFILE_open_fd(iu, fd, line_buffered);
+  return vFILE_open_fd(iu, fd, line_buffered, mode);
 }
 
 
@@ -711,7 +711,8 @@ static int
 vmir_fdopen(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t fd = vmir_vm_arg32(&rf);
-  vFILE_t *vfile = vFILE_open_fd(iu, fd, 0);
+  const char *mode = vmir_vm_ptr(&rf, iu);
+  vFILE_t *vfile = vFILE_open_fd(iu, fd, 0, mode);
   vmir_vm_retptr(ret, vfile, iu);
   return 0;
 }
