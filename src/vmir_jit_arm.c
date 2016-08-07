@@ -902,8 +902,8 @@ jit_store(ir_unit_t *iu, ir_instr_store_t *ii, jitctx_t *jc)
 {
   int ea = jit_loadvalue(iu, ii->ptr, R_TMPA, jc);
 
-  if(ii->offset) {
-    jit_push_add_imm(iu, R_TMPA, ea, ii->offset, R_TMPB, jc);
+  if(ii->immediate_offset) {
+    jit_push_add_imm(iu, R_TMPA, ea, ii->immediate_offset, R_TMPB, jc);
     ea = R_TMPA;
   }
 
