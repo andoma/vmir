@@ -2686,40 +2686,6 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
   const ir_value_t *src = value_get(iu, ii->ptr.value);
   const ir_value_t *roff =
     ii->value_offset.value >= 0 ? value_get(iu, ii->value_offset.value) : NULL;
-
-  if(ii->super.ii_ret.value < -1) {
-    int esize;
-    // Combined loads
-    const ir_type_t *aggty = type_get(iu, type_get_pointee(iu, ii->ptr.type));
-    switch(aggty->it_code) {
-    case IR_TYPE_STRUCT:
-      assert(aggty->it_struct.num_elements == -ii->super.ii_ret.value);
-      for(int i = 0; i < -ii->super.ii_ret.value; i++) {
-        const ir_value_t *ret = value_get(iu, ii->super.ii_rets[i].value);
-        const ir_type_t *retty = type_get(iu, ii->super.ii_rets[i].type);
-        int offset = aggty->it_struct.elements[i].offset;
-        emit_load1(iu, src, ret, retty, roff, ii->immediate_offset + offset,
-                   ii->value_offset_multiply, ii);
-      }
-      return;
-    case IR_TYPE_ARRAY:
-      esize = type_sizeof(iu, aggty->it_array.element_type);
-      for(int i = 0; i < -ii->super.ii_ret.value; i++) {
-        const ir_value_t *ret = value_get(iu, ii->super.ii_rets[i].value);
-        const ir_type_t *retty = type_get(iu, ii->super.ii_rets[i].type);
-        int offset = esize * i;
-        emit_load1(iu, src, ret, retty, roff, ii->immediate_offset + offset,
-                   ii->value_offset_multiply, ii);
-      }
-
-      return;
-    default:
-      parser_error(iu, "Can't load aggregate from %d",
-                   aggty->it_code);
-    }
-  }
-
-
   const ir_value_t *ret = value_get(iu, ii->super.ii_ret.value);
   const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
 
