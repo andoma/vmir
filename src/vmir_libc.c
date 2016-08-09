@@ -793,6 +793,19 @@ vmir_feof(void *ret, const void *rf, ir_unit_t *iu)
 }
 
 static int
+vmir_fflush(void *ret, const void *rf, ir_unit_t *iu)
+{
+  vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
+  if(vfile == NULL) {
+    vmir_vm_ret32(ret, 1);
+    return 0;
+  }
+  int r = fflush(vfile->fp);
+  vmir_vm_ret32(ret, r);
+  return 0;
+}
+
+static int
 vmir_ftell(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
@@ -1607,6 +1620,7 @@ static const vmir_function_tab_t libc_funcs[] = {
   FN_EXT("fread",   vmir_fread),
   FN_EXT("fwrite",  vmir_fwrite),
   FN_EXT("feof",    vmir_feof),
+  FN_EXT("fflush",  vmir_fflush),
   FN_EXT("ftell",   vmir_ftell),
   FN_EXT("ftello",  vmir_ftello),
   FN_EXT("fclose",  vmir_fclose),
