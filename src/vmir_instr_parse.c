@@ -352,7 +352,7 @@ typedef struct ir_instr_jsr {
  *
  */
 typedef struct ir_instr_path {
-  int64_t v64;
+  uint64_t v64;
   int block;
 } ir_instr_path_t;
 
@@ -1057,6 +1057,8 @@ parse_switch(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   i->defblock = defblock;
   i->num_paths = paths;
 
+  const int width = type_bitwidth(iu, type_get(iu, typeid));
+  const uint64_t mask = width == 64 ? ~1ULL : (1ULL << width) - 1;
   for(int n = 0; n < paths; n++) {
     int val = instr_get_uint(iu, &argc, &argv);
     i->paths[n].block = instr_get_uint(iu, &argc, &argv);
@@ -1066,7 +1068,7 @@ parse_switch(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
       parser_error(iu, "Switch on non-constant value");
     if(iv->iv_type != typeid)
       parser_error(iu, "Type mismatch for switch/case values");
-    i->paths[n].v64 = value_get_const64(iu, iv);
+    i->paths[n].v64 = value_get_const64(iu, iv) & mask;
   }
   qsort(i->paths, paths, sizeof(ir_instr_path_t), switch_sort64);
 }

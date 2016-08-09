@@ -1252,7 +1252,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(CAST_16_ZEXT_1)   AR32(0, R32(1)); NEXT(2);
   VMOP(CAST_16_ZEXT_8)   AR32(0, R8(1)); NEXT(2);
   VMOP(CAST_16_SEXT_8)   AR32(0, S8(1)); NEXT(2);
-  VMOP(CAST_16_TRUNC_32) AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_16_TRUNC_32) AR32(0, R16(1)); NEXT(2);
   VMOP(CAST_16_TRUNC_64) AR32(0, R64(1)); NEXT(2);
   VMOP(CAST_16_FPTOSI_FLT) AR32(0, (int32_t)RFLT(1)); NEXT(2);
   VMOP(CAST_16_FPTOUI_FLT) AR32(0, (uint32_t)RFLT(1)); NEXT(2);
@@ -3420,16 +3420,28 @@ emit_switch(ir_unit_t *iu, ir_instr_switch_t *ii)
   assert(c->iv_class == IR_VC_REGFRAME);
   int reg = value_reg(c);
 
-  switch(legalize_type(cty)) {
+  switch(cty->it_code) {
 
-  case IR_TYPE_INT1:
-  case IR_TYPE_INT8:
-
+  case IR_TYPE_INTx:
     width = type_bitwidth(iu, cty);
+    assert(width < 32);
+    mask32 = (1 << width) - 1;
+
+    assert(c->iv_class == IR_VC_REGFRAME);
+    emit_op2(iu, VM_AND_R32C, 0, reg);
+    emit_i32(iu, mask32);
+
+    reg = 0;
+
+    goto switch32;
+    /*
     if(width <= 4) {
       jumptable_size = 1 << width;
       goto jumptable;
     }
+    */
+  case IR_TYPE_INT1:
+  case IR_TYPE_INT8:
 
     if(ii->num_paths > 64) {
       jumptable_size = 256;
