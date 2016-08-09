@@ -315,3 +315,16 @@ void vmir_set_debugged_function(ir_unit_t *iu, const char *function);
  * Print various stats about code transformation to stdout
  */
 void vmir_print_stats(ir_unit_t *iu);
+
+
+/**
+ *
+ */
+void vmir_walk_heap(ir_unit_t *iu,
+                    void (*fn)(void *opaque, uint32_t addr, uint32_t size,
+                               int inuse),
+                    void *opaque);
+
+void vmir_walk_fds(ir_unit_t *iu,
+                   void (*fn)(void *opaque, int fd, int type),
+                   void *opaque);

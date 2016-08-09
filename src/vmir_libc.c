@@ -57,7 +57,7 @@ vmir_heap_init(ir_unit_t *iu)
 
 
 static void
-walker(void* ptr, size_t size, int used, void* user)
+walker_print(void* ptr, size_t size, int used, void* user)
 {
   printf("%p +%zd %s\n", ptr, size, used ? "Used" : "Free");
 }
@@ -66,7 +66,38 @@ static void
 vmir_heap_print0(void *pool)
 {
   printf(" --- Heap allocation dump (TLSF) ---\n");
-  tlsf_walk_heap(pool, walker, NULL);
+  tlsf_walk_heap(pool, walker_print, NULL);
+}
+
+
+
+typedef struct walkeraux {
+  void (*fn)(void *opaque, uint32_t addr, uint32_t size,
+             int inuse);
+  void *opaque;
+  ir_unit_t *iu;
+} walkeraux_t;
+
+
+static void
+walker_ext(void *ptr, size_t size, int used, void* user)
+{
+  walkeraux_t *aux = user;
+  aux->fn(aux->opaque, (uint32_t)(ptr - aux->iu->iu_mem), size, used);
+}
+
+
+void
+vmir_walk_heap(ir_unit_t *iu,
+               void (*fn)(void *opaque, uint32_t addr, uint32_t size,
+                          int inuse),
+               void *opaque)
+{
+  walkeraux_t aux;
+  aux.fn = fn;
+  aux.opaque = opaque;
+  aux.iu = iu;
+  tlsf_walk_heap(iu->iu_heap, walker_ext, &aux);
 }
 
 
@@ -1820,4 +1851,17 @@ libc_terminate(ir_unit_t *iu)
 
   while((vf = LIST_FIRST(&iu->iu_vfiles)) != NULL)
     fclose(vf->fp);
+}
+
+
+void
+vmir_walk_fds(ir_unit_t *iu,
+              void (*fn)(void *opaque, int fd, int type),
+              void *opaque)
+{
+  for(int i = 0; i < VECTOR_LEN(&iu->iu_vfds); i++) {
+    vmir_fd_t *vfd = &VECTOR_ITEM(&iu->iu_vfds, i);
+    if(vfd->type != 0)
+      fn(opaque, i, vfd->type);
+  }
 }
