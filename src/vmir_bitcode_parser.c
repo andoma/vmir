@@ -100,7 +100,7 @@ module_globalvar(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_globalvar_t *ig = calloc(1, sizeof(ir_globalvar_t));
   ig->ig_type = pointee;
 
-  unsigned int alignment = vmir_llvm_alignment(argv[4].i64);
+  unsigned int alignment = vmir_llvm_alignment(argv[4].i64, 4);
   const int val_id = value_append(iu);
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_id);
   iv->iv_class = IR_VC_GLOBALVAR;

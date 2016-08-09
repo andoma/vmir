@@ -123,10 +123,10 @@ vmir_hexdump(const char *pfx, const void *data_, int len)
 #define VMIR_ARRAYSIZE(x) (sizeof(x) / sizeof(x[0]))
 
 static int
-vmir_llvm_alignment(int align)
+vmir_llvm_alignment(int align, int default_alignment)
 {
   if(align == 0)
-    return 1;
+    return default_alignment;
   if(align > 9)
     return 256;
   return (1 << align) >> 1;

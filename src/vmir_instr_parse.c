@@ -1100,7 +1100,7 @@ parse_alloca(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   value_alloc_instr_ret(iu, rtype, &i->super);
 
-  i->alignment = vmir_llvm_alignment(flags & 0x1f);
+  i->alignment = vmir_llvm_alignment(flags & 0x1f, 4);
   i->num_items_value.value = argv[2].i64;
   i->num_items_value.type = argv[1].i64;
 }
