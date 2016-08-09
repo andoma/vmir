@@ -487,7 +487,7 @@ vmir_open(void *ret, const void *rf, ir_unit_t *iu)
   else
     vmir_flags |= VMIR_FS_OPEN_READ;
 
-  int fd = vfd_open(iu, path, flags);
+  int fd = vfd_open(iu, path, vmir_flags);
   vmir_vm_ret32(ret, fd);
   return 0;
 }
