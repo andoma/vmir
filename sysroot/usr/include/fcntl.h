@@ -13,6 +13,9 @@ extern "C"
 #define O_CREAT         00000100
 #define O_EXCL          00000200
 
+#define SEEK_SET	0
+#define SEEK_CUR	1
+#define SEEK_END	2
 
 int open(const char *pathname, int flags, ...);
 
