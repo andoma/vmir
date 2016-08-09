@@ -802,6 +802,46 @@ void vmir_set_external_function_resolver(ir_unit_t *iu, vmir_function_resolver_t
 /**
  *
  */
+static const ir_globalvar_t *
+find_globalvar(ir_unit_t *iu, const char *name)
+{
+  for(int i = 0; i < iu->iu_next_value; i++) {
+    ir_value_t *iv = value_get(iu, i);
+    if(iv->iv_class != IR_VC_GLOBALVAR)
+      continue;
+    ir_globalvar_t *ig = iv->iv_gvar;
+    if(ig->ig_name != NULL && !strcmp(ig->ig_name, name))
+      return ig;
+  }
+  return NULL;
+}
+
+
+/**
+ *
+ */
+static void
+run_global_ctors(ir_unit_t *iu)
+{
+  const ir_globalvar_t *ig = find_globalvar(iu, "llvm.global_ctors");
+
+  if(ig == NULL)
+    return;
+  const int ctor_size = 12;
+  int num_ctors = ig->ig_size / ctor_size;
+
+  for(int i = 0; i < num_ctors; i++) {
+    uint32_t fn = mem_rd32(iu->iu_mem + ig->ig_addr + ctor_size * i + 4, iu);
+    if(fn < VECTOR_LEN(&iu->iu_functions)) {
+      ir_function_t *f = VECTOR_ITEM(&iu->iu_functions, fn);
+      vmir_vm_function_call(iu, f, NULL);
+    }
+  }
+}
+
+/**
+ *
+ */
 int
 vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
 {
@@ -849,6 +889,8 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
     if(f->if_used && f->if_vm_text == NULL && f->if_ext_func == NULL)
       parser_error(iu, "Function %s() is not defined", f->if_name);
   }
+
+  run_global_ctors(iu);
 
   iu_cleanup(iu);
   return 0;
