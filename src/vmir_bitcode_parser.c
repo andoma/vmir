@@ -109,6 +109,7 @@ module_globalvar(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   assert(alignment > 0);
   iu->iu_data_ptr = VMIR_ALIGN(iu->iu_data_ptr, alignment);
   ig->ig_addr = iu->iu_data_ptr;
+  ig->ig_size = type_sizeof(iu, pointee);
   iu->iu_data_ptr += type_sizeof(iu, pointee);
 
   const unsigned int initializer = argv[2].i64;

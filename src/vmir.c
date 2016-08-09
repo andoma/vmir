@@ -350,7 +350,7 @@ typedef struct ir_globalvar {
   unsigned int ig_type;
   char *ig_name;
   uint32_t ig_addr;
-
+  uint32_t ig_size;
 } ir_globalvar_t;
 
 
