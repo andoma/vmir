@@ -1,4 +1,4 @@
-CLANG=clang
+CLANG=${LLVM_TOOLCHAIN}clang${LLVM_VERSION}
 SRCFILES = $(shell find src/ -type f -name '*.c')
 CFILES = $(patsubst src/%.c, %, $(SRCFILES))
 
@@ -15,7 +15,6 @@ CFLAGS += --sysroot=${SYSROOT} -I${SYSROOT}/usr/include -std=gnu99
 .PHONY: all
 all: ${O0FILES} ${O1FILES} ${O2FILES}
 
-#LLVM_VER=-3.7
 
 build-O0/%.bc: src/%.c Makefile
 	@mkdir -p "$(@D)"

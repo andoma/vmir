@@ -1,4 +1,4 @@
-CLANG=clang${LLVM_VER}
+CLANG=${LLVM_TOOLCHAIN}clang${LLVM_VERSION}
 SRCFILES = $(shell find src/ -type f -name '*.c')
 CFILES = $(patsubst src/%.c, %, $(SRCFILES))
 
