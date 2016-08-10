@@ -83,8 +83,7 @@ arm_machinereg(int reg)
 #define R_MEM     1
 #define R_TMPA    2
 #define R_TMPB    3
-
-#define R_TMPC    11
+#define R_TMPC    9
 
 #define LITERAL_POOL_MAX_SIZE 256
 
@@ -970,7 +969,7 @@ jit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii, jitctx_t *jc)
     Ra = jit_loadvalue(iu, ii->arg3, R_TMPA, jc);
   } else if(Rm != R_TMPB) {
     Ra = jit_loadvalue(iu, ii->arg3, R_TMPB, jc);
-  }else {
+  } else {
     Ra = jit_loadvalue(iu, ii->arg3, R_TMPC, jc);
   }
 
