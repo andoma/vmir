@@ -175,6 +175,8 @@ ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
 #define VM_STOP_BAD_FUNCTION 5     // Unresolved function was called
 #define VM_STOP_UNCAUGHT_EXCEPTION 6
 #define VM_STOP_ACCESS_VIOLATION 7
+#define VM_STOP_BAD_ARGUMENTS   8
+#define VM_STOP_OUT_OF_MEMROY   9
 
 /**
  * Call a vmir function
@@ -243,18 +245,16 @@ void vmir_vm_ret64(void *ret, uint64_t v);
 
 
 /**
- * Copy a string to the alloca stack
+ * Copy data to VM space
  */
 
-uint32_t vmir_astack_mark(ir_unit_t *iu);
+uint32_t vmir_mem_alloc(ir_unit_t *iu, uint32_t size, void *hostaddr);
 
-void vmir_astack_restore(ir_unit_t *iu, uint32_t value);
+uint32_t vmir_mem_strdup(ir_unit_t *iu, const char *str);
 
-uint32_t vmir_astack_copy_str(ir_unit_t *iu, const char *str);
+uint32_t vmir_mem_copy(ir_unit_t *iu, const void *data, size_t size);
 
-uint32_t vmir_astack_copy_buf(ir_unit_t *iu, const void *buf, size_t len,
-                              void **hptr);
-
+void vmir_mem_free(ir_unit_t *iu, uint32_t addr);
 
 /**
  * Filedescriptors

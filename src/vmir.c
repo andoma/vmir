@@ -187,12 +187,10 @@ struct ir_unit {
   void *iu_jit_mem;
   int iu_jit_mem_alloced;
   int iu_jit_ptr;
-  void *iu_rf;
 
   vmir_exception_t iu_exception;
 
-  struct vm_stack_frame *iu_current_frame;
-  int iu_trace_on;
+  const struct vm_frame *iu_current_frame;
   char *iu_traced_function;
 
   uint32_t iu_data_ptr;
@@ -200,8 +198,9 @@ struct ir_unit {
   void *iu_heap;
   uint32_t iu_rsize;
   uint32_t iu_asize;
-  uint32_t iu_alloca_ptr;
   uint32_t iu_memsize;
+
+  uint32_t iu_stack_stash;
 
   struct vFILE *iu_stdin;
   struct vFILE *iu_stdout;
@@ -287,7 +286,6 @@ vmir_host_to_vmaddr(ir_unit_t *iu, void *ptr)
     return 0;
   return ptr - iu->iu_mem;
 }
-
 
 /**
  * Attribute
@@ -691,9 +689,9 @@ initialize_globals(ir_unit_t *iu, void *mem)
     const ir_value_t *c  = value_get(iu, ii->ii_constant);
     const ir_globalvar_t *ig = gv->iv_gvar;
 #if 0
-    printf("Initializing '%s' @ 0x%x with '%s'\n",
+    printf("Initializing global @ 0x%08x + 0x%08x '%s' with '%s'\n",
+           ig->ig_addr, ig->ig_size,
            value_str_id(iu, ii->ii_globalvar),
-           ig->ig_addr,
            value_str_id(iu, ii->ii_constant));
 #endif
     initialize_global(iu, mem + ig->ig_addr, ig->ig_type, c);
@@ -768,14 +766,12 @@ vmir_create(void *membase, uint32_t memsize,
   iu->iu_opaque = opaque;
   iu->iu_mem = membase;
   iu->iu_memsize = memsize;
-  iu->iu_rf = membase;
   iu->iu_rsize = rsize;
-  iu->iu_alloca_ptr = rsize;
   iu->iu_asize = asize;
   iu->iu_text_alloc_memsize = 1024 * 1024;
   iu->iu_text_alloc = malloc(iu->iu_text_alloc_memsize);
 
-  iu->iu_mem_low = iu->iu_mem + rsize;
+  iu->iu_mem_low = iu->iu_mem;
   iu->iu_mem_high = iu->iu_mem + memsize;
 
   return iu;
@@ -857,7 +853,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   iu->iu_bs = &bs;
 
   TAILQ_INIT(&iu->iu_functions_with_bodies);
-  iu->iu_data_ptr = iu->iu_rsize + iu->iu_asize;
+  iu->iu_data_ptr = 4096;
 
   if(setjmp(iu->iu_parser_jmp)) {
     iu_cleanup(iu);
@@ -932,19 +928,14 @@ vmir_dump_instrumentation(ir_unit_t *iu)
  *
  */
 uint32_t
-vmir_astack_mark(ir_unit_t *iu)
+vmir_mem_copy(ir_unit_t *iu, const void *data, size_t len)
 {
-  return iu->iu_alloca_ptr;
-}
+  void *hostaddr;
+  uint32_t addr = vmir_mem_alloc(iu, len, &hostaddr);
+  if(hostaddr != NULL)
+    memcpy(hostaddr, data, len);
 
-
-/**
- *
- */
-void
-vmir_astack_restore(ir_unit_t *iu, uint32_t a)
-{
-  iu->iu_alloca_ptr = a;
+  return addr;
 }
 
 
@@ -952,25 +943,9 @@ vmir_astack_restore(ir_unit_t *iu, uint32_t a)
  *
  */
 uint32_t
-vmir_astack_copy_buf(ir_unit_t *iu, const void *buf, size_t len, void **hptr)
+vmir_mem_strdup(ir_unit_t *iu, const char *str)
 {
-  uint32_t r = iu->iu_alloca_ptr;
-  void *m = iu->iu_mem + r;
-  if(buf != NULL)
-    memcpy(m, buf, len);
-  if(hptr != NULL)
-    *hptr = m;
-  iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr + len, 8);
-  return r;
-}
-
-/**
- *
- */
-uint32_t
-vmir_astack_copy_str(ir_unit_t *iu, const char *str)
-{
-  return vmir_astack_copy_buf(iu, str, strlen(str) + 1, NULL);
+  return vmir_mem_copy(iu, str, strlen(str) + 1);
 }
 
 
@@ -978,19 +953,19 @@ vmir_astack_copy_str(ir_unit_t *iu, const char *str)
  * Copy argv vector into VM space (at top of alloca stack)
  */
 static uint32_t
-vmir_copy_argv(ir_unit_t *iu, int argc, char **argv)
+vmir_argv_copy(ir_unit_t *iu, int argc, char **argv)
 {
-  uint32_t vm_argv = iu->iu_alloca_ptr;
-  void *vm_argv_host = iu->iu_mem + vm_argv;
-  iu->iu_alloca_ptr += (argc + 1) * sizeof(uint32_t);
+  void *vm_argv_host;
+  uint32_t vm_argv = vmir_mem_alloc(iu, (argc + 1) * sizeof(uint32_t),
+                                    &vm_argv_host);
 
   for(int i = 0; i < argc; i++) {
-    uint32_t str = vmir_astack_copy_str(iu, argv[i]);
+    uint32_t str = vmir_mem_strdup(iu, argv[i]);
     mem_wr32(vm_argv_host + i * sizeof(uint32_t), str, iu);
   }
-  iu->iu_alloca_ptr = VMIR_ALIGN(iu->iu_alloca_ptr, 8);
   return vm_argv;
 }
+
 
 /**
  *
@@ -1002,25 +977,17 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
   f = vmir_find_function(iu, "main");
   if(f == NULL) {
     printf("main() not found\n");
-    exit(1);
+    return;
   }
 
-  uint32_t astack = vmir_astack_mark(iu);
-
-  int vm_argv = vmir_copy_argv(iu, argc, argv);
+  int vm_argv = vmir_argv_copy(iu, argc, argv);
 
   union {
     uint32_t u32;
     uint64_t u64;
   } ret;
 
-  int64_t ts = get_ts();
   int r = vmir_vm_function_call(iu, f, &ret, argc, vm_argv);
-  vmir_astack_restore(iu, astack);
-  ts = get_ts() - ts;
-  printf("main() took %"PRId64"\n", ts);
-  if(0)
-    libc_terminate(iu);
 
   switch(r) {
   case 0:

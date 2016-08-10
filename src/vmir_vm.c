@@ -30,19 +30,30 @@
 #include <unistd.h>
 
 
+typedef struct vm_frame {
+  ir_unit_t *iu;
+  uint32_t allocaptr;
+
+#ifdef VM_TRACE_FUNCTION
+  const ir_function_t *func;
+  const struct vm_frame *prev;
+  int trace;
+#endif
+} vm_frame_t;
+
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
 #endif
 
 #ifdef VM_TRACE
-#define vm_tracef(iu, fmt, ...) do {             \
-    if(iu->iu_trace_on)                          \
+#define vm_tracef(f, fmt, ...) do {              \
+    if((f)->trace)                               \
       printf(fmt"\n", ##__VA_ARGS__);            \
   } while(0)
 
 #else
-#define vm_tracef(iu, fmt...)
+#define vm_tracef(f, fmt...)
 #endif
 
 #ifdef VM_TRACE
@@ -57,22 +68,6 @@ typedef struct ir_instr_backref {
 
 #ifdef VM_TRACE_FUNCTION
 
-typedef struct vm_stack_frame {
-  const ir_function_t *f;
-  struct vm_stack_frame *prev;
-  struct ir_unit *iu;
-  int traceflags;
-} vm_stack_frame_t;
-
-static void
-restoreframe(vm_stack_frame_t *f)
-{
-  if(f->iu) {
-    f->iu->iu_current_frame = f->prev;
-    f->iu->iu_trace_on = f->traceflags;
-  }
-}
-
 
 static ir_function_t *
 vm_getfunc(int callee, ir_unit_t *iu)
@@ -86,11 +81,11 @@ vm_getfunc(int callee, ir_unit_t *iu)
 static void
 vmir_traceback(struct ir_unit *iu)
 {
-  vm_stack_frame_t *f;
+  const vm_frame_t *f;
 
   printf("traceback\n");
   for(f = iu->iu_current_frame; f != NULL; f = f->prev) {
-    printf("  %s()\n", f->f->if_name);
+    printf("  %s()\n", f->func->if_name);
   }
 }
 
@@ -245,132 +240,132 @@ vm_vaarg64(void *rf, void **ptr)
 
 #ifdef VM_TRACE
 static void __attribute__((noinline))
-vm_wr_u32(ir_unit_t *iu, void *rf, int16_t reg, uint32_t data)
+vm_wr_u32(const vm_frame_t *f, void *rf, int16_t reg, uint32_t data)
 {
-  vm_tracef(iu, "Reg 0x%x (u32) = 0x%x", reg, data);
+  vm_tracef(f, "Reg 0x%x (u32) = 0x%x", reg, data);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_u64(ir_unit_t *iu, void *rf, int16_t reg, uint64_t data)
+vm_wr_u64(const vm_frame_t *f, void *rf, int16_t reg, uint64_t data)
 {
-  vm_tracef(iu, "Reg 0x%x (u64) = 0x%"PRIx64"", reg, data);
+  vm_tracef(f, "Reg 0x%x (u64) = 0x%"PRIx64"", reg, data);
   *(uint64_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_flt(ir_unit_t *iu, void *rf, int16_t reg, float data)
+vm_wr_flt(const vm_frame_t *f, void *rf, int16_t reg, float data)
 {
-  vm_tracef(iu, "Reg 0x%x (flt) = %f", reg, data);
+  vm_tracef(f, "Reg 0x%x (flt) = %f", reg, data);
   *(float *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_wr_dbl(ir_unit_t *iu, void *rf, int16_t reg, double data)
+vm_wr_dbl(const vm_frame_t *f, void *rf, int16_t reg, double data)
 {
-  vm_tracef(iu, "Reg 0x%x (dbl) = %f", reg, data);
+  vm_tracef(f, "Reg 0x%x (dbl) = %f", reg, data);
   *(double *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_8(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_8(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint8_t data = mem_rd8(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u8) = Loaded 0x%x from 0x%08x",
+  uint8_t data = mem_rd8(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u8) = Loaded 0x%x from 0x%08x",
          reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_8_zext_32(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_8_zext_32(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint8_t data = mem_rd8(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u32) = Loaded.u8 0x%x from 0x%08x",
+  uint8_t data = mem_rd8(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u32) = Loaded.u8 0x%x from 0x%08x",
          reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_8_sext_32(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_8_sext_32(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  int8_t data = mem_rd8(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u32) = Loaded.s8 0x%x from 0x%08x",
+  int8_t data = mem_rd8(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u32) = Loaded.s8 0x%x from 0x%08x",
          reg, data, ea);
   *(int32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_16(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_16(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint16_t data = mem_rd16(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u16) = Loaded 0x%x from 0x%08x",
+  uint16_t data = mem_rd16(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u16) = Loaded 0x%x from 0x%08x",
          reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_16_zext_32(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_16_zext_32(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint16_t data = mem_rd16(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u32) = Loaded.u16 0x%x from 0x%08x",
+  uint16_t data = mem_rd16(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u32) = Loaded.u16 0x%x from 0x%08x",
          reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_16_sext_32(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_16_sext_32(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  int16_t data = mem_rd16(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u32) = Loaded.s16 0x%x from 0x%08x",
+  int16_t data = mem_rd16(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u32) = Loaded.s16 0x%x from 0x%08x",
          reg, data, ea);
   *(int32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_32(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_32(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint32_t data = mem_rd32(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u32) = Loaded 0x%x from 0x%08x",
+  uint32_t data = mem_rd32(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u32) = Loaded 0x%x from 0x%08x",
          reg, data, ea);
   *(uint32_t *)(rf + reg) = data;
 }
 
 static void __attribute__((noinline))
-vm_load_64(ir_unit_t *iu, void *rf, int16_t reg, void *mem, uint32_t ea)
+vm_load_64(const vm_frame_t *f, void *rf, int16_t reg, void *mem, uint32_t ea)
 {
-  uint64_t data = mem_rd64(mem + ea, iu);
-  vm_tracef(iu, "Reg 0x%x (u64) = Loaded 0x%"PRIx64" from 0x%08x",
+  uint64_t data = mem_rd64(mem + ea, f->iu);
+  vm_tracef(f, "Reg 0x%x (u64) = Loaded 0x%"PRIx64" from 0x%08x",
          reg, data, ea);
   *(uint64_t *)(rf + reg) = data;
 }
 
 
 static void __attribute__((noinline))
-vm_store_8(ir_unit_t *iu, void *mem, uint32_t ea, uint8_t v)
+vm_store_8(const vm_frame_t *f, void *mem, uint32_t ea, uint8_t v)
 {
-  vm_tracef(iu, "Store (u8) 0x%x to 0x%08x", v, ea);
-  mem_wr8(mem + ea, v, iu);
+  vm_tracef(f, "Store (u8) 0x%x to 0x%08x", v, ea);
+  mem_wr8(mem + ea, v, f->iu);
 }
 
 static void __attribute__((noinline))
-vm_store_16(ir_unit_t *iu, void *mem, uint32_t ea, uint16_t v)
+vm_store_16(const vm_frame_t *f, void *mem, uint32_t ea, uint16_t v)
 {
-  vm_tracef(iu, "Store (u16) 0x%x to 0x%08x", v, ea);
-  mem_wr16(mem + ea, v, iu);
+  vm_tracef(f, "Store (u16) 0x%x to 0x%08x", v, ea);
+  mem_wr16(mem + ea, v, f->iu);
 }
 
 static void __attribute__((noinline))
-vm_store_32(ir_unit_t *iu, void *mem, uint32_t ea, uint32_t v)
+vm_store_32(const vm_frame_t *f, void *mem, uint32_t ea, uint32_t v)
 {
-  vm_tracef(iu, "Store (u32) 0x%x to 0x%08x", v, ea);
-  mem_wr32(mem + ea, v, iu);
+  vm_tracef(f, "Store (u32) 0x%x to 0x%08x", v, ea);
+  mem_wr32(mem + ea, v, f->iu);
 }
 
 static void __attribute__((noinline))
-vm_store_64(ir_unit_t *iu, void *mem, uint32_t ea, uint64_t v)
+vm_store_64(const vm_frame_t *f, void *mem, uint32_t ea, uint64_t v)
 {
-  vm_tracef(iu, "Store (u64) 0x%"PRIx64" to 0x%08x", v, ea);
-  mem_wr64(mem + ea, v, iu);
+  vm_tracef(f, "Store (u64) 0x%"PRIx64" to 0x%08x", v, ea);
+  mem_wr64(mem + ea, v, f->iu);
 }
 
 
@@ -403,29 +398,29 @@ vm_funcname(int callee, ir_unit_t *iu)
 
 #ifdef VM_TRACE
 
-#define AR32(reg, src) vm_wr_u32(iu, rf, I[reg], src)
-#define AR64(reg, src) vm_wr_u64(iu, rf, I[reg], src)
-#define AFLT(reg, src) vm_wr_flt(iu, rf, I[reg], src)
-#define ADBL(reg, src) vm_wr_dbl(iu, rf, I[reg], src)
+#define AR32(reg, src) vm_wr_u32(&F, rf, I[reg], src)
+#define AR64(reg, src) vm_wr_u64(&F, rf, I[reg], src)
+#define AFLT(reg, src) vm_wr_flt(&F, rf, I[reg], src)
+#define ADBL(reg, src) vm_wr_dbl(&F, rf, I[reg], src)
 
 
 
-#define LOAD8(reg, ea)       vm_load_8(iu, rf,  I[reg], hostmem, ea)
-#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(iu, rf,  I[r], hostmem, ea)
-#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(iu, rf,  I[r], hostmem, ea)
+#define LOAD8(reg, ea)       vm_load_8(&F, rf,  I[reg], hostmem, ea)
+#define LOAD8_ZEXT_32(r, ea) vm_load_8_zext_32(&F, rf,  I[r], hostmem, ea)
+#define LOAD8_SEXT_32(r, ea) vm_load_8_sext_32(&F, rf,  I[r], hostmem, ea)
 
-#define LOAD16(reg, ea)       vm_load_16(iu, rf, I[reg], hostmem, ea)
-#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(iu, rf,  I[r], hostmem, ea)
-#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(iu, rf,  I[r], hostmem, ea)
+#define LOAD16(reg, ea)       vm_load_16(&F, rf, I[reg], hostmem, ea)
+#define LOAD16_ZEXT_32(r, ea) vm_load_16_zext_32(&F, rf,  I[r], hostmem, ea)
+#define LOAD16_SEXT_32(r, ea) vm_load_16_sext_32(&F, rf,  I[r], hostmem, ea)
 
 
-#define LOAD32(reg, ea)  vm_load_32(iu, rf, I[reg], hostmem, ea)
-#define LOAD64(reg, ea)  vm_load_64(iu, rf, I[reg], hostmem, ea)
+#define LOAD32(reg, ea)  vm_load_32(&F, rf, I[reg], hostmem, ea)
+#define LOAD64(reg, ea)  vm_load_64(&F, rf, I[reg], hostmem, ea)
 
-#define STORE8(ea, v)    vm_store_8(iu, hostmem, ea, v)
-#define STORE16(ea, v)   vm_store_16(iu, hostmem, ea, v)
-#define STORE32(ea, v)   vm_store_32(iu, hostmem, ea, v)
-#define STORE64(ea, v)   vm_store_64(iu, hostmem, ea, v)
+#define STORE8(ea, v)    vm_store_8(&F, hostmem, ea, v)
+#define STORE16(ea, v)   vm_store_16(&F, hostmem, ea, v)
+#define STORE32(ea, v)   vm_store_32(&F, hostmem, ea, v)
+#define STORE64(ea, v)   vm_store_64(&F, hostmem, ea, v)
 
 
 #else
@@ -498,7 +493,9 @@ static int vm_find_backref(const void *A, const void *B)
 
 
 static void
-vm_trace_instruction(ir_unit_t *iu, const ir_function_t *f, const uint16_t *I,
+vm_trace_instruction(const vm_frame_t *frame,
+                     const ir_function_t *f,
+                     const uint16_t *I,
                      const char *opname)
 {
   int pc = (int)((void *)I - (void *)f->if_vm_text) - 2;
@@ -509,45 +506,46 @@ vm_trace_instruction(ir_unit_t *iu, const ir_function_t *f, const uint16_t *I,
                                     sizeof(ir_instr_backref_t),
                                     vm_find_backref);
   if(iib != NULL)
-    vm_tracef(iu, "%s().%d: %s [vmop:%s]",
+    vm_tracef(frame, "%s().%d: %s [vmop:%s]",
               f->if_name, iib->bb, iib->str, opname);
   else
-    vm_tracef(iu, "%s(): %s @ %d", f->if_name, opname, pc);
+    vm_tracef(frame, "%s(): %s @ %d", f->if_name, opname, pc);
 }
 #endif
 
 
+
+
 static int __attribute__((noinline))
-vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
-        uint32_t allocaptr, vm_op_t op
-#ifdef VM_TRACE_FUNCTION
-        , ir_function_t *f
-#endif
-)
+vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 {
-
-#ifdef VM_TRACE_FUNCTION
-  vm_stack_frame_t frame __attribute__((cleanup(restoreframe)));
-  frame.f = f;
-  frame.iu = iu;
-  if(iu != NULL) {
-    frame.prev = iu->iu_current_frame;
-    frame.traceflags = iu->iu_trace_on;
-
-    iu->iu_current_frame = &frame;
-
-    iu->iu_trace_on = iu->iu_traced_function &&
-      !strcmp(f->if_name, iu->iu_traced_function);
-  }
+#ifndef VM_DONT_USE_COMPUTED_GOTO
+  if(rf == NULL)
+    goto resolve;
 #endif
 
   int r;
   int16_t opc;
-#ifndef VM_DONT_USE_COMPUTED_GOTO
-  if((int)op != -1)
-    goto resolve;
+  vm_frame_t F = *P;
+  ir_unit_t *iu = F.iu;
   void *hostmem = iu->iu_mem;
 
+#ifdef VM_TRACE_FUNCTION
+  iu->iu_current_frame = &F;
+  F.prev = P;
+  F.trace = !iu->iu_traced_function ||
+    !strcmp(P->func->if_name, iu->iu_traced_function);
+
+#define RESTORE_CURRENT_FRAME() iu->iu_current_frame = P
+#define SET_CALLEE_FUNC(x) F.func = vm_getfunc(x, iu)
+#else
+#define RESTORE_CURRENT_FRAME()
+#define SET_CALLEE_FUNC(x)
+#endif
+
+    RESTORE_CURRENT_FRAME();
+
+#ifndef VM_DONT_USE_COMPUTED_GOTO
 #define NEXT(skip) I+=skip; opc = *I++; goto *(&&opz + opc)
 #define VMOP(x) x: // printf("%s\n", #x);
 
@@ -559,14 +557,10 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
     vm_stop(iu, VM_STOP_BAD_INSTRUCTION, 0);
 #else
 
-  if((int)op != -1)
-    return op; // Resolve to itself when we use switch() { case ... }
-  void *hostmem = iu->iu_mem;
-
 #define NEXT(skip) I+=skip; opc = *I++; goto reswitch
 
 #ifdef VM_TRACE
-#define VMOP(x) case VM_ ## x : do { if(iu->iu_trace_on) { vm_trace_instruction(iu, f, I, #x);} } while(0);
+#define VMOP(x) case VM_ ## x : do { if(F.trace) { vm_trace_instruction(&F, P->func, I, #x);} } while(0);
 #else
 #define VMOP(x) case VM_ ## x :
 #endif
@@ -574,18 +568,6 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   opc = *I++;
  reswitch:
 
-  #if 0
-  if(traceaddr != -1) {
-    static uint32_t cmpval;
-    uint32_t v = *(uint32_t *)(iu->iu_mem + traceaddr);
-    if(v != cmpval) {
-      printf("Traced address %x changed from %x to %x\n",
-             traceaddr, cmpval, v);
-      cmpval = v;
-      vmir_traceback(iu);
-    }
-  }
-#endif
 
   switch(opc) {
   default:
@@ -622,44 +604,37 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   VMOP(BCOND) I = (void *)I + (int16_t)(R32(0) ? I[1] : I[2]); NEXT(0);
 
   VMOP(JSR_VM)
-    vm_tracef(iu, "Calling %s", vm_funcname(I[0], iu));
-    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE_FUNCTION
-                , vm_getfunc(I[0], iu)
-#endif
-                );
+    vm_tracef(&F, "Calling %s", vm_funcname(I[0], iu));
+    SET_CALLEE_FUNC(I[0]);
+    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], rf + I[2], &F);
+    RESTORE_CURRENT_FRAME();
     if(r)
       return r;
     NEXT(3);
 
   VMOP(JSR_EXT)
-    vm_tracef(iu, "Calling %s (external)", vm_funcname(I[0], iu));
-    iu->iu_rf = rf + I[1];
-    iu->iu_alloca_ptr = allocaptr;
+    vm_tracef(&F, "Calling %s (external)", vm_funcname(I[0], iu));
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    RESTORE_CURRENT_FRAME();
     if(r)
       return r;
     NEXT(3);
 
   VMOP(JSR_R)
-    vm_tracef(iu, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
+    vm_tracef(&F, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
     if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
     }
 
+    SET_CALLEE_FUNC(R32(0));
     if(iu->iu_vm_funcs[R32(0)]) {
-      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu,
-                  rf + I[2], allocaptr, -1
-#ifdef VM_TRACE_FUNCTION
-                  , vm_getfunc(R32(0), iu)
-#endif
-                  );
-    if(r)
-      return r;
+      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], rf + I[2], &F);
+      RESTORE_CURRENT_FRAME();
+      if(r)
+        return r;
     } else if(iu->iu_ext_funcs[R32(0)]) {
-      iu->iu_rf = rf + I[1];
-      iu->iu_alloca_ptr = allocaptr;
       iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+      RESTORE_CURRENT_FRAME();
     } else {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
     }
@@ -668,36 +643,30 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
 
   VMOP(INVOKE_VM)
-    vm_tracef(iu, "Invoking %s", vm_funcname(I[0], iu));
-    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE_FUNCTION
-                , vm_getfunc(I[0], iu)
-#endif
-                );
+    vm_tracef(&F, "Invoking %s", vm_funcname(I[0], iu));
+    SET_CALLEE_FUNC(I[0]);
+    r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], rf + I[2], &F);
+    RESTORE_CURRENT_FRAME();
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_EXT)
-    vm_tracef(iu, "Calling %s (external)", vm_funcname(I[0], iu));
-    iu->iu_rf = rf + I[1];
-    iu->iu_alloca_ptr = allocaptr;
+    vm_tracef(&F, "Calling %s (external)", vm_funcname(I[0], iu));
     r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    RESTORE_CURRENT_FRAME();
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_R)
-    vm_tracef(iu, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
+    vm_tracef(&F, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
     if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
     }
+    SET_CALLEE_FUNC(R32(0));
     if(iu->iu_vm_funcs[R32(0)]) {
-      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], iu, rf + I[2], allocaptr, -1
-#ifdef VM_TRACE_FUNCTION
-                  , vm_getfunc(R32(0), iu)
-#endif
-              );
+      r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], rf + I[2], &F);
+      RESTORE_CURRENT_FRAME();
     } else if(iu->iu_ext_funcs[R32(0)]) {
-      iu->iu_rf = rf + I[1];
-      iu->iu_alloca_ptr = allocaptr;
       r = iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+      RESTORE_CURRENT_FRAME();
     } else {
       vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
     }
@@ -1388,44 +1357,44 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
 
   VMOP(ALLOCA) {
-      allocaptr = VMIR_ALIGN(allocaptr, I[1]);
-      AR32(0, allocaptr);
-      allocaptr += UIMM32(2);
+      F.allocaptr = VMIR_ALIGN(F.allocaptr, I[1]);
+      AR32(0, F.allocaptr);
+      F.allocaptr += UIMM32(2);
       NEXT(4);
     }
 
   VMOP(ALLOCAD) {
-      allocaptr = VMIR_ALIGN(allocaptr, I[1]);
-      uint32_t r = allocaptr;
-      allocaptr += UIMM32(3) * R32(2);
+      F.allocaptr = VMIR_ALIGN(F.allocaptr, I[1]);
+      uint32_t r = F.allocaptr;
+      F.allocaptr += UIMM32(3) * R32(2);
       AR32(0, r);
       NEXT(5);
     }
 
   VMOP(STACKSHRINK)
-    allocaptr -= UIMM32(0);
+    F.allocaptr -= UIMM32(0);
     NEXT(2);
 
   VMOP(STACKSAVE)
-    AR32(0, allocaptr);
+    AR32(0, F.allocaptr);
     NEXT(1);
 
   VMOP(STACKRESTORE)
-    allocaptr = R32(0);
+    F.allocaptr = R32(0);
     NEXT(1);
 
   VMOP(STACKCOPYR)
-    allocaptr = VMIR_ALIGN(allocaptr, 4);
-    AR32(0, allocaptr);
-    memcpy(HOSTADDR(allocaptr), HOSTADDR(R32(1)), UIMM32(2));
-    allocaptr += UIMM32(2);
+    F.allocaptr = VMIR_ALIGN(F.allocaptr, 4);
+    AR32(0, F.allocaptr);
+    memcpy(HOSTADDR(F.allocaptr), HOSTADDR(R32(1)), UIMM32(2));
+    F.allocaptr += UIMM32(2);
     NEXT(4);
 
   VMOP(STACKCOPYC)
-    allocaptr = VMIR_ALIGN(allocaptr, 4);
-    AR32(0, allocaptr);
-    memcpy(HOSTADDR(allocaptr), HOSTADDR(UIMM32(1)), UIMM32(3));
-    allocaptr += UIMM32(3);
+    F.allocaptr = VMIR_ALIGN(F.allocaptr, 4);
+    AR32(0, F.allocaptr);
+    memcpy(HOSTADDR(F.allocaptr), HOSTADDR(UIMM32(1)), UIMM32(3));
+    F.allocaptr += UIMM32(3);
     NEXT(5);
 
   VMOP(UNREACHABLE) vm_stop(iu, VM_STOP_UNREACHABLE, 0);
@@ -1572,7 +1541,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 #ifndef VM_DONT_USE_COMPUTED_GOTO
 
  resolve:
-  switch(op) {
+  switch(I[0]) {
   case VM_NOP:       return &&NOP      - &&opz;     break;
 
   case VM_JIT_CALL:  return &&JIT_CALL - &&opz;     break;
@@ -2140,7 +2109,7 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
   case VM_INSTRUMENT_COUNT: return &&INSTRUMENT_COUNT - &&opz; break;
 
   default:
-    printf("Can't emit op %d\n", op);
+    printf("Can't emit op %d\n", I[0]);
     abort();
   }
 #endif
@@ -2148,16 +2117,16 @@ vm_exec(const uint16_t *I, void *rf, ir_unit_t *iu, void *ret,
 
 
 static int16_t
-vm_resolve(int op)
+vm_resolve(uint16_t opcode)
 {
-  int o = vm_exec(NULL, NULL, NULL, NULL, 0, op
-#ifdef VM_TRACE_FUNCTION
-                  , NULL
-#endif
-                  );
+#ifdef VM_DONT_USE_COMPUTED_GOTO
+  return opcode;
+#else
+  int o = vm_exec(&opcode, NULL, NULL, NULL);
   assert(o <= INT16_MAX);
   assert(o >= INT16_MIN);
   return o;
+#endif
 }
 
 /**
@@ -4662,7 +4631,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
 
   argpos += it->it_function.num_parameters * sizeof(uint32_t);
 
-  void *rf = iu->iu_rf;
+  void *rf = alloca(4096 * sizeof(uint32_t));
   void *rfa = rf + argpos;
 
   for(int i = 0; i < it->it_function.num_parameters; i++) {
@@ -4686,29 +4655,49 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
     default:
       fprintf(stderr, "Unable to encode argument %d (%s) in call to %s\n",
               i, type_str(iu, arg), f->if_name);
-      return 0;
+      return VM_STOP_BAD_ARGUMENTS;
     }
   }
+
+  uint32_t allocaptr;
+
+  if(iu->iu_stack_stash) {
+    allocaptr = iu->iu_stack_stash;
+    iu->iu_stack_stash = 0;
+  } else {
+    allocaptr = vmir_mem_alloc(iu, iu->iu_asize, NULL);
+    if(allocaptr == 0) {
+      return VM_STOP_OUT_OF_MEMROY;
+    }
+  }
+
   jmp_buf *prevjb = iu->iu_err_jmpbuf;
   iu->iu_err_jmpbuf = &jb;
-  const uint32_t alloca_ptr = iu->iu_alloca_ptr;
+
   int r = setjmp(jb);
   if(!r) {
     if(out == NULL)
       out = &dummy;
 
-    r = vm_exec(f->if_vm_text, rfa, iu, out, iu->iu_alloca_ptr, -1
+    vm_frame_t F = {
+      .iu = iu,
+      .allocaptr = allocaptr,
 #ifdef VM_TRACE_FUNCTION
-                , f
+      .func = f,
 #endif
-                );
+    };
+    r = vm_exec(f->if_vm_text, rfa, out, &F);
 
     if(r == 1)
       r = VM_STOP_UNCAUGHT_EXCEPTION;
   }
-  iu->iu_rf = rf;
   iu->iu_err_jmpbuf = prevjb;
-  iu->iu_alloca_ptr = alloca_ptr;
+
+  if(iu->iu_stack_stash == 0) {
+    iu->iu_stack_stash = allocaptr;
+  } else {
+    vmir_mem_free(iu, allocaptr);
+  }
   return r;
 }
 

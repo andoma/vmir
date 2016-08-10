@@ -1844,7 +1844,7 @@ libc_initialize(ir_unit_t *iu)
   }
 }
 
-static void
+static void __attribute__((unused))
 libc_terminate(ir_unit_t *iu)
 {
   vFILE_t *vf;
@@ -1864,4 +1864,26 @@ vmir_walk_fds(ir_unit_t *iu,
     if(vfd->type != 0)
       fn(opaque, i, vfd->type);
   }
+}
+
+
+uint32_t
+vmir_mem_alloc(ir_unit_t *iu, uint32_t size, void *hostaddr_)
+{
+  void **hostaddr = hostaddr_;
+  void *p = vmir_heap_malloc(iu->iu_heap, size);
+  if(p == NULL) {
+    if(hostaddr)
+      *hostaddr = NULL;
+    return 0;
+  }
+  if(hostaddr)
+    *hostaddr = p;
+  return p - iu->iu_mem;
+}
+
+void
+vmir_mem_free(ir_unit_t *iu, uint32_t addr)
+{
+  return vmir_heap_free(iu->iu_heap, iu->iu_mem + addr);
 }
