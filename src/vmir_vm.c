@@ -1214,6 +1214,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(CAST_1_TRUNC_16)   AR32(0, !!R16(1)); NEXT(2);
 
   VMOP(CAST_8_ZEXT_1)    AR32(0, R32(1)); NEXT(2);
+  VMOP(CAST_8_SEXT_1)    AR32(0, R32(1) ? -1 : 0); NEXT(2);
   VMOP(CAST_8_TRUNC_16)  AR32(0, R16(1)); NEXT(2);
   VMOP(CAST_8_TRUNC_32)  AR32(0, R32(1)); NEXT(2);
   VMOP(CAST_8_TRUNC_64)  AR32(0, R64(1)); NEXT(2);
@@ -1993,6 +1994,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_CAST_1_TRUNC_16: return &&CAST_1_TRUNC_16 - &&opz;  break;
 
   case VM_CAST_8_ZEXT_1:   return &&CAST_8_ZEXT_1 - &&opz; break;
+  case VM_CAST_8_SEXT_1:   return &&CAST_8_SEXT_1 - &&opz; break;
   case VM_CAST_8_TRUNC_16: return &&CAST_8_TRUNC_16 - &&opz;  break;
   case VM_CAST_8_TRUNC_32: return &&CAST_8_TRUNC_32 - &&opz;  break;
   case VM_CAST_8_TRUNC_64: return &&CAST_8_TRUNC_64 - &&opz;  break;
@@ -2727,6 +2729,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     emit_i16(iu, ii->immediate_offset);
     return;
 
+  case COMBINE4(IR_TYPE_INT1, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
     emit_op1(iu, VM_STORE8_G, value_reg(val));
@@ -3711,7 +3714,10 @@ emit_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
     op = VM_CAST_1_TRUNC_16;
     break;
 
-    
+  case COMBINE3(IR_TYPE_INT8, CAST_SEXT,  IR_TYPE_INT1):
+    op = VM_CAST_8_SEXT_1;
+    break;
+
   case COMBINE3(IR_TYPE_INT8, CAST_TRUNC, IR_TYPE_INT16):
     op = VM_CAST_8_TRUNC_16;
     break;
