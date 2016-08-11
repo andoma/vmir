@@ -882,8 +882,13 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
     iu->iu_vm_funcs[i]  = f->if_vm_text;
     iu->iu_ext_funcs[i] = f->if_ext_func;
 
-    if(f->if_used && f->if_vm_text == NULL && f->if_ext_func == NULL)
-      parser_error(iu, "Function %s() is not defined", f->if_name);
+    if(f->if_used && f->if_vm_text == NULL && f->if_ext_func == NULL) {
+      if(iu->iu_debug_flags & VMIR_DBG_IGNORE_UNRESOLVED_FUNCTIONS) {
+        printf("Warning: Function %s() is not defined\n", f->if_name);
+      } else {
+        parser_error(iu, "Function %s() is not defined", f->if_name);
+      }
+    }
   }
 
   run_global_ctors(iu);
