@@ -259,18 +259,6 @@ jit_loadimm(ir_unit_t *iu, uint32_t imm, int Rd, jitctx_t *jc)
  *
  */
 static void
-jit_push_epilogue(ir_unit_t *iu, jitctx_t *jc)
-{
-  jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
-  jit_push_literal_pool(iu, jc);
-  //  jit_push(iu, 0xe12fff1e); // bx lr
-}
-
-
-/**
- *
- */
-static void
 jit_push_add_imm(ir_unit_t *iu, int Rd, int Rn, int imm, int tmpreg,
                  jitctx_t *jc)
 {
@@ -1078,7 +1066,8 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc, ir_bb_t *curbb)
     // Jumping to non-JITed instruction, emit return + jump to VM location
     jit_loadimm_from_literal_pool(iu, ii->true_branch, 0, LITERAL_POOL_VMBB,
                                   jc);
-    jit_push_epilogue(iu, jc);
+    jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+    jit_push_literal_pool(iu, jc);
   }
 }
 
