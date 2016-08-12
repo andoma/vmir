@@ -126,11 +126,6 @@ struct ir_unit;
 typedef void (rec_handler_t)(struct ir_unit *iu, int op,
                              unsigned int argc, const ir_arg_t *argv);
 
-static void ir_parse_blocks(struct ir_unit *iu,
-                            int abbrev_id_width, int bytes,
-                            rec_handler_t *rh,
-                            const ir_blockinfo_t *ib);
-
 VECTOR_HEAD(ir_op_vector, struct ir_op);
 VECTOR_HEAD(ir_attrset_vector, struct ir_attrset);
 VECTOR_HEAD(ir_type_vector, struct ir_type);
@@ -266,15 +261,13 @@ struct ir_unit {
   void *iu_text_ptr;
   size_t iu_text_alloc_memsize;
 
-  bcbitstream_t *iu_bs;
-
   VECTOR_HEAD(, ir_arg_t) iu_argv;
 
   char        iu_err_buf[256];
   const char *iu_err_file;
   int         iu_err_line;
   int         iu_failed;
-
+  int         iu_vstoffset;
   // Stats
 
   vmir_stats_t iu_stats;
@@ -852,8 +845,6 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   if(x != 0xdec04342)
     return VMIR_ERR_NOT_BITCODE;
 
-  iu->iu_bs = &bs;
-
   TAILQ_INIT(&iu->iu_functions_with_bodies);
   iu->iu_data_ptr = 4096;
 
@@ -866,7 +857,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   jit_init(iu);
 #endif
 
-  ir_parse_blocks(iu, 2, len - 4, NULL, NULL);
+  ir_parse_blocks(iu, 2, NULL, NULL, &bs);
   free(iu->iu_text_alloc);
 
 #ifdef VMIR_VM_JIT

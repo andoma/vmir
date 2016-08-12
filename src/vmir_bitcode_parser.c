@@ -1,4 +1,8 @@
 
+static void ir_parse_blocks(ir_unit_t *iu, int abbrev_id_width,
+                            rec_handler_t *rh, const ir_blockinfo_t *ibi,
+                            bcbitstream_t *bs);
+
 static void
 abbrev_queue_free(struct ir_abbrev_queue *iaq)
 {
@@ -172,6 +176,18 @@ module_alias(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
 
 /**
+ * Value symtab offset
+ */
+static void
+module_vstoffset(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+{
+  if(argc != 1)
+    parser_error(iu, "Bad number of args");
+  iu->iu_vstoffset = (int)argv[0].i64;
+}
+
+
+/**
  *
  */
 static void
@@ -200,7 +216,11 @@ module_rec_handler(ir_unit_t *iu, int op,
   case MODULE_CODE_ALIAS:
     return module_alias(iu, argc, argv);
 
+  case MODULE_CODE_VSTOFFSET:
+    return module_vstoffset(iu, argc, argv);
+
   case MODULE_CODE_COMDAT:
+  case MODULE_CODE_METADATA_VALUES_UNUSED:
     break;
 
   default:
@@ -339,10 +359,62 @@ metadata_rec_handler(ir_unit_t *iu, int op,
  *
  */
 static void
-uselist_rec_handler(ir_unit_t *iu, int op,
-                    unsigned int argc, const ir_arg_t *argv)
+dummy_rec_handler(ir_unit_t *iu, int op,
+                  unsigned int argc, const ir_arg_t *argv)
 {
 }
+
+
+/**
+ *
+ */
+static void
+set_value_name(ir_unit_t *iu, int vid, char *str)
+{
+  ir_value_t *iv = value_get(iu, vid);
+  free(iv->iv_name);
+  iv->iv_name = strdup(str);
+
+  switch(iv->iv_class) {
+  case IR_VC_FUNCTION:
+    free(iv->iv_func->if_name);
+    iv->iv_func->if_name = str;
+    if(!vmop_resolve(iv->iv_func)) {
+      iv->iv_func->if_ext_func = iu->iu_external_function_resolver(iv->iv_func->if_name, iu->iu_opaque);
+    }
+
+    if(iu->iu_debug_flags & VMIR_DBG_LIST_FUNCTIONS) {
+      const ir_function_t *f = iv->iv_func;
+      printf("Function %-10s %s\n",
+             !f->if_isproto ? "defined" :
+             f->if_vmop != 0 ? "vmop" :
+             f->if_ext_func != NULL ? "external" :
+             "undefined",
+             f->if_name);
+
+    }
+    break;
+
+  case IR_VC_GLOBALVAR:
+    free(iv->iv_gvar->ig_name);
+    iv->iv_gvar->ig_name = str;
+    break;
+
+  case IR_VC_CONSTANT:
+  case IR_VC_ZERO_INITIALIZER:
+  case IR_VC_TEMPORARY:
+  case IR_VC_REGFRAME:
+  case IR_VC_ALIAS:
+    free(str);
+    break;
+
+  default:
+    parser_error(iu, "Can't give name %s to value of class %d\n",
+                 str, iv->iv_class);
+    break;
+  }
+}
+
 
 /**
  *
@@ -351,62 +423,28 @@ static void
 value_symtab_rec_handler(ir_unit_t *iu, int op,
                          unsigned int argc, const ir_arg_t *argv)
 {
-  ir_value_t *iv;
-
+  unsigned int vid;
+  char *str;
   switch(op) {
   case 1: // VST_CODE_ENTRY
     if(argc < 2)
       parser_error(iu, "Bad args to VST_CODE_ENTRY");
 
-    unsigned int vid = argv[0].i64;
-    char *str = read_str_from_argv(argc - 1, argv + 1);
-
-    iv = value_get(iu, vid);
-
-    free(iv->iv_name);
-    iv->iv_name = strdup(str);
-
-    switch(iv->iv_class) {
-    case IR_VC_FUNCTION:
-      free(iv->iv_func->if_name);
-      iv->iv_func->if_name = str;
-      if(!vmop_resolve(iv->iv_func)) {
-        iv->iv_func->if_ext_func = iu->iu_external_function_resolver(iv->iv_func->if_name, iu->iu_opaque);
-      }
-
-      if(iu->iu_debug_flags & VMIR_DBG_LIST_FUNCTIONS) {
-        const ir_function_t *f = iv->iv_func;
-        printf("Function %-10s %s\n",
-               !f->if_isproto ? "defined" :
-               f->if_vmop != 0 ? "vmop" :
-               f->if_ext_func != NULL ? "external" :
-               "undefined",
-               f->if_name);
-
-      }
-      break;
-
-    case IR_VC_GLOBALVAR:
-      free(iv->iv_gvar->ig_name);
-      iv->iv_gvar->ig_name = str;
-      break;
-
-    case IR_VC_CONSTANT:
-    case IR_VC_ZERO_INITIALIZER:
-    case IR_VC_TEMPORARY:
-    case IR_VC_REGFRAME:
-    case IR_VC_ALIAS:
-      free(str);
-      break;
-
-    default:
-      parser_error(iu, "Can't give name %s to value of class %d\n",
-                   str, iv->iv_class);
-      break;
-    }
+    vid = argv[0].i64;
+    str = read_str_from_argv(argc - 1, argv + 1);
+    set_value_name(iu, vid, str);
     break;
 
   case 2: // VST_CODE_BBENTRY
+    break;
+
+  case 3: // VST_CODE_FNENTRY
+    if(argc < 3)
+      parser_error(iu, "Bad args to VST_CODE_FNENTRY");
+
+    vid = argv[0].i64;
+    str = read_str_from_argv(argc - 2, argv + 2);
+    set_value_name(iu, vid, str);
     break;
 
   default:
@@ -659,13 +697,12 @@ function_process(ir_unit_t *iu, ir_function_t *f)
  *
  */
 static void
-ir_enter_subblock(ir_unit_t *iu)
+ir_enter_subblock(ir_unit_t *iu, bcbitstream_t *bs, int outer_id_width)
 {
-  bcbitstream_t *bs = iu->iu_bs;
   const uint32_t blockid = read_vbr(bs, 8);
   const uint32_t inner_id_width = read_vbr(bs, 4);
   align_bits32(bs);
-  const uint32_t blocklen = read_bits(bs, 32) * 4;
+  /* const uint32_t blocklen = */ read_bits(bs, 32);
 
   ir_block_t *ib = calloc(1, sizeof(ir_block_t));
 
@@ -678,24 +715,32 @@ ir_enter_subblock(ir_unit_t *iu)
   rec_handler_t *rh;
 
   switch(blockid) {
-  case 0:  // BLOCKINFO block
+  case BITCODE_BLOCKINFO:
     rh = blockinfo_rec_handler;
     break;
-  case 8:  // MODULE block
+  case BITCODE_MODULE:
     rh = module_rec_handler;
     break;
-  case 9:  // PARAMATTR block
+  case BITCODE_PARAMATTR:
     rh = paramattr_rec_handler;
     break;
-  case 10: // PARAMATTR_GROUP
+  case BITCODE_PARAMATTR_GROUP:
     rh = paramattr_group_rec_handler;
     break;
-  case 11: // CONSTANTS block
+  case BITCODE_CONSTANTS:
     rh = constants_rec_handler;
     break;
-  case 12:  // FUNCTION block
+  case BITCODE_FUNCTION:
     valuelistsize = iu->iu_next_value;
     iu->iu_first_func_value = iu->iu_next_value;
+
+    if(iu->iu_vstoffset) {
+      bcbitstream_t vstbs = *bs;
+      vstbs.bytes_offset = iu->iu_vstoffset * 4;
+      vstbs.remain = 0;
+      ir_parse_blocks(iu, outer_id_width, NULL, ibi, &vstbs);
+      iu->iu_vstoffset = 0;
+    }
 
     if(iu->iu_current_function == NULL) {
       iu->iu_current_function = TAILQ_FIRST(&iu->iu_functions_with_bodies);
@@ -718,39 +763,42 @@ ir_enter_subblock(ir_unit_t *iu)
     function_prepare_parse(iu, f);
     rh = function_rec_handler;
     break;
-  case 14:  // VALUE_SYMTAB block
+  case BITCODE_VALUE_SYMTAB:
     rh = value_symtab_rec_handler;
     break;
-  case 15:  // METADATA block
+  case BITCODE_METADATA:
     rh = metadata_rec_handler;
     break;
-  case 16:  // METADATA_ATTACHMENT block
+  case BITCODE_METADATA_ATTACHMENT:
     rh = metadata_attachment_rec_handler;
     break;
-  case 17:  // TYPES_NEW block
+  case BITCODE_TYPES_NEW:
     rh = types_new_rec_handler;
     break;
-  case 18:  // USELIST block
-    rh = uselist_rec_handler;
+  case BITCODE_USELIST:
+  case BITCODE_METADATA_KIND_BLOCK_ID:
+  case BITCODE_IDENTIFICATION_BLOCK_ID:
+  case BITCODE_OPERAND_BUNDLE_TAGS_BLOCK_ID:
+    rh = dummy_rec_handler;
     break;
   default:
     parser_error(iu, "Invalid block type %d", blockid);
   }
 
-  ir_parse_blocks(iu, inner_id_width, blocklen, rh, ibi);
+  ir_parse_blocks(iu, inner_id_width, rh, ibi, bs);
 
   switch(blockid) {
-  case 12:
+  case BITCODE_FUNCTION:
     function_process(iu, iu->iu_current_function);
 
     value_resize(iu, valuelistsize);
     break;
 
-  case 11:
+  case BITCODE_CONSTANTS:
     eval_constexprs(iu);
     break;
 
-  case 17:
+  case BITCODE_TYPES_NEW:
     types_finalize(iu);
     break;
   }
@@ -762,10 +810,9 @@ ir_enter_subblock(ir_unit_t *iu)
  *
  */
 static void
-ir_unabbrev_record(ir_unit_t *iu, rec_handler_t *rh)
+ir_unabbrev_record(ir_unit_t *iu, rec_handler_t *rh, bcbitstream_t *bs)
 {
   int i;
-  bcbitstream_t *bs = iu->iu_bs;
   const uint32_t code = read_vbr(bs, 6);
   const uint32_t numops = read_vbr(bs, 6);
 
@@ -783,9 +830,8 @@ ir_unabbrev_record(ir_unit_t *iu, rec_handler_t *rh)
  *
  */
 static int
-ir_define_abbrev(ir_unit_t *iu)
+ir_define_abbrev(ir_unit_t *iu, bcbitstream_t *bs)
 {
-  bcbitstream_t *bs = iu->iu_bs;
   const uint32_t numops = read_vbr(bs, 5);
   ir_abbrev_t *ia = calloc(1, sizeof(ir_abbrev_t) +
                            sizeof(ir_abbrev_operand_t) * numops);
@@ -873,9 +919,8 @@ load_array(bcbitstream_t *bs, ir_unit_t *iu, const ir_abbrev_operand_t *type)
  */
 static void
 ir_dispatch_abbrev(ir_unit_t *iu, unsigned int id, rec_handler_t *rh,
-                   const ir_blockinfo_t *ibi)
+                   const ir_blockinfo_t *ibi, bcbitstream_t *bs)
 {
-  bcbitstream_t *bs = iu->iu_bs;
   const ir_abbrev_t *ia;
   const struct ir_abbrev_queue *iaq;
   const int orig_id = id;
@@ -938,27 +983,22 @@ ir_dispatch_abbrev(ir_unit_t *iu, unsigned int id, rec_handler_t *rh,
  *
  */
 static void
-ir_parse_blocks(ir_unit_t *iu, int abbrev_id_width, int bytes,
-                rec_handler_t *rh, const ir_blockinfo_t *ibi)
+ir_parse_blocks(ir_unit_t *iu, int abbrev_id_width,
+                rec_handler_t *rh, const ir_blockinfo_t *ibi,
+                bcbitstream_t *bs)
 {
-  uint32_t id;
-  bcbitstream_t *bs = iu->iu_bs;
   assert(bs->remain == 0);
-  const int start = bs->bytes_offset;
-
-  while((id = read_bits(bs, abbrev_id_width)) != 0) {
+  while(1) {
+    uint32_t id = read_bits(bs, abbrev_id_width);
+    if(id == 0)
+      break;
     switch(id) {
-    case 1:  ir_enter_subblock(iu);               break;
-    case 2:  ir_define_abbrev(iu);                break;
-    case 3:  ir_unabbrev_record(iu, rh);          break;
-    default: ir_dispatch_abbrev(iu, id, rh, ibi); break;
+    case 1:  ir_enter_subblock(iu, bs, abbrev_id_width); break;
+    case 2:  ir_define_abbrev(iu, bs);                break;
+    case 3:  ir_unabbrev_record(iu, rh, bs);          break;
+    default: ir_dispatch_abbrev(iu, id, rh, ibi, bs); break;
     }
   }
 
   align_bits32(bs);
-
-  assert(bs->remain == 0);
-  const int stop = bs->bytes_offset;
-
-  assert(bytes == (stop - start));
 }
