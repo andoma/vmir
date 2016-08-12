@@ -1,3 +1,4 @@
+#include <sys/time.h>
 #include <getopt.h>
 
 #include <stdint.h>
@@ -21,6 +22,14 @@ usage(const char *argv0)
   printf("  -i                  List all functions\n");
   printf("  -n                  Don't try to run code\n");
   printf("\n");
+}
+
+static int64_t
+get_ts(void)
+{
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
 }
 
 /**
@@ -124,8 +133,13 @@ main(int argc, char **argv)
   if(print_stats)
     vmir_print_stats(iu);
 
-  if(run)
+  if(run) {
+    int64_t ts = get_ts();
     vmir_run(iu, argc, argv);
+    ts = get_ts() - ts;
+    if(print_stats)
+      printf("main() executed for %d ms\n", (int)(ts / 1000LL));
+  }
 
   free(mem);
 
