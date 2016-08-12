@@ -1121,7 +1121,7 @@ break_critical_edge(ir_function_t *f, ir_bb_edge_t *ibe)
 {
   ir_bb_t *from = ibe->ibe_from;
   ir_bb_t *to   = ibe->ibe_to;
-  ir_bb_t *nb   = bb_add(f, from);
+  ir_bb_t *nb   = bb_add_before(f, to);
 
   // Add a single branch instruction to new basic block
   ir_instr_br_t *br = instr_add(nb, sizeof(ir_instr_br_t), IR_IC_BR);

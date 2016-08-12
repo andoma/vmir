@@ -372,6 +372,7 @@ typedef struct ir_bb {
   int ib_id;
   uint8_t ib_mark;
   uint8_t ib_jit;
+  uint8_t ib_only_jit_sucessors;
 
   struct ir_bb_edge_list ib_incoming_edges;
   struct ir_bb_edge_list ib_outgoing_edges;

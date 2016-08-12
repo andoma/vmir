@@ -23,19 +23,38 @@
  */
 
 
+static ir_bb_t *
+bb_make(ir_function_t *f)
+{
+  ir_bb_t *ib = calloc(1, sizeof(ir_bb_t));
+  TAILQ_INIT(&ib->ib_instrs);
+  ib->ib_id = f->if_num_bbs++;
+  return ib;
+}
+
 /**
  *
  */
 static ir_bb_t *
 bb_add(ir_function_t *f, ir_bb_t *after)
 {
-  ir_bb_t *ib = calloc(1, sizeof(ir_bb_t));
-  TAILQ_INIT(&ib->ib_instrs);
-  ib->ib_id = f->if_num_bbs++;
+  ir_bb_t *ib = bb_make(f);
   if(after != NULL)
     TAILQ_INSERT_AFTER(&f->if_bbs, after, ib, ib_link);
   else
     TAILQ_INSERT_TAIL(&f->if_bbs, ib, ib_link);
+  return ib;
+}
+
+
+/**
+ *
+ */
+static ir_bb_t *
+bb_add_before(ir_function_t *f, ir_bb_t *before)
+{
+  ir_bb_t *ib = bb_make(f);
+  TAILQ_INSERT_BEFORE(before, ib, ib_link);
   return ib;
 }
 

@@ -82,6 +82,9 @@ get_ts(void)
   VECTOR_ITEM(head, cursize) = (item);             \
   } while(0)
 
+#define VECTOR_POP(head) (head)->vh_length--
+
+
 #define VECTOR_CLEAR(head) do {                 \
   (head)->vh_capacity = 0;                      \
   (head)->vh_length = 0;                        \

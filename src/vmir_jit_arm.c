@@ -87,13 +87,16 @@ arm_machinereg(int reg)
 
 #define LITERAL_POOL_MAX_SIZE 256
 
+#define LITERAL_POOL_CONSTANT 0
+#define LITERAL_POOL_VMBB 1
+
 typedef struct jitctx {
 
   int literal_pool_use;
   struct {
     uint32_t value;
     uint32_t instr;
-    int *addrp;
+    int type;
   } literal_pool[LITERAL_POOL_MAX_SIZE];
 } jitctx_t;
 
@@ -171,8 +174,12 @@ jit_push_literal_pool(ir_unit_t *iu, jitctx_t *jc)
     int imm12 = iu->iu_jit_ptr - jc->literal_pool[i].instr - 8;
     assert(imm12 < 4096);
     uint32_t *p = iu->iu_jit_mem + jc->literal_pool[i].instr;
-    if(jc->literal_pool[i].addrp != NULL)
-      *jc->literal_pool[i].addrp = iu->iu_jit_ptr;
+
+    switch(jc->literal_pool[i].type) {
+    case LITERAL_POOL_VMBB:
+      VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, iu->iu_jit_ptr);
+      break;
+    }
     *p |= imm12;
     jit_push(iu, jc->literal_pool[i].value);
   }
@@ -185,13 +192,14 @@ jit_push_literal_pool(ir_unit_t *iu, jitctx_t *jc)
  */
 static void
 jit_loadimm_from_literal_pool_cond(ir_unit_t *iu, uint32_t imm, int Rd,
-                                   int *literaladdr, jitctx_t *jc, uint32_t cond)
+                                   int type, jitctx_t *jc,
+                                   uint32_t cond)
 {
   assert(jc->literal_pool_use != LITERAL_POOL_MAX_SIZE);
 
   jc->literal_pool[jc->literal_pool_use].value = imm;
   jc->literal_pool[jc->literal_pool_use].instr = iu->iu_jit_ptr;
-  jc->literal_pool[jc->literal_pool_use].addrp = literaladdr;
+  jc->literal_pool[jc->literal_pool_use].type = type;
   jc->literal_pool_use++;
   jit_push(iu, cond | (1 << 26) | (1 << 24) | (1 << 23) | (0x1f << 16) |
            (Rd << 12));
@@ -199,9 +207,9 @@ jit_loadimm_from_literal_pool_cond(ir_unit_t *iu, uint32_t imm, int Rd,
 
 static void
 jit_loadimm_from_literal_pool(ir_unit_t *iu, uint32_t imm, int Rd,
-                              int *literaladdr, jitctx_t *jc)
+                              int type, jitctx_t *jc)
 {
-  jit_loadimm_from_literal_pool_cond(iu, imm, Rd, literaladdr, jc,
+  jit_loadimm_from_literal_pool_cond(iu, imm, Rd, type, jc,
                                      ARM_COND_AL);
 }
 
@@ -233,7 +241,7 @@ jit_loadimm_cond(ir_unit_t *iu, uint32_t imm, int Rd, jitctx_t *jc, uint32_t con
              ((imm & 0xf000) << 4) | (Rd << 12) | (imm & 0xfff));
     return;
   }
-  jit_loadimm_from_literal_pool_cond(iu, imm, Rd, NULL, jc, cond);
+  jit_loadimm_from_literal_pool_cond(iu, imm, Rd, 0, jc, cond);
 }
 
 
@@ -983,41 +991,49 @@ jit_mla(ir_unit_t *iu, ir_instr_ternary_t *ii, jitctx_t *jc)
  */
 static void
 jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
-                            jitctx_t *jc)
+                            jitctx_t *jc, ir_bb_t *curbb)
 {
-  int ptr1 = 0;
-  int ptr2 = 0;
-  ir_bb_t *ib;
+  ir_bb_t *tib  = bb_find(iu->iu_current_function, true_bb);
+  ir_bb_t *fib = bb_find(iu->iu_current_function, false_bb);
+  const int true_cond = armcond(pred);
+  int false_cond = ARM_COND_AL;
+  int may_push_pool = 1;
 
-  const int cond = armcond(pred);
-
-  ib = bb_find(iu->iu_current_function, true_bb);
-  if(ib->ib_jit) {
-    // Jumping to another JITen instruction, emit a branch
-    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
-    jit_push(iu, cond | (1 << 27) | (1 << 25) | true_bb);
+  if(tib->ib_jit) {
+    if(tib->ib_only_jit_sucessors && TAILQ_NEXT(curbb, ib_link) == tib) {
+      // Jumping to consecustive BB can be skipped
+      false_cond = armcond(invert_pred(pred));
+      may_push_pool = 0;
+    } else {
+      // Jumping to another JITen instruction, emit a branch
+      VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
+      jit_push(iu, true_cond | (1 << 27) | (1 << 25) | true_bb);
+    }
   } else {
     // Jumping to non-JITed instruction, emit return + jump to VM location
-    jit_loadimm_from_literal_pool_cond(iu, true_bb, 0, &ptr1, jc, cond);
-    jit_push(iu, cond | (0x8bd << 16) | (0x8DF0));
+    jit_loadimm_from_literal_pool_cond(iu, true_bb, 0, LITERAL_POOL_VMBB,
+                                       jc, true_cond);
+    jit_push(iu, true_cond | (0x8bd << 16) | (0x8DF0));
   }
 
-  ib = bb_find(iu->iu_current_function, false_bb);
-  if(ib->ib_jit) {
-    // Jumping to another JITen instruction, emit a branch
-    VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
-    jit_pushal(iu, (1 << 27) | (1 << 25) | false_bb);
+  if(fib->ib_jit) {
+    if(fib->ib_only_jit_sucessors && TAILQ_NEXT(curbb, ib_link) == fib) {
+      // Jumping to consecustive BB can be skipped
+      may_push_pool = 0;
+    } else {
+      // Jumping to another JITen instruction, emit a branch
+      VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
+      jit_push(iu, false_cond | (1 << 27) | (1 << 25) | false_bb);
+    }
   } else {
     // Jumping to non-JITed instruction, emit return + jump to VM location
-    jit_loadimm_from_literal_pool(iu, false_bb, 0, &ptr2, jc);
-    jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+    jit_loadimm_from_literal_pool_cond(iu, false_bb, 0, LITERAL_POOL_VMBB,
+                                       jc, false_cond);
+    jit_push(iu, false_cond | (0x8bd << 16) | (0x8DF0));
   }
 
-  jit_push_literal_pool(iu, jc);
-  if(ptr1)
-    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr1);
-  if(ptr2)
-    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr2);
+  if(may_push_pool)
+    jit_push_literal_pool(iu, jc);
 }
 
 
@@ -1036,7 +1052,7 @@ jit_br_check(ir_unit_t *iu, ir_instr_br_t *ii)
  *
  */
 static void
-jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
+jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc, ir_bb_t *curbb)
 {
   if(ii->condition.value != -1) {
     int Rn = jit_loadvalue(iu, ii->condition, R_TMPA, jc);
@@ -1044,22 +1060,25 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
     jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 22) | (1 << 20) | (Rn << 16));
     // Jump to true if condition is not true (makes sure 0 == false, all else is true)
     jit_emit_conditional_branch(iu, ii->true_branch,
-                                ii->false_branch, ICMP_NE, jc);
+                                ii->false_branch, ICMP_NE, jc, curbb);
     return;
   }
   // Unconditional branch
   ir_bb_t *ib = bb_find(iu->iu_current_function, ii->true_branch);
   if(ib->ib_jit) {
+    if(TAILQ_NEXT(curbb, ib_link) == ib && ib->ib_only_jit_sucessors) {
+      // Jumping to consecustive BB can be skipped
+      return;
+    }
     // Jumping to another JITed BB, emit a branch
     VECTOR_PUSH_BACK(&iu->iu_jit_branch_fixups, iu->iu_jit_ptr);
     jit_pushal(iu, (1 << 27) | (1 << 25) | ii->true_branch);
     jit_push_literal_pool(iu, jc);
   } else {
     // Jumping to non-JITed instruction, emit return + jump to VM location
-    int ptr;
-    jit_loadimm_from_literal_pool(iu, ii->true_branch, 0, &ptr, jc);
+    jit_loadimm_from_literal_pool(iu, ii->true_branch, 0, LITERAL_POOL_VMBB,
+                                  jc);
     jit_push_epilogue(iu, jc);
-    VECTOR_PUSH_BACK(&iu->iu_jit_vmbb_fixups, ptr);
   }
 }
 
@@ -1068,8 +1087,8 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc)
  *
  */
 static void
-jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs, jitctx_t *jc,
-             int pred)
+jit_emit_cmp(ir_unit_t *iu, ir_valuetype_t lhs, ir_valuetype_t rhs,
+             jitctx_t *jc, int pred)
 {
   int ext = JIT_LOAD_EXT_UNSIGNED;
   switch(pred) {
@@ -1137,12 +1156,13 @@ jit_cmp_br_check(ir_unit_t *iu, ir_instr_cmp_branch_t *ii)
  *
  */
 static void
-jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc)
+jit_cmp_br(ir_unit_t *iu, ir_instr_cmp_branch_t *ii, jitctx_t *jc,
+           ir_bb_t *curbb)
 {
   jit_emit_cmp(iu, ii->lhs_value, ii->rhs_value, jc, ii->op);
 
   jit_emit_conditional_branch(iu, ii->true_branch,
-                              ii->false_branch, ii->op, jc);
+                              ii->false_branch, ii->op, jc, curbb);
 }
 
 
@@ -1531,14 +1551,17 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
         }
       }
 
+      ib->ib_only_jit_sucessors = TAILQ_FIRST(&f->if_bbs) != ib;
       LIST_FOREACH(ibe, &ib->ib_incoming_edges, ibe_to_link) {
         if(!ibe->ibe_from->ib_jit) {
+          ib->ib_only_jit_sucessors = 0;
           ir_bb_t *from = ibe->ibe_from;
           ir_instr_t *ii = TAILQ_LAST(&from->ib_instrs, ir_instr_queue);
           const uint32_t *out = ii->ii_liveness;
           bitset_or(mask, out, setwords);
         }
       }
+
     }
 
 #if 0
@@ -1571,19 +1594,34 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
 }
 
 
+
+static void
+jitctx_init(ir_unit_t *iu, ir_function_t *f, jitctx_t *jc)
+{
+  jc->literal_pool_use = 0;
+}
+
+
+static void
+jitctx_done(ir_unit_t *iu, ir_function_t *f, jitctx_t *jc)
+{
+  jit_push_literal_pool(iu, jc);
+}
+
 /**
  *
  */
 static int
-jit_emit(ir_unit_t *iu, ir_bb_t *ib)
+jit_emit(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
 {
-  jitctx_t jc;
-  jc.literal_pool_use = 0;
+  int ret;
 
-  int ret = iu->iu_jit_ptr;
-
-  jit_pushal(iu, (0x92d << 16) | (0x4DF0));
-
+  if(!ib->ib_only_jit_sucessors) {
+    ret = iu->iu_jit_ptr;
+    jit_pushal(iu, (0x92d << 16) | (0x4DF0));
+  } else {
+    ret = INT32_MIN;
+  }
   ib->ib_jit_offset = iu->iu_jit_ptr;
 
   ir_instr_t *ii;
@@ -1591,40 +1629,40 @@ jit_emit(ir_unit_t *iu, ir_bb_t *ib)
 
     switch(ii->ii_class) {
     case IR_IC_BINOP:
-      jit_binop(iu, (ir_instr_binary_t *)ii, &jc);
+      jit_binop(iu, (ir_instr_binary_t *)ii, jc);
       break;
     case IR_IC_CAST:
-      jit_cast(iu, (ir_instr_unary_t *)ii, &jc);
+      jit_cast(iu, (ir_instr_unary_t *)ii, jc);
       break;
     case IR_IC_MOVE:
-      jit_move(iu, (ir_instr_move_t *)ii, &jc);
+      jit_move(iu, (ir_instr_move_t *)ii, jc);
       break;
     case IR_IC_LOAD:
-      jit_load(iu, (ir_instr_load_t *)ii, &jc);
+      jit_load(iu, (ir_instr_load_t *)ii, jc);
       break;
     case IR_IC_STORE:
-      jit_store(iu, (ir_instr_store_t *)ii, &jc);
+      jit_store(iu, (ir_instr_store_t *)ii, jc);
       break;
     case IR_IC_LEA:
-      jit_lea(iu, (ir_instr_lea_t *)ii, &jc);
+      jit_lea(iu, (ir_instr_lea_t *)ii, jc);
       break;
     case IR_IC_MLA:
-      jit_mla(iu, (ir_instr_ternary_t *)ii, &jc);
+      jit_mla(iu, (ir_instr_ternary_t *)ii, jc);
       break;
     case IR_IC_CMP2:
-      jit_cmp(iu, (ir_instr_binary_t *)ii, &jc);
+      jit_cmp(iu, (ir_instr_binary_t *)ii, jc);
       break;
     case IR_IC_CMP_SELECT:
-      jit_cmp_select(iu, (ir_instr_cmp_select_t *)ii, &jc);
+      jit_cmp_select(iu, (ir_instr_cmp_select_t *)ii, jc);
       break;
     case IR_IC_SELECT:
-      jit_select(iu, (ir_instr_select_t *)ii, &jc);
+      jit_select(iu, (ir_instr_select_t *)ii, jc);
       break;
     case IR_IC_BR:
-      jit_br(iu, (ir_instr_br_t *)ii, &jc);
+      jit_br(iu, (ir_instr_br_t *)ii, jc, ib);
       return ret;
     case IR_IC_CMP_BRANCH:
-      jit_cmp_br(iu, (ir_instr_cmp_branch_t *)ii, &jc);
+      jit_cmp_br(iu, (ir_instr_cmp_branch_t *)ii, jc, ib);
       return ret;
     default:
       abort();

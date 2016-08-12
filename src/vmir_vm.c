@@ -3337,13 +3337,20 @@ emit_cmp_select(ir_unit_t *iu, ir_instr_cmp_select_t *ii)
  *
  */
 static void
-emit_br(ir_unit_t *iu, ir_instr_br_t *ii)
+emit_br(ir_unit_t *iu, ir_instr_br_t *ii, ir_bb_t *currentib)
 {
   int textpos = iu->iu_text_ptr - iu->iu_text_alloc;
   VECTOR_PUSH_BACK(&iu->iu_branch_fixups, textpos);
 
   // We can't emit code yet cause we don't know the final destination
   if(ii->condition.value == -1) {
+    ir_bb_t *next = TAILQ_NEXT(currentib, ib_link);
+    if(next != NULL && next->ib_id == ii->true_branch) {
+      // Jump to next bb is NOP as basic-blocks are contigous in memory
+      VECTOR_POP(&iu->iu_branch_fixups);
+      return;
+    }
+
     // Unconditional branch
     emit_i16(iu, VM_B);
     emit_i16(iu, ii->true_branch);
@@ -4261,7 +4268,11 @@ emit_resume(ir_unit_t *iu, ir_instr_resume_t *r)
  *
  */
 static void
-instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
+instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f
+#ifdef VMIR_VM_JIT
+           , jitctx_t *jc
+#endif
+           )
 {
   ir_instr_t *ii;
   //  printf("=========== BB %s.%d\n", f->if_name, bb->ib_id);
@@ -4269,8 +4280,11 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
 
 #ifdef VMIR_VM_JIT
   if(bb->ib_jit) {
-    int jitoffset = jit_emit(iu, bb);
+    int jitoffset = jit_emit(iu, bb, jc);
 
+    if(bb->ib_only_jit_sucessors)
+      return;
+    assert(jitoffset >= 0);
 #ifdef VM_TRACE
     char tmp[128];
     ir_instr_backref_t *iib = f->if_instr_backrefs + f->if_instr_backref_size;
@@ -4315,7 +4329,7 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f)
       emit_cmp2(iu, (ir_instr_binary_t *)ii);
       break;
     case IR_IC_BR:
-      emit_br(iu, (ir_instr_br_t *)ii);
+      emit_br(iu, (ir_instr_br_t *)ii, bb);
       break;
     case IR_IC_MOVE:
       emit_move(iu, (ir_instr_move_t *)ii);
@@ -4492,6 +4506,10 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   f->if_instr_backref_size = 0;
 #endif
 
+#ifdef VMIR_VM_JIT
+  jitctx_t jc;
+  jitctx_init(iu, f, &jc);
+#endif
 
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ib->ib_text_offset = iu->iu_text_ptr - iu->iu_text_alloc;
@@ -4506,9 +4524,16 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
       ir_instrumentation_t ii = {f, ib->ib_id, num_instructions, 0};
       VECTOR_PUSH_BACK(&iu->iu_instrumentation, ii);
     }
-    instr_emit(iu, ib, f);
+    instr_emit(iu, ib, f
+#ifdef VMIR_VM_JIT
+               ,&jc
+#endif
+               );
   }
 
+#ifdef VMIR_VM_JIT
+  jitctx_done(iu, f, &jc);
+#endif
   f->if_vm_text_size = iu->iu_text_ptr - iu->iu_text_alloc;
   f->if_vm_text = malloc(f->if_vm_text_size);
   memcpy(f->if_vm_text, iu->iu_text_alloc, f->if_vm_text_size);
