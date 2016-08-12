@@ -613,6 +613,12 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
                    (Rn << 16) | (Rd << 12) | imm12);
         goto wb;
       }
+      if((imm12 = make_imm12(~rc)) != -1) {
+        // BIC
+        jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 23) | (1 << 22) |
+                   (Rn << 16) | (Rd << 12) | imm12);
+        goto wb;
+      }
       break;
 
     case BINOP_XOR:
