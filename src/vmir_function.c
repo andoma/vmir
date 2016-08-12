@@ -46,15 +46,17 @@ ibe_destroy_list(struct ir_bb_edge_list *list)
  *
  */
 static void
-bb_destroy(ir_bb_t *ib)
+bb_destroy(ir_bb_t *ib, ir_function_t *f)
 {
-  ir_instr_t *ii, *next;
+  ir_instr_t *ii;
+
+  TAILQ_REMOVE(&f->if_bbs, ib, ib_link);
+
   ibe_destroy_list(&ib->ib_incoming_edges);
   ibe_destroy_list(&ib->ib_outgoing_edges);
 
-  for(ii = TAILQ_FIRST(&ib->ib_instrs); ii != NULL; ii = next) {
-    next = TAILQ_NEXT(ii, ii_link);
-    free(ii);
+  while((ii = TAILQ_FIRST(&ib->ib_instrs)) != NULL) {
+    instr_destroy(ii);
   }
   free(ib);
 }
@@ -99,6 +101,11 @@ function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
     TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
       printf("\t%s\n", instr_str(iu, ii, 0));
     }
+    printf("\t\t");
+    LIST_FOREACH(ibe, &ib->ib_outgoing_edges, ibe_from_link) {
+      printf(" next:%d", ibe->ibe_to->ib_id);
+    }
+    printf("\n");
   }
 }
 
@@ -128,8 +135,7 @@ function_remove_bb(ir_function_t *f)
 {
   ir_bb_t *ib;
   while((ib = TAILQ_FIRST(&f->if_bbs)) != NULL) {
-    TAILQ_REMOVE(&f->if_bbs, ib, ib_link);
-    bb_destroy(ib);
+    bb_destroy(ib, f);
   }
 }
 

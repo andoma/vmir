@@ -619,14 +619,11 @@ function_bind_instr_inputs(ir_unit_t *iu, ir_function_t *f)
  *
  */
 static void
-eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
+eliminate_dead_code_in_bb(ir_unit_t *iu, ir_function_t *f, ir_bb_t *ib)
 {
-  ir_bb_t *ib;
-
-  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
-    ir_instr_t *ii, *iip;
-    ir_value_instr_t *ivi;
-    for(ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue); ii != NULL; ii = iip) {
+  ir_instr_t *ii, *iip;
+  ir_value_instr_t *ivi;
+  for(ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue); ii != NULL; ii = iip) {
       iip = TAILQ_PREV(ii, ir_instr_queue, ii_link);
       if(ii->ii_ret.value == -1 ||
          ii->ii_class == IR_IC_VMOP ||
@@ -650,8 +647,71 @@ eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
       instr_destroy(ii);
       output->iv_class = IR_VC_DEAD;
     }
+}
+
+
+/**
+ *
+ */
+static void
+eliminate_dead_code(ir_unit_t *iu, ir_function_t *f)
+{
+  ir_bb_t *ib = TAILQ_FIRST(&f->if_bbs);
+  if(ib == NULL)
+    return;
+  ir_bb_t *next;
+
+  eliminate_dead_code_in_bb(iu, f, ib);
+
+  ib = TAILQ_NEXT(ib, ib_link);
+  for(; ib != NULL; ib = next) {
+    next = TAILQ_NEXT(ib, ib_link);
+    ir_bb_edge_t *in = LIST_FIRST(&ib->ib_incoming_edges);
+    if(in == NULL) {
+      // No incoming edges to this bb (ie, it's unreachable), so delete it
+      bb_destroy(ib, f);
+      continue;
+    }
+
+    eliminate_dead_code_in_bb(iu, f, ib);
+
+    if(LIST_NEXT(in, ibe_to_link) == NULL) {
+      // This BB only have one incoming edge..
+      ir_bb_t *from = in->ibe_from;
+      ir_instr_t *last = TAILQ_LAST(&from->ib_instrs, ir_instr_queue);
+      if(last->ii_class == IR_IC_BR) {
+        ir_instr_br_t *b = (ir_instr_br_t *)last;
+        if(b->condition.value == -1) {
+          // .. and previous bb have an unconditional branch to us
+          // we may merge the basic blocks
+
+          instr_destroy(last); // Kill branch instruction
+          ibe_destroy(in);     // Kill CFG edge
+          assert(LIST_FIRST(&from->ib_outgoing_edges) == NULL);
+
+          // Move instructions
+          ir_instr_t *ii;
+          while((ii = TAILQ_FIRST(&ib->ib_instrs)) != NULL) {
+            TAILQ_REMOVE(&ib->ib_instrs, ii, ii_link);
+            TAILQ_INSERT_TAIL(&from->ib_instrs, ii, ii_link);
+            ii->ii_bb = from;
+          }
+
+          // Move outgoing edges
+          ir_bb_edge_t *edge;
+          while((edge = LIST_FIRST(&ib->ib_outgoing_edges)) != NULL) {
+            LIST_REMOVE(edge, ibe_from_link);
+            LIST_INSERT_HEAD(&from->ib_outgoing_edges, edge, ibe_from_link);
+            edge->ibe_from = from;
+          }
+          bb_destroy(ib, f);
+          continue;
+        }
+      }
+    }
   }
 }
+
 
 
 /**
@@ -971,8 +1031,7 @@ remove_empty_bb(ir_unit_t *iu, ir_function_t *f)
       LIST_REMOVE(ibe, ibe_to_link);
       LIST_INSERT_HEAD(&nb->ib_incoming_edges, ibe, ibe_to_link);
     }
-    TAILQ_REMOVE(&f->if_bbs, ib, ib_link);
-    bb_destroy(ib);
+    bb_destroy(ib, f);
   }
 }
 
