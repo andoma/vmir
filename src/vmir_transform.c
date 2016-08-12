@@ -624,29 +624,29 @@ eliminate_dead_code_in_bb(ir_unit_t *iu, ir_function_t *f, ir_bb_t *ib)
   ir_instr_t *ii, *iip;
   ir_value_instr_t *ivi;
   for(ii = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue); ii != NULL; ii = iip) {
-      iip = TAILQ_PREV(ii, ir_instr_queue, ii_link);
-      if(ii->ii_ret.value == -1 ||
-         ii->ii_class == IR_IC_VMOP ||
-         ii->ii_class == IR_IC_VAARG ||
-         ii->ii_class == IR_IC_CALL ||
-         ii->ii_class == IR_IC_INVOKE)
-        continue;
+    iip = TAILQ_PREV(ii, ir_instr_queue, ii_link);
+    if(ii->ii_ret.value == -1 ||
+       ii->ii_class == IR_IC_VMOP ||
+       ii->ii_class == IR_IC_VAARG ||
+       ii->ii_class == IR_IC_CALL ||
+       ii->ii_class == IR_IC_INVOKE)
+      continue;
 
-      if(ii->ii_ret.value < 1)
-        continue; // Maybe need to deal with multiple ret values in the future?
+    if(ii->ii_ret.value < 1)
+      continue; // Maybe need to deal with multiple ret values in the future?
 
-      ir_value_t *output = value_get(iu, ii->ii_ret.value);
+    ir_value_t *output = value_get(iu, ii->ii_ret.value);
 
-      LIST_FOREACH(ivi, &output->iv_instructions, ivi_value_link) {
-        if(ivi->ivi_relation == IVI_INPUT)
-          break; // Someone is using our output for input ->
-      }
-      if(ivi != NULL)
-        continue; // -> thus continue
-
-      instr_destroy(ii);
-      output->iv_class = IR_VC_DEAD;
+    LIST_FOREACH(ivi, &output->iv_instructions, ivi_value_link) {
+      if(ivi->ivi_relation == IVI_INPUT)
+        break; // Someone is using our output for input ->
     }
+    if(ivi != NULL)
+      continue; // -> thus continue
+
+    instr_destroy(ii);
+    output->iv_class = IR_VC_DEAD;
+  }
 }
 
 
