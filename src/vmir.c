@@ -187,6 +187,7 @@ struct ir_unit {
   void *iu_jit_mem;
   int iu_jit_mem_alloced;
   int iu_jit_ptr;
+  uint32_t iu_jit_cpuflags;
 
   vmir_exception_t iu_exception;
 
@@ -860,6 +861,10 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
     iu_cleanup(iu);
     return VMIR_ERR_LOAD_ERROR;
   }
+
+#ifdef VMIR_VM_JIT
+  jit_init(iu);
+#endif
 
   ir_parse_blocks(iu, 2, len - 4, NULL, NULL);
   free(iu->iu_text_alloc);

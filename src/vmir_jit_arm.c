@@ -23,6 +23,10 @@
  */
 
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define ARM_COND_EQ  0x00000000
 #define ARM_COND_NE  0x10000000
@@ -530,6 +534,12 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
   switch(binop) {
   case BINOP_SDIV:
   case BINOP_UDIV:
+    if(!(iu->iu_jit_cpuflags & (1 << 17))) // Integer division
+      return 0;
+    if(typecode != IR_TYPE_INT32)
+      return 0;
+    break;
+
   case BINOP_SREM:
   case BINOP_UREM:
     return 0;
@@ -675,6 +685,16 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
     jit_push(iu, ARM_COND_AL | (1 << 24) | (1 << 23) | (1 << 21) |
              (1 << 6) | (1 << 4) |
              (Rm << 8) | (Rd << 12) | Rn);
+    break;
+  case BINOP_SDIV:
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) | (1 << 24) | (1 << 20) |
+             0xf000 | (1 << 4) |
+             (Rm << 8) | (Rd << 16) | Rn);
+    break;
+  case BINOP_UDIV:
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) | (1 << 24) | (1 << 20) |
+             (1 << 21) | 0xf000 | (1 << 4) |
+             (Rm << 8) | (Rd << 16) | Rn);
     break;
   default:
     abort();
@@ -1711,3 +1731,23 @@ jit_seal_code(ir_unit_t *iu)
 }
 
 
+/**
+ *
+ */
+static void
+jit_init(ir_unit_t *iu)
+{
+  int fd = open("/proc/self/auxv", O_RDONLY);
+  if(fd != -1) {
+    struct {
+      uint32_t type;
+      uint32_t value;
+    } auxv;
+    while(read(fd, &auxv, sizeof(auxv)) == sizeof(auxv)) {
+      if(auxv.type == 16) {
+        iu->iu_jit_cpuflags = auxv.value;
+      }
+    }
+    close(fd);
+  }
+}
