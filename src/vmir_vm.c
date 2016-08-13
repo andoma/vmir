@@ -34,10 +34,15 @@ typedef struct vm_frame {
   ir_unit_t *iu;
   uint32_t allocaptr;
 
-#ifdef VM_TRACE_FUNCTION
+#ifndef VM_NO_STACK_FRAME
   const ir_function_t *func;
   const struct vm_frame *prev;
+  uint32_t *allocapeak;
+
+#ifdef VM_TRACE
   int trace;
+#endif
+
 #endif
 } vm_frame_t;
 
@@ -66,7 +71,7 @@ typedef struct ir_instr_backref {
 
 #endif
 
-#ifdef VM_TRACE_FUNCTION
+#ifndef VM_NO_STACK_FRAME
 
 
 static ir_function_t *
@@ -79,14 +84,15 @@ vm_getfunc(int callee, ir_unit_t *iu)
 
 
 static void
-vmir_traceback(struct ir_unit *iu)
+vmir_traceback(struct ir_unit *iu, const char *info)
 {
   const vm_frame_t *f;
 
-  vmir_log(iu, VMIR_LOG_INFO, "Traceback");
+  vmir_log(iu, VMIR_LOG_INFO, "--- Traceback (%s) ---", info);
   for(f = iu->iu_current_frame; f != NULL; f = f->prev) {
     vmir_log(iu, VMIR_LOG_INFO, "%s()", f->func->if_name);
   }
+  vmir_log(iu, VMIR_LOG_INFO, "--- Traceback end ---");
 }
 
 
@@ -98,12 +104,17 @@ static void __attribute__((noinline)) __attribute__((noreturn))
 vm_stop(ir_unit_t *iu, int reason, int code)
 {
   iu->iu_exit_code = code;
-#ifdef VM_TRACE_FUNCTION
-  vmir_traceback(iu);
-#endif
   longjmp(*iu->iu_err_jmpbuf, reason);
 }
 
+static void __attribute__((noinline)) __attribute__((noreturn))
+vm_bad_function(ir_unit_t *iu, uint32_t fid)
+{
+#ifndef VM_NO_STACK_FRAME
+  vmir_traceback(iu, "bad function called");
+#endif
+  vm_stop(iu, VM_STOP_BAD_FUNCTION, fid);
+}
 
 uint32_t
 vmir_vm_arg32(const void **rfp)
@@ -185,6 +196,9 @@ vm_exit(void *ret, const void *rf, ir_unit_t *iu)
 static int
 vm_abort(void *ret, const void *rf, ir_unit_t *iu)
 {
+#ifndef VM_NO_STACK_FRAME
+  vmir_traceback(iu, "abort");
+#endif
   vm_stop(iu, VM_STOP_ABORT, 0);
   return 0;
 }
@@ -463,7 +477,10 @@ vm_funcname(int callee, ir_unit_t *iu)
 #define HOSTADDR(x) ((hostmem) + (x))
 
 
-static void * __attribute__((noinline))
+static void *
+#ifndef VM_NO_STACK_FRAME
+__attribute__((noinline))
+#endif
 do_jit_call(void *rf, void *mem, void *(*code)(void *, void *))
 {
 #if 0
@@ -530,17 +547,21 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   ir_unit_t *iu = F.iu;
   void *hostmem = iu->iu_mem;
 
-#ifdef VM_TRACE_FUNCTION
+#ifndef VM_NO_STACK_FRAME
   iu->iu_current_frame = &F;
   F.prev = P;
+#ifdef VM_TRACE
   F.trace = !iu->iu_traced_function ||
     !strcmp(P->func->if_name, iu->iu_traced_function);
+#endif
 
 #define RESTORE_CURRENT_FRAME() iu->iu_current_frame = P
 #define SET_CALLEE_FUNC(x) F.func = vm_getfunc(x, iu)
+#define ALLOCATRACEPEAK() *F.allocapeak = VMIR_MAX(*F.allocapeak, F.allocaptr)
 #else
 #define RESTORE_CURRENT_FRAME()
 #define SET_CALLEE_FUNC(x)
+#define ALLOCATRACEPEAK()
 #endif
 
     RESTORE_CURRENT_FRAME();
@@ -623,7 +644,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(JSR_R)
     vm_tracef(&F, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
     if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
-      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+      vm_bad_function(iu, R32(0));
     }
 
     SET_CALLEE_FUNC(R32(0));
@@ -636,7 +657,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
       iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
       RESTORE_CURRENT_FRAME();
     } else {
-      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+      vm_bad_function(iu, R32(0));
     }
     NEXT(3);
 
@@ -658,7 +679,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(INVOKE_R)
     vm_tracef(&F, "Calling indirect %s (%d)", vm_funcname(R32(0), iu), R32(0));
     if(R32(0) >= VECTOR_LEN(&iu->iu_functions)) {
-      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+      vm_bad_function(iu, R32(0));
     }
     SET_CALLEE_FUNC(R32(0));
     if(iu->iu_vm_funcs[R32(0)]) {
@@ -668,7 +689,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
       r = iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
       RESTORE_CURRENT_FRAME();
     } else {
-      vm_stop(iu, VM_STOP_BAD_FUNCTION, R32(0));
+      vm_bad_function(iu, R32(0));
     }
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
@@ -1361,6 +1382,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
       F.allocaptr = VMIR_ALIGN(F.allocaptr, I[1]);
       AR32(0, F.allocaptr);
       F.allocaptr += UIMM32(2);
+      ALLOCATRACEPEAK();
       NEXT(4);
     }
 
@@ -1368,6 +1390,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
       F.allocaptr = VMIR_ALIGN(F.allocaptr, I[1]);
       uint32_t r = F.allocaptr;
       F.allocaptr += UIMM32(3) * R32(2);
+      ALLOCATRACEPEAK();
       AR32(0, r);
       NEXT(5);
     }
@@ -1389,6 +1412,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
     AR32(0, F.allocaptr);
     memcpy(HOSTADDR(F.allocaptr), HOSTADDR(R32(1)), UIMM32(2));
     F.allocaptr += UIMM32(2);
+    ALLOCATRACEPEAK();
     NEXT(4);
 
   VMOP(STACKCOPYC)
@@ -1396,6 +1420,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
     AR32(0, F.allocaptr);
     memcpy(HOSTADDR(F.allocaptr), HOSTADDR(UIMM32(1)), UIMM32(3));
     F.allocaptr += UIMM32(3);
+    ALLOCATRACEPEAK();
     NEXT(5);
 
   VMOP(UNREACHABLE) vm_stop(iu, VM_STOP_UNREACHABLE, 0);
@@ -4710,6 +4735,10 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
     }
   }
 
+#ifndef VM_NO_STACK_FRAME
+    uint32_t allocapeak = allocaptr;
+#endif
+
   jmp_buf *prevjb = iu->iu_err_jmpbuf;
   iu->iu_err_jmpbuf = &jb;
 
@@ -4721,8 +4750,9 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
     vm_frame_t F = {
       .iu = iu,
       .allocaptr = allocaptr,
-#ifdef VM_TRACE_FUNCTION
+#ifndef VM_NO_STACK_FRAME
       .func = f,
+      .allocapeak = &allocapeak,
 #endif
     };
     r = vm_exec(f->if_vm_text, rfa, out, &F);
@@ -4731,6 +4761,21 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       r = VM_STOP_UNCAUGHT_EXCEPTION;
   }
   iu->iu_err_jmpbuf = prevjb;
+
+#ifndef VM_NO_STACK_FRAME
+  uint32_t stackuse = allocapeak - allocaptr;
+
+  if(stackuse > f->if_peak_stack_use) {
+    f->if_peak_stack_use = stackuse;
+    if(allocapeak - allocaptr > iu->iu_asize) {
+      vmir_log(iu, VMIR_LOG_ERROR, "%s() peak stack usage: %d > avail: %d",
+               f->if_name, allocapeak - allocaptr, iu->iu_asize);
+    } else {
+      vmir_log(iu, VMIR_LOG_DEBUG, "%s() peak stack usage: %d",
+               f->if_name, allocapeak - allocaptr);
+    }
+  }
+#endif
 
   if(iu->iu_stack_stash == 0) {
     iu->iu_stack_stash = allocaptr;
@@ -4792,6 +4837,6 @@ vmir_access_trap(struct ir_unit *iu, const void *p, const char *func)
            iu->iu_mem_low,
            iu->iu_mem_high,
            p);
-  vmir_traceback(iu);
+  vmir_traceback(iu, "data breakpoint");
 }
 #endif

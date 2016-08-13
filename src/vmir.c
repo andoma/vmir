@@ -50,13 +50,13 @@
 #endif
 
 #if defined(VM_TRACE)
-#define VM_TRACE_FUNCTION
+#undef VM_NO_STACK_FRAME
 #endif
 
 
 
-#ifdef VM_TRACE_FUNCTION
-static void vmir_traceback(struct ir_unit *iu);
+#ifndef VM_NO_STACK_FRAME
+static void vmir_traceback(struct ir_unit *iu, const char *info);
 #endif
 
 #ifdef VM_TRACE
@@ -332,6 +332,9 @@ struct ir_function {
   struct ir_instr_backref *if_instr_backrefs;
   int if_instr_backref_size;
 
+#ifndef VM_NO_STACK_FRAME
+  int if_peak_stack_use;
+#endif
 };
 
 

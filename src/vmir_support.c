@@ -22,6 +22,9 @@
  * SOFTWARE.
  */
 
+#define VMIR_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define VMIR_MAX(a, b) ((a) > (b) ? (a) : (b))
+
 /**
  *
  */
