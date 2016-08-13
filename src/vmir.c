@@ -247,9 +247,10 @@ struct ir_unit {
   VECTOR_HEAD(, struct ir_initializer) iu_initializers;
 
   VECTOR_HEAD(, int) iu_branch_fixups;
-  VECTOR_HEAD(, int) iu_jit_vmcode_fixups;
+  VECTOR_HEAD(, int) iu_jit_vmcode_fixups; // unused ?
   VECTOR_HEAD(, int) iu_jit_vmbb_fixups;
   VECTOR_HEAD(, int) iu_jit_branch_fixups;
+  VECTOR_HEAD(, int) iu_jit_bb_to_addr_fixups;
 
   int iu_types_created;
 
@@ -367,6 +368,7 @@ typedef struct ir_bb {
   uint8_t ib_mark;
   uint8_t ib_jit;
   uint8_t ib_only_jit_sucessors;
+  uint8_t ib_force_jit_entrypoint;
 
   struct ir_bb_edge_list ib_incoming_edges;
   struct ir_bb_edge_list ib_outgoing_edges;
@@ -704,6 +706,7 @@ iu_cleanup(ir_unit_t *iu)
   VECTOR_CLEAR(&iu->iu_jit_vmcode_fixups);
   VECTOR_CLEAR(&iu->iu_jit_vmbb_fixups);
   VECTOR_CLEAR(&iu->iu_jit_branch_fixups);
+  VECTOR_CLEAR(&iu->iu_jit_bb_to_addr_fixups);
   VECTOR_CLEAR(&iu->iu_initializers);
   value_resize(iu, 0);
 

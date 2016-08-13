@@ -630,6 +630,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
       break;
 
     case BINOP_SHL:
+      // LSL
       jit_pushal(iu, (1 << 24) | (1 << 23) | (1 << 21) | (Rd << 12) | Rn |
                  ((rc & 0x1f) << 7));
       goto wb;
@@ -1400,6 +1401,81 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
  *
  */
 static int
+jit_switch_check(ir_unit_t *iu, ir_instr_switch_t *ii)
+{
+  const ir_type_t *cty = type_get(iu, ii->value.type);
+  int width;
+  switch(cty->it_code) {
+
+  case IR_TYPE_INTx:
+    width = type_bitwidth(iu, cty);
+    if(width <= 8)
+      break;
+    return 0;
+
+  case IR_TYPE_INT8:
+    break;
+
+  default:
+    return 0;
+  }
+
+  // All target BBs must have JIT entry points so we set a flag in
+  // each involved BB that will force it to emit an entry point
+  // from JIT even if it's only a direct return to the C VM
+
+  ir_function_t *f = iu->iu_current_function;
+  bb_find(f, ii->defblock)->ib_force_jit_entrypoint = 1;
+
+  for(int i = 0; i < ii->num_paths; i++)
+    bb_find(f, ii->paths[i].block)->ib_force_jit_entrypoint = 1;
+  return 1;
+
+}
+
+
+/**
+ *
+ */
+static void
+jit_jumptable(ir_unit_t *iu, ir_instr_switch_t *ii, jitctx_t *jc)
+{
+  const ir_type_t *cty = type_get(iu, ii->value.type);
+
+  int width = type_bitwidth(iu, cty);
+  int items = 1 << width;
+  int mask = items - 1;
+
+  int Rv = jit_loadvalue(iu, ii->value, R_TMPA, jc);
+
+  // AND
+  jit_pushal(iu, (1 << 25) | (Rv << 16) | (R_TMPB << 12) | mask);
+
+  // LDR PC <- [PC + R_TMPB << 2]
+  jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) | (1 << 24) | (1 << 23) |
+           (1 << 20) | (0xf << 16) | (0xf << 12) | (2 << 7) | R_TMPB);
+  iu->iu_jit_ptr += 4;
+  uint32_t *table = iu->iu_jit_mem + iu->iu_jit_ptr;
+  // Fill table with default paths
+  for(int i = 0; i < items; i++) {
+    table[i] = ii->defblock;
+    VECTOR_PUSH_BACK(&iu->iu_jit_bb_to_addr_fixups, iu->iu_jit_ptr + i * 4);
+  }
+
+  // Fill table with actual items
+  for(int i = 0; i < ii->num_paths; i++)
+    table[ii->paths[i].v64 & mask] = ii->paths[i].block;
+
+  iu->iu_jit_ptr += 4 * items;
+
+  jit_push_literal_pool(iu, jc);
+}
+
+
+/**
+ *
+ */
+static int
 jit_check(ir_unit_t *iu, ir_instr_t *ii)
 {
   switch(ii->ii_class) {
@@ -1425,6 +1501,8 @@ jit_check(ir_unit_t *iu, ir_instr_t *ii)
     return jit_cmp_check(iu, (ir_instr_binary_t *)ii);
   case IR_IC_SELECT:
     return jit_select_check(iu, (ir_instr_select_t *)ii);
+  case IR_IC_SWITCH:
+    return jit_switch_check(iu, (ir_instr_switch_t *)ii);
   case IR_IC_LEA:
     return 1;
   default:
@@ -1679,11 +1757,26 @@ jit_emit(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
     case IR_IC_CMP_BRANCH:
       jit_cmp_br(iu, (ir_instr_cmp_branch_t *)ii, jc, ib);
       return ret;
+    case IR_IC_SWITCH:
+      jit_jumptable(iu, (ir_instr_switch_t *)ii, jc);
+      return ret;
     default:
       abort();
     }
   }
   abort();
+}
+
+/**
+ *
+ */
+static void
+jit_emit_stub(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
+{
+  ib->ib_jit_offset = iu->iu_jit_ptr;
+  jit_loadimm_from_literal_pool(iu, ib->ib_id, 0, LITERAL_POOL_VMBB, jc);
+  jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+  jit_push_literal_pool(iu, jc);
 }
 
 
@@ -1722,6 +1815,15 @@ jit_branch_fixup(ir_unit_t *iu, ir_function_t *f)
     int pc = off + 0x8;
     int delta = (bb->ib_jit_offset - pc) >> 2;
     *instrp = (*instrp & 0xff000000) | (delta & 0x00ffffff);
+  }
+
+  x = VECTOR_LEN(&iu->iu_jit_bb_to_addr_fixups);
+  for(int i = 0; i < x; i++) {
+    int off = VECTOR_ITEM(&iu->iu_jit_bb_to_addr_fixups, i);
+    int32_t *datap = iu->iu_jit_mem + off;
+    ir_bb_t *bb = bb_find(f, *datap);
+    assert(bb != NULL);
+    *datap = (uint32_t)(bb->ib_jit_offset + iu->iu_jit_mem);
   }
 }
 

@@ -4297,6 +4297,8 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f
     emit_op(iu, VM_JIT_CALL);
     emit_i32(iu, jitoffset);
     return;
+  } else if(bb->ib_force_jit_entrypoint) {
+    jit_emit_stub(iu, bb, jc);
   }
 #endif
 
@@ -4494,6 +4496,7 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   VECTOR_RESIZE(&iu->iu_jit_vmcode_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_vmbb_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_branch_fixups, 0);
+  VECTOR_RESIZE(&iu->iu_jit_bb_to_addr_fixups, 0);
 
 #ifdef VM_TRACE
   int total_instructions = 0;
