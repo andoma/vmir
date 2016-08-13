@@ -47,9 +47,9 @@ typedef struct vm_frame {
 #endif
 
 #ifdef VM_TRACE
-#define vm_tracef(f, fmt, ...) do {              \
-    if((f)->trace)                               \
-      printf(fmt"\n", ##__VA_ARGS__);            \
+#define vm_tracef(f, fmt, ...) do {                           \
+    if((f)->trace)                                            \
+      vmir_log((f)->iu, VMIR_LOG_DEBUG, fmt, ##__VA_ARGS__);  \
   } while(0)
 
 #else
@@ -83,9 +83,9 @@ vmir_traceback(struct ir_unit *iu)
 {
   const vm_frame_t *f;
 
-  printf("traceback\n");
+  vmir_log(iu, VMIR_LOG_INFO, "Traceback");
   for(f = iu->iu_current_frame; f != NULL; f = f->prev) {
-    printf("  %s()\n", f->func->if_name);
+    vmir_log(iu, VMIR_LOG_INFO, "%s()", f->func->if_name);
   }
 }
 
@@ -547,7 +547,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
 #ifndef VM_DONT_USE_COMPUTED_GOTO
 #define NEXT(skip) I+=skip; opc = *I++; goto *(&&opz + opc)
-#define VMOP(x) x: // printf("%s\n", #x);
+#define VMOP(x) x:
 
   NEXT(0);
 
@@ -1532,7 +1532,8 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 #ifdef VM_TRACE
   {
     ir_instrumentation_t *ii = &VECTOR_ITEM(&iu->iu_instrumentation, UIMM32(0));
-    printf("!!! BASIC BLOCK %s.%d\n", ii->ii_func->if_name, ii->ii_bb);
+    vm_tracef(&F, "Entering basic block %s().%d",
+              ii->ii_func->if_name, ii->ii_bb);
   }
 #endif
     VECTOR_ITEM(&iu->iu_instrumentation, UIMM32(0)).ii_count++;
@@ -4401,11 +4402,12 @@ instr_emit(ir_unit_t *iu, ir_bb_t *bb, ir_function_t *f
  *
  */
 static int16_t
-bb_to_offset_delta(ir_function_t *f, int bbi, int off)
+bb_to_offset_delta(ir_unit_t *iu, ir_function_t *f, int bbi, int off)
 {
   ir_bb_t *bb = bb_find(f, bbi);
   if(bb == NULL) {
-    printf("bb .%d not found\n", bbi);
+    vmir_log(iu, VMIR_LOG_FAIL, "%s() basic block %d not found during fixup",
+             f->if_name, bbi);
     abort();
   }
   // The 2 is here because we need to compensate that the instruction
@@ -4436,41 +4438,41 @@ branch_fixup(ir_unit_t *iu)
     uint16_t *I = f->if_vm_text + off;
     switch(I[0]) {
     case VM_B:
-      I[1] = bb_to_offset_delta(f, I[1], off);
+      I[1] = bb_to_offset_delta(iu, f, I[1], off);
       break;
     case VM_BCOND:
-      I[2] = bb_to_offset_delta(f, I[2], off);
-      I[3] = bb_to_offset_delta(f, I[3], off);
+      I[2] = bb_to_offset_delta(iu, f, I[2], off);
+      I[3] = bb_to_offset_delta(iu, f, I[3], off);
       break;
     case VM_INVOKE_VM:
     case VM_INVOKE_EXT:
     case VM_INVOKE_R:
-      I[4] = bb_to_offset_delta(f, I[4], off);
-      I[5] = bb_to_offset_delta(f, I[5], off);
+      I[4] = bb_to_offset_delta(iu, f, I[4], off);
+      I[5] = bb_to_offset_delta(iu, f, I[5], off);
       break;
     case VM_EQ8_BR ... VM_SLE32_C_BR:
-      I[1] = bb_to_offset_delta(f, I[1], off);
-      I[2] = bb_to_offset_delta(f, I[2], off);
+      I[1] = bb_to_offset_delta(iu, f, I[1], off);
+      I[2] = bb_to_offset_delta(iu, f, I[2], off);
       break;
     case VM_JUMPTABLE:
       for(int j = 0; j < I[2]; j++) // one extra for default path (first)
-        I[3 + j] = bb_to_offset_delta(f, I[3 + j], off);
+        I[3 + j] = bb_to_offset_delta(iu, f, I[3 + j], off);
       break;
 
     case VM_SWITCH8_BS:
       p = I[2];
       for(int j = 0; j < p + 1; j++)
-        I[3 + p + j] = bb_to_offset_delta(f, I[3 + p + j], off);
+        I[3 + p + j] = bb_to_offset_delta(iu, f, I[3 + p + j], off);
       break;
     case VM_SWITCH32_BS:
       p = I[2];
       for(int j = 0; j < p + 1; j++)
-        I[3 + p * 2 + j] = bb_to_offset_delta(f, I[3 + p * 2 + j], off);
+        I[3 + p * 2 + j] = bb_to_offset_delta(iu, f, I[3 + p * 2 + j], off);
       break;
     case VM_SWITCH64_BS:
       p = I[2];
       for(int j = 0; j < p + 1; j++)
-        I[3 + p * 4 + j] = bb_to_offset_delta(f, I[3 + p * 4 + j], off);
+        I[3 + p * 4 + j] = bb_to_offset_delta(iu, f, I[3 + p * 4 + j], off);
       break;
     default:
       parser_error(iu, "Bad branch temporary opcode %d", I[0]);
@@ -4493,7 +4495,6 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   iu->iu_text_ptr = iu->iu_text_alloc;
 
   VECTOR_RESIZE(&iu->iu_branch_fixups, 0);
-  VECTOR_RESIZE(&iu->iu_jit_vmcode_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_vmbb_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_branch_fixups, 0);
   VECTOR_RESIZE(&iu->iu_jit_bb_to_addr_fixups, 0);
@@ -4687,8 +4688,9 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       break;
 
     default:
-      fprintf(stderr, "Unable to encode argument %d (%s) in call to %s\n",
-              i, type_str(iu, arg), f->if_name);
+      vmir_log(iu, VMIR_LOG_ERROR,
+               "Unable to encode argument %d (%s) in call to %s",
+               i, type_str(iu, arg), f->if_name);
       return VM_STOP_BAD_ARGUMENTS;
     }
   }
@@ -4701,6 +4703,9 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   } else {
     allocaptr = vmir_mem_alloc(iu, iu->iu_asize, NULL);
     if(allocaptr == 0) {
+      vmir_log(iu, VMIR_LOG_ERROR,
+               "Unable allocate memory for stack when calling %s()",
+               f->if_name);
       return VM_STOP_OUT_OF_MEMROY;
     }
   }
@@ -4732,6 +4737,32 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   } else {
     vmir_mem_free(iu, allocaptr);
   }
+
+  switch(r) {
+  case 0:
+    break;
+  case VM_STOP_EXIT:
+    vmir_log(iu, VMIR_LOG_INFO, "exit(0x%x) called", iu->iu_exit_code);
+    break;
+  case VM_STOP_ABORT:
+    vmir_log(iu, VMIR_LOG_ERROR, "abort() called");
+    break;
+  case VM_STOP_UNREACHABLE:
+    vmir_log(iu, VMIR_LOG_ERROR, "Unreachable instruction");
+    break;
+  case VM_STOP_BAD_INSTRUCTION:
+    vmir_log(iu, VMIR_LOG_FAIL, "Illegal instruction");
+    break;
+  case VM_STOP_BAD_FUNCTION:
+    vmir_log(iu, VMIR_LOG_FAIL, "Bad function %s", iu->iu_exit_code);
+    break;
+  case VM_STOP_UNCAUGHT_EXCEPTION:
+    vmir_log(iu, VMIR_LOG_ERROR, "Uncaught exception");
+    break;
+  case VM_STOP_ACCESS_VIOLATION:
+    vmir_log(iu, VMIR_LOG_ERROR, "Access violation");
+    break;
+  }
   return r;
 }
 
@@ -4740,12 +4771,13 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
 static void
 vmir_access_violation(struct ir_unit *iu, const void *p, const char *func)
 {
-  printf("Access violation in %s @ %zx\n", func, p - iu->iu_mem);
-  printf("Host mem base @ %p (%p - %p) trap address: %p\n",
-         iu->iu_mem,
-         iu->iu_mem_low,
-         iu->iu_mem_high,
-         p);
+  vmir_log(iu, VMIR_LOG_FAIL, "Access violation in %s @ %zx",
+           func, p - iu->iu_mem);
+  vmir_log(iu, VMIR_LOG_FAIL, "Host mem base @ %p (%p - %p) trap address: %p",
+           iu->iu_mem,
+           iu->iu_mem_low,
+           iu->iu_mem_high,
+           p);
   vm_stop(iu, VM_STOP_ACCESS_VIOLATION, 0);
 }
 
@@ -4753,12 +4785,13 @@ vmir_access_violation(struct ir_unit *iu, const void *p, const char *func)
 static void
 vmir_access_trap(struct ir_unit *iu, const void *p, const char *func)
 {
-  printf("Data breakpoint in %s @ %zx\n", func, p - iu->iu_mem);
-  printf("Host mem base @ %p (%p - %p) trap address: %p\n",
-         iu->iu_mem,
-         iu->iu_mem_low,
-         iu->iu_mem_high,
-         p);
+  vmir_log(iu, VMIR_LOG_FAIL, "Data breakpoint in %s @ %zx",
+           func, p - iu->iu_mem);
+  vmir_log(iu, VMIR_LOG_FAIL, "Host mem base @ %p (%p - %p) trap address: %p",
+           iu->iu_mem,
+           iu->iu_mem_low,
+           iu->iu_mem_high,
+           p);
   vmir_traceback(iu);
 }
 #endif

@@ -247,7 +247,6 @@ struct ir_unit {
   VECTOR_HEAD(, struct ir_initializer) iu_initializers;
 
   VECTOR_HEAD(, int) iu_branch_fixups;
-  VECTOR_HEAD(, int) iu_jit_vmcode_fixups; // unused ?
   VECTOR_HEAD(, int) iu_jit_vmbb_fixups;
   VECTOR_HEAD(, int) iu_jit_branch_fixups;
   VECTOR_HEAD(, int) iu_jit_bb_to_addr_fixups;
@@ -272,6 +271,7 @@ struct ir_unit {
   // Stats
 
   vmir_stats_t iu_stats;
+  vmir_logger_t *iu_logger;
 };
 
 static uint32_t
@@ -471,6 +471,30 @@ typedef struct ir_instr {
   uint8_t ii_jit;
 } ir_instr_t;
 
+
+static void
+vmir_log(ir_unit_t *iu, vmir_log_level_t level, const char *fmt, ...)
+{
+  va_list ap;
+  char tmp[1024];
+  va_start(ap, fmt);
+  vsnprintf(tmp, sizeof(tmp), fmt, ap);
+  va_end(ap);
+
+  if(iu->iu_logger) {
+    iu->iu_logger(iu, level, tmp);
+  } else {
+    printf("%s\n", tmp);
+  }
+}
+
+
+void
+vmir_set_logger(ir_unit_t *iu, vmir_logger_t *logger)
+{
+  iu->iu_logger = logger;
+}
+
 static void type_print_list(ir_unit_t *iu);
 static void value_print_list(ir_unit_t *iu);
 
@@ -491,19 +515,13 @@ parser_error0(ir_unit_t *iu, const char *file, int line,
   iu->iu_err_file = file;
   iu->iu_err_line = line;
 
-  printf("%s:%d : Error: %s\n", file, line, iu->iu_err_buf);
+  vmir_log(iu, VMIR_LOG_ERROR, "Parser error: %s:%d : %s",
+           file, line, iu->iu_err_buf);
 
   if(iu->iu_failed) {
     printf("Double failure\n");
   } else {
     iu->iu_failed = 1;
-    if(0) {
-      printf("=== Type list =========================\n");
-      type_print_list(iu);
-      printf("=== Valie list ========================\n");
-      value_print_list(iu);
-      printf("%s:%d : Parser error: %s\n", file, line, iu->iu_err_buf);
-    }
   }
 
   longjmp(iu->iu_parser_jmp, 1);
@@ -703,7 +721,6 @@ static void
 iu_cleanup(ir_unit_t *iu)
 {
   VECTOR_CLEAR(&iu->iu_branch_fixups);
-  VECTOR_CLEAR(&iu->iu_jit_vmcode_fixups);
   VECTOR_CLEAR(&iu->iu_jit_vmbb_fixups);
   VECTOR_CLEAR(&iu->iu_jit_branch_fixups);
   VECTOR_CLEAR(&iu->iu_jit_bb_to_addr_fixups);
@@ -883,9 +900,8 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
     iu->iu_ext_funcs[i] = f->if_ext_func;
 
     if(f->if_used && f->if_vm_text == NULL && f->if_ext_func == NULL) {
-      if(iu->iu_debug_flags & VMIR_DBG_IGNORE_UNRESOLVED_FUNCTIONS) {
-        printf("Warning: Function %s() is not defined\n", f->if_name);
-      } else {
+      vmir_log(iu, VMIR_LOG_ERROR, "Function %s() is not defined", f->if_name);
+      if(!(iu->iu_debug_flags & VMIR_DBG_IGNORE_UNRESOLVED_FUNCTIONS)) {
         parser_error(iu, "Function %s() is not defined", f->if_name);
       }
     }
@@ -897,7 +913,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   return 0;
 }
 
- 
+
 /**
  *
  */
@@ -915,8 +931,8 @@ instrumentation_cmp(const ir_instrumentation_t *a,
 /**
  *
  */
-static void
-vmir_dump_instrumentation(ir_unit_t *iu)
+void
+vmir_instrumentation_dump(ir_unit_t *iu)
 {
   VECTOR_SORT(&iu->iu_instrumentation, instrumentation_cmp);
   for(int i = 0; i < VECTOR_LEN(&iu->iu_instrumentation); i++) {
@@ -975,15 +991,13 @@ vmir_argv_copy(ir_unit_t *iu, int argc, char **argv)
 /**
  *
  */
-void
-vmir_run(ir_unit_t *iu, int argc, char **argv)
+int
+vmir_run(ir_unit_t *iu, int *retptr, int argc, char **argv)
 {
   ir_function_t *f;
   f = vmir_find_function(iu, "main");
-  if(f == NULL) {
-    printf("main() not found\n");
-    return;
-  }
+  if(f == NULL)
+    return VM_STOP_BAD_FUNCTION;
 
   int vm_argv = vmir_argv_copy(iu, argc, argv);
 
@@ -994,6 +1008,14 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
 
   int r = vmir_vm_function_call(iu, f, &ret, argc, vm_argv);
 
+
+  if(r == VM_STOP_EXIT)
+    ret.u32 = iu->iu_exit_code;
+
+  if(retptr != NULL)
+    *retptr = ret.u32;
+
+#if 0
   switch(r) {
   case 0:
     printf("Program returned normally: 0x%x\n", ret.u32);
@@ -1017,13 +1039,9 @@ vmir_run(ir_unit_t *iu, int argc, char **argv)
     printf("Uncaught exception\n");
     break;
   }
-
-  vmir_dump_instrumentation(iu);
-
-  if(r == VM_STOP_ABORT ||
-     r == VM_STOP_BAD_INSTRUCTION ||
-     r == VM_STOP_UNREACHABLE)
-    exit(r);
+  vmir_instrumentation_dump(iu);
+#endif
+  return r;
 }
 
 

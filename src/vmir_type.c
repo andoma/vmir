@@ -622,7 +622,7 @@ types_new_rec_handler(struct ir_unit *iu, int op,
 /**
  *
  */
-static void
+static void __attribute__((unused))
 type_print_list(ir_unit_t *iu)
 {
   for(int i = 0; i < VECTOR_LEN(&iu->iu_types); i++) {

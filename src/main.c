@@ -135,7 +135,7 @@ main(int argc, char **argv)
 
   if(run) {
     int64_t ts = get_ts();
-    vmir_run(iu, argc, argv);
+    vmir_run(iu, NULL, argc, argv);
     ts = get_ts() - ts;
     if(print_stats)
       printf("main() executed for %d ms\n", (int)(ts / 1000LL));

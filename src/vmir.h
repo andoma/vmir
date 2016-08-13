@@ -26,6 +26,15 @@
 
 typedef struct ir_unit ir_unit_t;
 
+typedef enum {
+  VMIR_LOG_FAIL  = 0,
+  VMIR_LOG_ERROR = 1,
+  VMIR_LOG_INFO  = 2,
+  VMIR_LOG_DEBUG = 3,
+} vmir_log_level_t;
+
+typedef void (vmir_logger_t)(ir_unit_t *iu, vmir_log_level_t level,
+                             const char *str);
 
 typedef enum {
   VMIR_ERR_NOT_BITCODE = -1,
@@ -78,8 +87,17 @@ ir_unit_t *vmir_create(void *membase, uint32_t memsize,
                        void *opaque);
 
 
+
+/**
+ * Return opaque value passed to vmir_create()
+ */
 void *vmir_get_opaque(ir_unit_t *iu);
 
+
+/**
+ *
+ */
+void vmir_set_logger(ir_unit_t *iu, vmir_logger_t *logger);
 
 /**
  * Signature for external function (as returned by
@@ -151,8 +169,22 @@ void vmir_destroy(ir_unit_t *iu);
  * Note: argv[0] is expected to be the executable name just as
  * the "normal" argv[] vector behaves. The user is responsible for
  * filling that out as well.
+ *
+ * Passing 0 to argc is OK if no arguments make sense in which case
+ * argv[] is not dereferenced and can thus be NULL
+ *
+ * *ret is used to store the return value from main() or the value
+ * passed to exit() if exit was called
+ *
  */
-void vmir_run(ir_unit_t *iu, int argc, char **argv);
+int vmir_run(ir_unit_t *iu, int *ret, int argc, char **argv);
+
+
+/**
+ * Dump basic block profiling to stdout
+ */
+void vmir_instrumentation_dump(ir_unit_t *iu);
+
 
 
 typedef struct ir_function ir_function_t;
@@ -164,7 +196,7 @@ ir_function_t *vmir_find_function(ir_unit_t *, const char *fn);
 
 
 /**
- * Return values frmo vmir_vm_function_call()
+ * Return values from vmir_vm_function_call()
  */
 #define VM_STOP_OK          0      // Returned normally
 #define VM_STOP_EXIT        1      // exit() was called

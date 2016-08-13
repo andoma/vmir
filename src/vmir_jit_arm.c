@@ -1788,13 +1788,7 @@ jit_branch_fixup(ir_unit_t *iu, ir_function_t *f)
 {
   assert(sizeof(f->if_vm_text) == 4);
   const int vmtext = (intptr_t)f->if_vm_text;
-
-  int x = VECTOR_LEN(&iu->iu_jit_vmcode_fixups);
-  for(int i = 0; i < x; i++) {
-    int off = VECTOR_ITEM(&iu->iu_jit_vmcode_fixups, i);
-    int32_t *literal = iu->iu_jit_mem + off;
-    *literal += vmtext;
-  }
+  int x;
 
   x = VECTOR_LEN(&iu->iu_jit_vmbb_fixups);
   for(int i = 0; i < x; i++) {

@@ -779,7 +779,7 @@ value_str_vt(ir_unit_t *iu, ir_valuetype_t vt)
 /**
  *
  */
-static void
+static void __attribute__((unused))
 value_print_list(ir_unit_t *iu)
 {
   for(int i = 0; i < iu->iu_next_value; i++) {
