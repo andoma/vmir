@@ -1830,6 +1830,7 @@ jit_seal_code(ir_unit_t *iu)
 {
   mprotect(iu->iu_jit_mem, iu->iu_jit_mem_alloced,
            PROT_EXEC | PROT_READ);
+  iu->iu_stats.jit_code_size = iu->iu_jit_mem_alloced;
 }
 
 

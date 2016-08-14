@@ -32,6 +32,37 @@ get_ts(void)
   return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
 }
 
+
+
+
+static void
+dump_stats(ir_unit_t *iu)
+{
+  const vmir_stats_t *s = vmir_get_stats(iu);
+
+  printf("\n");
+  printf(" Memory usage stats\n");
+  printf("\n");
+  printf("       VM code size: %d\n", s->vm_code_size);
+  printf("      JIT code size: %d\n", s->jit_code_size);
+  printf("          Data size: %d\n", s->data_size);
+  printf("     Peak heap size: %d\n", s->peak_heap_size);
+  printf("   Peak stack usage: %d\n", s->peak_stack_size);
+  printf("\n");
+  printf(" Code transformation stats\n");
+  printf("\n");
+  printf("       Moves killed: %d\n", s->moves_killed);
+  printf("  Lea+Load combined: %d\n", s->lea_load_combined);
+  printf(" Lea+Load comb-fail: %d\n", s->lea_load_combined_failed);
+  printf("Cmp+Branch combined: %d\n", s->cmp_branch_combine);
+  printf("Cmp+Select combined: %d\n", s->cmp_select_combine);
+  printf("   Mul+Add combined: %d\n", s->mla_combine);
+  printf(" Load+Cast combined: %d\n", s->load_cast_combine);
+  printf("\n");
+}
+
+
+
 /**
  *
  */
@@ -130,9 +161,6 @@ main(int argc, char **argv)
     return -1;
   }
 
-  if(print_stats)
-    vmir_print_stats(iu);
-
   if(run) {
     int64_t ts = get_ts();
     vmir_run(iu, NULL, argc, argv);
@@ -140,6 +168,9 @@ main(int argc, char **argv)
     if(print_stats)
       printf("main() executed for %d ms\n", (int)(ts / 1000LL));
   }
+
+  if(print_stats)
+    dump_stats(iu);
 
   free(mem);
 

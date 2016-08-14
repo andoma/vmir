@@ -50,9 +50,46 @@ vmir_heap_init(ir_unit_t *iu)
 }
 
 
-#define vmir_heap_malloc(heap, size) tlsf_malloc(heap, size)
-#define vmir_heap_free(heap, ptr) tlsf_free(heap, ptr)
-#define vmir_heap_realloc(heap, ptr, size) tlsf_realloc(heap, ptr, size)
+static void *
+vmir_heap_malloc(ir_unit_t *iu, int size)
+{
+  void *p = tlsf_malloc(iu->iu_heap, size);
+  iu->iu_heap_usage += tlsf_block_size(p);
+  iu->iu_stats.peak_heap_size =
+    MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
+  if(p == NULL)
+    vmir_log(iu, VMIR_LOG_ERROR, "malloc(%d) failed", size);
+
+  return p;
+}
+
+static void
+vmir_heap_free(ir_unit_t *iu, void *ptr)
+{
+  if(ptr != NULL)
+    iu->iu_heap_usage -= tlsf_block_size(ptr);
+  tlsf_free(iu->iu_heap, ptr);
+}
+
+static void *
+vmir_heap_realloc(ir_unit_t *iu, void *ptr, int size)
+{
+  if(ptr != NULL)
+    iu->iu_heap_usage -= tlsf_block_size(ptr);
+  void *p = tlsf_realloc(iu->iu_heap, ptr, size);
+  if(p) {
+    iu->iu_heap_usage += tlsf_block_size(p);
+    iu->iu_stats.peak_heap_size =
+      MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
+  } else {
+
+    if(size)
+      vmir_log(iu, VMIR_LOG_ERROR, "realloc(%d) failed", size);
+  }
+  return p;
+}
+
+
 
 
 
@@ -169,7 +206,7 @@ vmir_heap_malloc(heap_t *h, int size)
 
 
 static void
-vmir_heap_merge_next(heap_t *h, heap_block_t *hb)
+vmir_heap_merge_next(ir_unit_t *iu, heap_block_t *hb)
 {
   heap_block_t *next = TAILQ_NEXT(hb, hb_link);
   if(next == NULL || next->hb_magic != HEAP_MAGIC_FREE)
@@ -180,7 +217,7 @@ vmir_heap_merge_next(heap_t *h, heap_block_t *hb)
 }
 
 static void
-vmir_heap_free(heap_t *h, void *ptr)
+vmir_heap_free(ir_unit_t *iu, void *ptr)
 {
   if(ptr == NULL)
     return;
@@ -198,7 +235,7 @@ vmir_heap_free(heap_t *h, void *ptr)
 }
 
 static int
-vmir_heap_usable_size(heap_t *h, void *ptr)
+vmir_heap_usable_size(ir_unit_t *iu, void *ptr)
 {
   heap_block_t *hb = ptr;
   hb--;
@@ -207,7 +244,7 @@ vmir_heap_usable_size(heap_t *h, void *ptr)
 }
 
 static void *
-vmir_heap_realloc(heap_t *h, void *ptr, int size)
+vmir_heap_realloc(ir_unit_t *iu, void *ptr, int size)
 {
   void *n = NULL;
   if(size) {
@@ -215,7 +252,7 @@ vmir_heap_realloc(heap_t *h, void *ptr, int size)
     if(size < cursize)
       return ptr;
 
-    n = vmir_heap_malloc(h, size);
+    n = vmir_heap_malloc(iu, size);
     if(n == NULL)
       return NULL;
 
@@ -227,7 +264,7 @@ vmir_heap_realloc(heap_t *h, void *ptr, int size)
 }
 
 static void
-vmir_heap_print0(heap_t *h)
+vmir_heap_print0(ir_unit_t *iu)
 {
   heap_block_t *hb;
   printf(" --- Heap allocation dump ---\n");
@@ -251,7 +288,7 @@ vmir_malloc(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t size = vmir_vm_arg32(&rf);
   MEMTRACE("malloc(%d) = ...\n", size);
-  void *p = vmir_heap_malloc(iu->iu_heap, size);
+  void *p = vmir_heap_malloc(iu, size);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("malloc(%d) = 0x%x\n", size, *(uint32_t *)ret);
   return 0;
@@ -263,7 +300,7 @@ vmir_calloc(void *ret, const void *rf, ir_unit_t *iu)
   uint32_t nmemb = vmir_vm_arg32(&rf);
   uint32_t size = vmir_vm_arg32(&rf);
   MEMTRACE("calloc(%d, %d) = ...\n", nmemb, size);
-  void *p = vmir_heap_malloc(iu->iu_heap, size * nmemb);
+  void *p = vmir_heap_malloc(iu, size * nmemb);
   if(p != NULL)
     memset(p, 0, size * nmemb);
   vmir_vm_retptr(ret, p, iu);
@@ -278,7 +315,7 @@ vmir_free(void *ret, const void *rf, ir_unit_t *iu)
   if(ptr == 0)
     return 0;
   MEMTRACE("free(0x%x)\n", ptr);
-  vmir_heap_free(iu->iu_heap, iu->iu_mem + ptr);
+  vmir_heap_free(iu, iu->iu_mem + ptr);
   return 0;
 }
 
@@ -289,7 +326,7 @@ vmir_realloc(void *ret, const void *rf, ir_unit_t *iu)
   uint32_t size = vmir_vm_arg32(&rf);
 
   MEMTRACE("realloc(0x%x, %d) = ...\n", ptr, size);
-  void *p = vmir_heap_realloc(iu->iu_heap, ptr ? iu->iu_mem + ptr : NULL, size);
+  void *p = vmir_heap_realloc(iu, ptr ? iu->iu_mem + ptr : NULL, size);
   vmir_vm_retptr(ret, p, iu);
   MEMTRACE("realloc(0x%x, %d) = 0x%x\n", ptr, size, *(uint32_t *)ret);
   return 0;
@@ -298,7 +335,7 @@ vmir_realloc(void *ret, const void *rf, ir_unit_t *iu)
 static int
 vmir_heap_print(void *ret, const void *rf, ir_unit_t *iu)
 {
-  vmir_heap_print0(iu->iu_heap);
+  vmir_heap_print0(iu);
   return 0;
 }
 
@@ -661,7 +698,7 @@ vFILE_close(void *fh)
   ir_unit_t *iu = vf->iu;
   vmir_fd_close(vf->iu, vf->fd);
   LIST_REMOVE(vf, link);
-  vmir_heap_free(iu->iu_heap, vf);
+  vmir_heap_free(iu, vf);
   return 0;
 }
 
@@ -682,7 +719,7 @@ static const cookie_io_functions_t cookiefuncs = {
 static void *
 vFILE_open_fd(ir_unit_t *iu, int fd, int line_buffered, const char *mode)
 {
-  vFILE_t *vfile = vmir_heap_malloc(iu->iu_heap, sizeof(vFILE_t));
+  vFILE_t *vfile = vmir_heap_malloc(iu, sizeof(vFILE_t));
   if(vfile == NULL) {
     vmir_fd_close(iu, fd);
     return NULL;
@@ -697,7 +734,7 @@ vFILE_open_fd(ir_unit_t *iu, int fd, int line_buffered, const char *mode)
 #endif
   if(vfile->fp == NULL) {
     vmir_fd_close(iu, fd);
-    vmir_heap_free(iu->iu_heap, vfile);
+    vmir_heap_free(iu, vfile);
     return NULL;
   }
   if(line_buffered)
@@ -1515,7 +1552,7 @@ static int
 vmir___cxa_allocate_exception(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t size = vmir_vm_arg32(&rf);
-  void *p = vmir_heap_malloc(iu->iu_heap, size + sizeof(vmir_cxx_exception_t));
+  void *p = vmir_heap_malloc(iu, size + sizeof(vmir_cxx_exception_t));
   memset(p, 0, sizeof(vmir_cxx_exception_t));
   vmir_vm_retptr(ret, p + sizeof(vmir_cxx_exception_t), iu);
   return 0;
@@ -1525,7 +1562,7 @@ static int
 vmir___cxa_free_exception(void *ret, const void *rf, ir_unit_t *iu)
 {
   uint32_t x = vmir_vm_arg32(&rf) - sizeof(vmir_cxx_exception_t);
-  vmir_heap_free(iu->iu_heap, iu->iu_mem + x);
+  vmir_heap_free(iu, iu->iu_mem + x);
   return 0;
 }
 
@@ -1557,7 +1594,7 @@ vmir___cxa_end_catch(void *ret, const void *rf, ir_unit_t *iu)
 
   if(--exc->handlers == 0) {
     iu->iu_exception.caught = exc->next;
-    vmir_heap_free(iu->iu_heap, exc);
+    vmir_heap_free(iu, exc);
   }
   return 0;
 }
@@ -1871,7 +1908,7 @@ uint32_t
 vmir_mem_alloc(ir_unit_t *iu, uint32_t size, void *hostaddr_)
 {
   void **hostaddr = hostaddr_;
-  void *p = vmir_heap_malloc(iu->iu_heap, size);
+  void *p = vmir_heap_malloc(iu, size);
   if(p == NULL) {
     if(hostaddr)
       *hostaddr = NULL;
@@ -1885,5 +1922,5 @@ vmir_mem_alloc(ir_unit_t *iu, uint32_t size, void *hostaddr_)
 void
 vmir_mem_free(ir_unit_t *iu, uint32_t addr)
 {
-  return vmir_heap_free(iu->iu_heap, iu->iu_mem + addr);
+  return vmir_heap_free(iu, iu->iu_mem + addr);
 }

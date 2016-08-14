@@ -140,19 +140,6 @@ LIST_HEAD(ir_bb_list, ir_bb);
 LIST_HEAD(ir_bb_edge_list, ir_bb_edge);
 LIST_HEAD(ir_value_instr_list, ir_value_instr);
 
-typedef struct vmir_stats {
-
-  int cmp_branch_combine;
-  int cmp_select_combine;
-  int mla_combine;
-  int load_cast_combine;
-  int moves_killed;
-
-  int lea_load_combined;
-  int lea_load_combined_failed;
-
-} vmir_stats_t;
-
 
 typedef struct vmir_exception {
   uint32_t exception;
@@ -192,6 +179,7 @@ struct ir_unit {
   uint32_t iu_data_ptr;
   uint32_t iu_heap_start;
   void *iu_heap;
+  uint32_t iu_heap_usage;
   uint32_t iu_rsize;
   uint32_t iu_asize;
   uint32_t iu_memsize;
@@ -887,6 +875,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   jit_seal_code(iu);
 #endif
   iu->iu_heap_start = VMIR_ALIGN(iu->iu_data_ptr, 4096);
+  iu->iu_stats.data_size = iu->iu_heap_start;
 
   vmir_heap_init(iu);
 
@@ -1075,17 +1064,9 @@ vmir_set_traced_function(ir_unit_t *iu, const char *fname)
   iu->iu_traced_function = fname ? strdup(fname) : NULL;
 }
 
-
-void
-vmir_print_stats(ir_unit_t *iu)
+const vmir_stats_t *
+vmir_get_stats(ir_unit_t *iu)
 {
-  printf("       Moves killed: %d\n", iu->iu_stats.moves_killed);
-  printf("  Lea+Load combined: %d\n", iu->iu_stats.lea_load_combined);
-  printf(" Lea+Load comb-fail: %d\n", iu->iu_stats.lea_load_combined_failed);
-  printf("Cmp+Branch combined: %d\n", iu->iu_stats.cmp_branch_combine);
-  printf("Cmp+Select combined: %d\n", iu->iu_stats.cmp_select_combine);
-  printf("   Mul+Add combined: %d\n", iu->iu_stats.mla_combine);
-  printf(" Load+Cast combined: %d\n", iu->iu_stats.load_cast_combine);
-
-  vmir_heap_print0(iu->iu_heap);
+  return &iu->iu_stats;
 }
+

@@ -361,3 +361,25 @@ void vmir_walk_heap(ir_unit_t *iu,
 void vmir_walk_fds(ir_unit_t *iu,
                    void (*fn)(void *opaque, int fd, int type),
                    void *opaque);
+
+typedef struct vmir_stats {
+
+  int vm_code_size;
+  int jit_code_size;
+  int data_size;
+  int peak_heap_size;
+  int peak_stack_size;
+
+  int cmp_branch_combine;
+  int cmp_select_combine;
+  int mla_combine;
+  int load_cast_combine;
+  int moves_killed;
+
+  int lea_load_combined;
+  int lea_load_combined_failed;
+
+} vmir_stats_t;
+
+const vmir_stats_t *vmir_get_stats(ir_unit_t *iu);
+

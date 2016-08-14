@@ -4567,6 +4567,8 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   f->if_vm_text = malloc(f->if_vm_text_size);
   memcpy(f->if_vm_text, iu->iu_text_alloc, f->if_vm_text_size);
 
+  iu->iu_stats.vm_code_size += f->if_vm_text_size;
+
   branch_fixup(iu);
 #ifdef VMIR_VM_JIT
   jit_branch_fixup(iu, f);
@@ -4713,7 +4715,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       break;
 
     default:
-      vmir_log(iu, VMIR_LOG_ERROR,
+      vmir_log(iu, VMIR_LOG_FAIL,
                "Unable to encode argument %d (%s) in call to %s",
                i, type_str(iu, arg), f->if_name);
       return VM_STOP_BAD_ARGUMENTS;
@@ -4728,7 +4730,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
   } else {
     allocaptr = vmir_mem_alloc(iu, iu->iu_asize, NULL);
     if(allocaptr == 0) {
-      vmir_log(iu, VMIR_LOG_ERROR,
+      vmir_log(iu, VMIR_LOG_FAIL,
                "Unable allocate memory for stack when calling %s()",
                f->if_name);
       return VM_STOP_OUT_OF_MEMROY;
@@ -4771,6 +4773,8 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       vmir_log(iu, VMIR_LOG_ERROR, "%s() peak stack usage: %d > avail: %d",
                f->if_name, allocapeak - allocaptr, iu->iu_asize);
     } else {
+      iu->iu_stats.peak_stack_size =
+        MAX(iu->iu_stats.peak_stack_size, stackuse);
       vmir_log(iu, VMIR_LOG_DEBUG, "%s() peak stack usage: %d",
                f->if_name, allocapeak - allocaptr);
     }
