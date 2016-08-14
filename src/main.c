@@ -172,6 +172,8 @@ main(int argc, char **argv)
   if(print_stats)
     dump_stats(iu);
 
+  vmir_instrumentation_dump(iu);
+
   free(mem);
 
   vmir_destroy(iu);
