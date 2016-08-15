@@ -5,6 +5,7 @@
 callgrind.*
 cachegrind.*
 vmir
+vmir.*
 shatest
 
 .DS_Store
