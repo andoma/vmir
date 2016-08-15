@@ -86,8 +86,9 @@ function_prepare_parse(ir_unit_t *iu, ir_function_t *f)
 static void
 function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
 {
-  printf("\nDump of %s function %s (%s)\n", what,
-         f->if_name, type_str_index(iu, f->if_type));
+  printf("\nDump of %s function %s (%s)%s\n", what,
+         f->if_name, type_str_index(iu, f->if_type),
+         f->if_full_jit ? ", Fully JITed" : "");
   ir_bb_t *ib;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ir_instr_t *ii;

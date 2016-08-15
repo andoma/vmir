@@ -379,8 +379,11 @@ set_value_name(ir_unit_t *iu, int vid, char *str)
   case IR_VC_FUNCTION:
     free(iv->iv_func->if_name);
     iv->iv_func->if_name = str;
-    if(!vmop_resolve(iv->iv_func)) {
-      iv->iv_func->if_ext_func = iu->iu_external_function_resolver(iv->iv_func->if_name, iu->iu_opaque);
+    if(iv->iv_func->if_ext_func == NULL) {
+      if(!vmop_resolve(iv->iv_func)) {
+        iv->iv_func->if_ext_func =
+          (void *)iu->iu_external_function_resolver(iv->iv_func->if_name, iu->iu_opaque);
+      }
     }
 
     if(iu->iu_debug_flags & VMIR_DBG_LIST_FUNCTIONS) {

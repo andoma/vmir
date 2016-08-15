@@ -153,6 +153,12 @@ typedef struct vmir_exception {
 /**
  * Translation unit
  */
+
+typedef int (vm_function_t)(void *ret,
+                            const void *regs,
+                            struct ir_unit *iu,
+                            void *hostmem);
+
 struct ir_unit {
   vmir_function_resolver_t iu_external_function_resolver;
 
@@ -162,7 +168,7 @@ struct ir_unit {
 
   void *iu_mem;
   void **iu_vm_funcs;
-  vm_ext_function_t **iu_ext_funcs;
+  vm_function_t **iu_function_table;
   jmp_buf *iu_err_jmpbuf;
   int iu_exit_code;
   void *iu_opaque;
@@ -302,6 +308,7 @@ struct ir_function {
   char *if_name;
   char if_isproto;
   char if_used;
+  char if_full_jit;
   int if_regframe_size; // Size of all temporary registers
   int if_callarg_size;  // Size of all (non vararg) arguments
   int if_gfid;          // Global function id
@@ -315,10 +322,12 @@ struct ir_function {
   void *if_vm_text;
   int if_vm_text_size;
 
-  vm_ext_function_t *if_ext_func;
+  vm_function_t *if_ext_func;
 
   struct ir_instr_backref *if_instr_backrefs;
   int if_instr_backref_size;
+
+  int if_jit_offset;
 
 #ifndef VM_NO_STACK_FRAME
   int if_peak_stack_use;
@@ -748,7 +757,7 @@ vmir_destroy(ir_unit_t *iu)
   }
 
   free(iu->iu_vm_funcs);
-  free(iu->iu_ext_funcs);
+  free(iu->iu_function_table);
 
   VECTOR_CLEAR(&iu->iu_types);
 
@@ -884,13 +893,12 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   libc_initialize(iu);
 
   iu->iu_vm_funcs  = calloc(VECTOR_LEN(&iu->iu_functions), sizeof(void *));
-  iu->iu_ext_funcs = calloc(VECTOR_LEN(&iu->iu_functions), sizeof(void *));
+  iu->iu_function_table = calloc(VECTOR_LEN(&iu->iu_functions), sizeof(void *));
   for(int i = 0; i < VECTOR_LEN(&iu->iu_functions); i++) {
     ir_function_t *f = VECTOR_ITEM(&iu->iu_functions, i);
 
     iu->iu_vm_funcs[i]  = f->if_vm_text;
-    iu->iu_ext_funcs[i] = f->if_ext_func;
-
+    iu->iu_function_table[i] = f->if_ext_func;
     if(f->if_used && f->if_vm_text == NULL && f->if_ext_func == NULL) {
       vmir_log(iu, VMIR_LOG_ERROR, "Function %s() is not defined", f->if_name);
       if(!(iu->iu_debug_flags & VMIR_DBG_IGNORE_UNRESOLVED_FUNCTIONS)) {

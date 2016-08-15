@@ -445,10 +445,13 @@ typedef enum {
 
   VM_B,
   VM_BCOND,
+
+  VM_JSR,
   VM_JSR_R,
   VM_JSR_VM,
   VM_JSR_EXT,
 
+  VM_INVOKE,
   VM_INVOKE_R,
   VM_INVOKE_VM,
   VM_INVOKE_EXT,

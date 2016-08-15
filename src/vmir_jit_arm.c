@@ -82,12 +82,31 @@ arm_machinereg(int reg)
 
 /**
  * Registers
+ *
+ *   r0 - return value pointer
+ *   r1 - Register frame
+ *   r2 - Stack frame, also used as TMP-C
+ *   r3 - Memory
+ *   r4 - r8 "machine registers"
+ *   r9 - TMP-B
+ *  r10 - r11 "machine registers"
+ *  r14 - Link register, used for TMP-A
  */
-#define R_VMSTACK 0
-#define R_MEM     1
-#define R_TMPA    2
-#define R_TMPB    3
-#define R_TMPC    9
+
+
+#define REG_SAVE_MASK    0x4ff0
+#define REG_RESTORE_MASK 0x8ff0
+
+/**
+ * Registers
+ */
+#define R_RET     0
+#define R_VMSTACK 1
+#define R_TMPC    2
+#define R_MEM     3
+#define R_TMPB    9
+#define R_TMPA    14
+#define R_PC      15
 
 #define LITERAL_POOL_MAX_SIZE 256
 
@@ -750,27 +769,6 @@ jit_move(ir_unit_t *iu, ir_instr_move_t *ii, jitctx_t *jc)
  *
  */
 static int
-jit_load_check(ir_unit_t *iu, ir_instr_load_t *ii)
-{
-  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
-
-  switch(legalize_type(retty)) {
-  case IR_TYPE_INT8:
-  case IR_TYPE_INT16:
-  case IR_TYPE_INT32:
-  case IR_TYPE_POINTER:
-  case IR_TYPE_FLOAT:
-    break;
-  default:
-    return 0;
-  }
-  return 1;
-}
-
-/**
- *
- */
-static int
 jit_compute_ea(ir_unit_t *iu, ir_valuetype_t baseptr,
                ir_valuetype_t value_offset,
                int value_offset_multiply, int immediate_offset,
@@ -818,6 +816,29 @@ jit_lea(ir_unit_t *iu, ir_instr_lea_t *ii, jitctx_t *jc)
                  jit_compute_ea(iu, ii->baseptr, ii->value_offset,
                                 ii->value_offset_multiply, ii->immediate_offset,
                                 R_TMPA, jc));
+}
+
+
+/**
+ *
+ */
+static int
+jit_load_check(ir_unit_t *iu, ir_instr_load_t *ii)
+{
+  const ir_type_t *retty = type_get(iu, ii->super.ii_ret.type);
+
+  switch(legalize_type(retty)) {
+  case IR_TYPE_INT1:
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
+  case IR_TYPE_INT32:
+  case IR_TYPE_POINTER:
+  case IR_TYPE_FLOAT:
+    break;
+  default:
+    return 0;
+  }
+  return 1;
 }
 
 
@@ -883,6 +904,7 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
                (R_MEM << 16) | (Rt << 12) | 0xb0 | ea);
       break;
     case IR_TYPE_INT8:
+    case IR_TYPE_INT1:
       // LDRB
       jit_pushal(iu, (1 << 26) | (1 << 25) | (1 << 24) | (1 << 23) |
                  (1 << 22) | (1 << 20) |
@@ -903,6 +925,7 @@ jit_store_check(ir_unit_t *iu, ir_instr_store_t *ii)
   const ir_type_t *ty = type_get(iu, ii->value.type);
 
   switch(legalize_type(ty)) {
+  case IR_TYPE_INT1:
   case IR_TYPE_INT8:
   case IR_TYPE_INT16:
   case IR_TYPE_INT32:
@@ -946,6 +969,7 @@ jit_store(ir_unit_t *iu, ir_instr_store_t *ii, jitctx_t *jc)
     jit_pushal(iu, (1 << 24) | (1 << 23) |
                (R_MEM << 16) | (Rt << 12) | 0xb0 | ea);
     break;
+  case IR_TYPE_INT1:
   case IR_TYPE_INT8:
     // STRB
     jit_pushal(iu, (1 << 26) | (1 << 25) | (1 << 24) | (1 << 23) |
@@ -1028,7 +1052,7 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
     // Jumping to non-JITed instruction, emit return + jump to VM location
     jit_loadimm_from_literal_pool_cond(iu, true_bb, 0, LITERAL_POOL_VMBB,
                                        jc, true_cond);
-    jit_push(iu, true_cond | (0x8bd << 16) | (0x8DF0));
+    jit_push(iu, true_cond | (0x8bd << 16) | REG_RESTORE_MASK);
   }
 
   if(fib->ib_jit) {
@@ -1044,7 +1068,7 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
     // Jumping to non-JITed instruction, emit return + jump to VM location
     jit_loadimm_from_literal_pool_cond(iu, false_bb, 0, LITERAL_POOL_VMBB,
                                        jc, false_cond);
-    jit_push(iu, false_cond | (0x8bd << 16) | (0x8DF0));
+    jit_push(iu, false_cond | (0x8bd << 16) | REG_RESTORE_MASK);
   }
 
   if(may_push_pool)
@@ -1093,7 +1117,7 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc, ir_bb_t *curbb)
     // Jumping to non-JITed instruction, emit return + jump to VM location
     jit_loadimm_from_literal_pool(iu, ii->true_branch, 0, LITERAL_POOL_VMBB,
                                   jc);
-    jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+    jit_pushal(iu, (0x8bd << 16) | REG_RESTORE_MASK);
     jit_push_literal_pool(iu, jc);
   }
 }
@@ -1471,6 +1495,43 @@ jit_jumptable(ir_unit_t *iu, ir_instr_switch_t *ii, jitctx_t *jc)
   jit_push_literal_pool(iu, jc);
 }
 
+/**
+ *
+ */
+static int
+jit_ret_check(ir_unit_t *iu, ir_instr_unary_t *ii)
+{
+  if(ii->value.value == -1)
+    return 1;
+
+  int typecode = legalize_type(type_get(iu, ii->value.type));
+
+  switch(typecode) {
+  case IR_TYPE_INT8:
+  case IR_TYPE_INT16:
+  case IR_TYPE_INT32:
+  case IR_TYPE_POINTER:
+    break;
+  default:
+    return 0;
+  }
+  return 1;
+}
+
+
+static void
+jit_ret(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
+{
+  if(ii->value.value != -1) {
+    int r = jit_loadvalue(iu, ii->value, R_TMPA, jc);
+    jit_pushal(iu, (1 << 26) | (1 << 24) | (R_RET << 16) | (r << 12));
+  }
+
+  jit_pushal(iu, (1 << 25) | (1 << 24) | (1 << 23) | (1 << 21) |
+             (0 << 12) | 0);
+  jit_pushal(iu, (0x8bd << 16) | REG_RESTORE_MASK);
+  jit_push_literal_pool(iu, jc);
+}
 
 /**
  *
@@ -1503,6 +1564,8 @@ jit_check(ir_unit_t *iu, ir_instr_t *ii)
     return jit_select_check(iu, (ir_instr_select_t *)ii);
   case IR_IC_SWITCH:
     return jit_switch_check(iu, (ir_instr_switch_t *)ii);
+  case IR_IC_RET:
+    return jit_ret_check(iu, (ir_instr_unary_t *)ii);
   case IR_IC_LEA:
     return 1;
   default:
@@ -1544,8 +1607,39 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
   ir_bb_t *ib, *ibn, *curbb;
   ir_instr_t *ii, *iin, *prev;
 
+  int fulljit = 1;
 
-  //  function_print(iu, f, "PRE JIT ANALYZE");
+  TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+    TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+      ii->ii_jit = jit_check(iu, ii);
+      if(!ii->ii_jit) {
+        fulljit = 0;
+      }
+    }
+  }
+
+  if(!fulljit) {
+    TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+      ir_instr_t *last = TAILQ_LAST(&ib->ib_instrs, ir_instr_queue);
+      if(last->ii_class == IR_IC_RET)
+        last->ii_jit = 0;
+    }
+  } else {
+    f->if_full_jit = 1;
+    TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+      ib->ib_jit = 1;
+
+      TAILQ_FOREACH(ii, &ib->ib_instrs, ii_link) {
+        int r = ii->ii_ret.value;
+        if(r < 0)
+          continue;
+        ir_value_t *iv = value_get(iu, ii->ii_ret.value);
+        assert(iv->iv_class == IR_VC_TEMPORARY);
+        iv->iv_jit = 1;
+      }
+    }
+    return;
+  }
 
   struct ir_bb_list jitbbs;
   LIST_INIT(&jitbbs);
@@ -1555,7 +1649,7 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
 
     prev = ii = TAILQ_FIRST(&ib->ib_instrs);
 
-    ib->ib_jit = ii->ii_jit = jit_check(iu, ii);
+    ib->ib_jit = ii->ii_jit;
     curbb = ib;
 
     if(ib->ib_jit)
@@ -1566,7 +1660,7 @@ jit_analyze(ir_unit_t *iu, ir_function_t *f, int setwords, int ffv)
     ii = TAILQ_NEXT(ii, ii_link);
     for(; ii != NULL; ii = iin) {
       iin = TAILQ_NEXT(ii, ii_link);
-      ii->ii_jit = jit_check(iu, ii);
+      ii->ii_jit = ii->ii_jit;
 
       if(ii->ii_jit != curbb->ib_jit) {
         // Enter/Leaved JIT section, split into new bb
@@ -1711,7 +1805,7 @@ jit_emit(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
 
   if(!ib->ib_only_jit_sucessors) {
     ret = iu->iu_jit_ptr;
-    jit_pushal(iu, (0x92d << 16) | (0x4DF0));
+    jit_pushal(iu, (0x92d << 16) | REG_SAVE_MASK);
   } else {
     ret = INT32_MIN;
   }
@@ -1760,6 +1854,9 @@ jit_emit(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
     case IR_IC_SWITCH:
       jit_jumptable(iu, (ir_instr_switch_t *)ii, jc);
       return ret;
+    case IR_IC_RET:
+      jit_ret(iu, (ir_instr_unary_t *)ii, jc);
+      return ret;
     default:
       abort();
     }
@@ -1775,7 +1872,7 @@ jit_emit_stub(ir_unit_t *iu, ir_bb_t *ib, jitctx_t *jc)
 {
   ib->ib_jit_offset = iu->iu_jit_ptr;
   jit_loadimm_from_literal_pool(iu, ib->ib_id, 0, LITERAL_POOL_VMBB, jc);
-  jit_pushal(iu, (0x8bd << 16) | (0x8DF0));
+  jit_pushal(iu, (0x8bd << 16) | REG_RESTORE_MASK);
   jit_push_literal_pool(iu, jc);
 }
 

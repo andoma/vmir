@@ -481,7 +481,7 @@ static void *
 #ifndef VM_NO_STACK_FRAME
 __attribute__((noinline))
 #endif
-do_jit_call(void *rf, void *mem, void *(*code)(void *, void *))
+  do_jit_call(void *rf, void *mem, void *(*code)(void *, void *, void *, void *))
 {
 #if 0
   printf("%p: Pre jit call 8=%x c=%x 10=%x\n", code,
@@ -489,7 +489,7 @@ do_jit_call(void *rf, void *mem, void *(*code)(void *, void *))
          *(uint32_t *)(rf + 12),
          *(uint32_t *)(rf + 16));
 #endif
-  void *r = code(rf, mem);
+  void *r = code(NULL, rf, NULL, mem);
 #if 0
   printf("%p: Post jit call 8=%x c=%x 10=%x\n", code,
          *(uint32_t *)(rf + 8),
@@ -531,10 +531,10 @@ vm_trace_instruction(const vm_frame_t *frame,
 #endif
 
 
-
+static int16_t vm_resolve(uint16_t opcode);
 
 static int __attribute__((noinline))
-vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
+vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 {
 #ifndef VM_DONT_USE_COMPUTED_GOTO
   if(rf == NULL)
@@ -603,7 +603,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
   VMOP(JIT_CALL)
   {
-    void *(*code)(void *, void *) = iu->iu_jit_mem + UIMM32(0);
+    void *(*code)(void *, void *, void *, void*) = iu->iu_jit_mem + UIMM32(0);
     I = do_jit_call(rf, iu->iu_mem, code);
     NEXT(0);
   }
@@ -624,6 +624,21 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(B)     I = (void *)I + (int16_t)I[0]; NEXT(0);
   VMOP(BCOND) I = (void *)I + (int16_t)(R32(0) ? I[1] : I[2]); NEXT(0);
 
+  VMOP(JSR)
+    vm_tracef(&F, "Calling %s", vm_funcname(I[0], iu));
+    SET_CALLEE_FUNC(I[0]);
+    if(iu->iu_function_table[I[0]]) {
+      I[-1] = vm_resolve(VM_JSR_EXT);
+      r = iu->iu_function_table[I[0]](rf + I[2], rf + I[1], iu, hostmem);
+    } else {
+      I[-1] = vm_resolve(VM_JSR_VM);
+      r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], rf + I[2], &F);
+    }
+    RESTORE_CURRENT_FRAME();
+    if(r)
+      return r;
+    NEXT(3);
+
   VMOP(JSR_VM)
     vm_tracef(&F, "Calling %s", vm_funcname(I[0], iu));
     SET_CALLEE_FUNC(I[0]);
@@ -635,7 +650,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
   VMOP(JSR_EXT)
     vm_tracef(&F, "Calling %s (external)", vm_funcname(I[0], iu));
-    r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    r = iu->iu_function_table[I[0]](rf + I[2], rf + I[1], iu, hostmem);
     RESTORE_CURRENT_FRAME();
     if(r)
       return r;
@@ -653,8 +668,8 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
       RESTORE_CURRENT_FRAME();
       if(r)
         return r;
-    } else if(iu->iu_ext_funcs[R32(0)]) {
-      iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+    } else if(iu->iu_function_table[R32(0)]) {
+      iu->iu_function_table[R32(0)](rf + I[2], rf + I[1], iu, hostmem);
       RESTORE_CURRENT_FRAME();
     } else {
       vm_bad_function(iu, R32(0));
@@ -662,6 +677,16 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
     NEXT(3);
 
 
+
+  VMOP(INVOKE)
+    vm_tracef(&F, "Invoking %s", vm_funcname(I[0], iu));
+    SET_CALLEE_FUNC(I[0]);
+    if(iu->iu_function_table[I[0]])
+      r = iu->iu_function_table[I[0]](rf + I[2], rf + I[1], iu, hostmem);
+    else
+      r = vm_exec(iu->iu_vm_funcs[I[0]], rf + I[1], rf + I[2], &F);
+    RESTORE_CURRENT_FRAME();
+    I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
   VMOP(INVOKE_VM)
     vm_tracef(&F, "Invoking %s", vm_funcname(I[0], iu));
@@ -672,7 +697,7 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
   VMOP(INVOKE_EXT)
     vm_tracef(&F, "Calling %s (external)", vm_funcname(I[0], iu));
-    r = iu->iu_ext_funcs[I[0]](rf + I[2], rf + I[1], iu);
+    r = iu->iu_function_table[I[0]](rf + I[2], rf + I[1], iu, hostmem);
     RESTORE_CURRENT_FRAME();
     I = (void *)I + (int16_t)I[3 + r]; NEXT(0);
 
@@ -685,8 +710,8 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
     if(iu->iu_vm_funcs[R32(0)]) {
       r = vm_exec(iu->iu_vm_funcs[R32(0)], rf + I[1], rf + I[2], &F);
       RESTORE_CURRENT_FRAME();
-    } else if(iu->iu_ext_funcs[R32(0)]) {
-      r = iu->iu_ext_funcs[R32(0)](rf + I[2], rf + I[1], iu);
+    } else if(iu->iu_function_table[R32(0)]) {
+      r = iu->iu_function_table[R32(0)](rf + I[2], rf + I[1], iu, hostmem);
       RESTORE_CURRENT_FRAME();
     } else {
       vm_bad_function(iu, R32(0));
@@ -1993,10 +2018,12 @@ vm_exec(const uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
   case VM_B:         return &&B        - &&opz;     break;
   case VM_BCOND:     return &&BCOND    - &&opz;     break;
+  case VM_JSR:       return &&JSR      - &&opz;     break;
   case VM_JSR_VM:    return &&JSR_VM   - &&opz;     break;
   case VM_JSR_EXT:   return &&JSR_EXT  - &&opz;     break;
   case VM_JSR_R:     return &&JSR_R    - &&opz;     break;
 
+  case VM_INVOKE:    return &&INVOKE   - &&opz;    break;
   case VM_INVOKE_VM: return &&INVOKE_VM - &&opz;    break;
   case VM_INVOKE_EXT: return &&INVOKE_EXT - &&opz;    break;
   case VM_INVOKE_R:  return &&INVOKE_R  - &&opz;    break;
@@ -3960,14 +3987,17 @@ emit_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
   } else {
     return_reg = 0;
   }
+
   ir_function_t *callee = value_function(iu, ii->callee.value);
+
   if(callee != NULL) {
     vm_op_t op;
 
-    if(callee->if_ext_func != NULL)
+    if(callee->if_ext_func != NULL) {
       op = VM_JSR_EXT;
-    else
-      op = VM_JSR_VM;
+    } else {
+      op = VM_JSR;
+    }
 
     emit_op3(iu, op, callee->if_gfid, rf_offset, return_reg);
 
@@ -4008,7 +4038,7 @@ emit_invoke(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *f)
     if(callee->if_ext_func != NULL) {
       op = VM_INVOKE_EXT;
     } else {
-      op = VM_INVOKE_VM;
+      op = VM_INVOKE;
     }
 
     emit_i16(iu, op);
@@ -4538,9 +4568,16 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
 #ifdef VMIR_VM_JIT
   jitctx_t jc;
   jitctx_init(iu, f, &jc);
+  f->if_jit_offset = iu->iu_jit_ptr;
 #endif
 
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
+#ifdef VMIR_VM_JIT
+    if(f->if_full_jit) {
+      jit_emit(iu, ib, &jc);
+      continue;
+    }
+#endif
     ib->ib_text_offset = iu->iu_text_ptr - iu->iu_text_alloc;
     if(iu->iu_debug_flags_func & VMIR_DBG_BB_INSTRUMENT) {
       emit_op(iu, VM_INSTRUMENT_COUNT);
@@ -4564,12 +4601,16 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
   jitctx_done(iu, f, &jc);
 #endif
   f->if_vm_text_size = iu->iu_text_ptr - iu->iu_text_alloc;
-  f->if_vm_text = malloc(f->if_vm_text_size);
-  memcpy(f->if_vm_text, iu->iu_text_alloc, f->if_vm_text_size);
+  if(f->if_full_jit) {
+    assert(f->if_vm_text_size == 0);
+    f->if_ext_func = iu->iu_jit_mem + f->if_jit_offset;
+  } else {
+    f->if_vm_text = malloc(f->if_vm_text_size);
+    memcpy(f->if_vm_text, iu->iu_text_alloc, f->if_vm_text_size);
 
-  iu->iu_stats.vm_code_size += f->if_vm_text_size;
-
-  branch_fixup(iu);
+    iu->iu_stats.vm_code_size += f->if_vm_text_size;
+    branch_fixup(iu);
+  }
 #ifdef VMIR_VM_JIT
   jit_branch_fixup(iu, f);
 #endif
@@ -4757,7 +4798,12 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
       .allocapeak = &allocapeak,
 #endif
     };
-    r = vm_exec(f->if_vm_text, rfa, out, &F);
+
+    if(f->if_ext_func != NULL) {
+      r = f->if_ext_func(out, rfa, iu, iu->iu_mem);
+    } else {
+      r = vm_exec(f->if_vm_text, rfa, out, &F);
+    }
 
     if(r == 1)
       r = VM_STOP_UNCAUGHT_EXCEPTION;
