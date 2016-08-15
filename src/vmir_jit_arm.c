@@ -258,8 +258,11 @@ jit_loadimm_cond(ir_unit_t *iu, uint32_t imm, int Rd, jitctx_t *jc, uint32_t con
              (Rd << 12) | imm12);
     return;
   }
-  if((uint32_t)imm <= 0xffff) {
-    // MOV A2 encoding
+
+  // MOV A2 encoding ...
+  // ... is only available on ARMv7 so play it safe and only emit it
+  // if IDIV is available. Not sure if there is a better way to detect
+  if((uint32_t)imm <= 0xffff && iu->iu_jit_cpuflags & (1 << 17)) {
     jit_push(iu, cond | (1 << 25) | (1 << 24) |
              ((imm & 0xf000) << 4) | (Rd << 12) | (imm & 0xfff));
     return;
