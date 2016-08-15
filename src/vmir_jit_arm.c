@@ -1356,8 +1356,10 @@ jit_cast_check(ir_unit_t *iu, ir_instr_unary_t *ii)
   case COMBINE3(IR_TYPE_INT32, CAST_ZEXT, IR_TYPE_INT16):
   case COMBINE3(IR_TYPE_INT16, CAST_ZEXT, IR_TYPE_INT8):
 
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT1):
   case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT8):
   case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT16):
+  case COMBINE3(IR_TYPE_INT16, CAST_SEXT, IR_TYPE_INT1):
   case COMBINE3(IR_TYPE_INT16, CAST_SEXT, IR_TYPE_INT8):
     return 1;
 
@@ -1413,6 +1415,13 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
              (Rd << 12) | Rm);
     break;
 
+  case COMBINE3(IR_TYPE_INT32, CAST_SEXT, IR_TYPE_INT1):
+  case COMBINE3(IR_TYPE_INT16, CAST_SEXT, IR_TYPE_INT1):
+    // SBFX
+    jit_push(iu, ARM_COND_AL | (1 << 26) | (1 << 25) | (1 << 24) |
+             (1 << 23) | (1 << 21) | (1 /* width */ << 16) |
+             (Rd << 12) | (1 << 6) | (1 << 4) | Rm);
+    break;
   default:
     abort();
   }
