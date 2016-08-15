@@ -86,8 +86,7 @@ typedef struct ir_type {
 } ir_type_t;
 
 
-static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it)
-  __attribute__((warn_unused_result));
+static int type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it);
 static const char *type_str_index(ir_unit_t *iu, int id);
 static void type_struct_layout(ir_unit_t *iu, ir_type_t *it);
 static unsigned int type_sizeof(ir_unit_t *iu, int index);
@@ -147,7 +146,7 @@ type_get_pointee(ir_unit_t *iu, unsigned int id)
 /**
  *
  */
-static int __attribute__((warn_unused_result))
+static int
 type_print_id(char **dstp, const ir_unit_t *iu, int id)
 {
   char tmpbuf[128];
@@ -163,7 +162,7 @@ type_print_id(char **dstp, const ir_unit_t *iu, int id)
 /**
  *
  */
-static int __attribute__((warn_unused_result))
+static int
 type_print(char **dst, const ir_unit_t *iu, const ir_type_t *it)
 {
   char tmpbuf[128];
@@ -257,8 +256,7 @@ type_str(ir_unit_t *iu, const ir_type_t *it)
   int len = type_print(NULL, iu, it);
   char *dst = tmpstr(iu, len);
   const char *ret = dst;
-  int x = type_print(&dst, iu, it);
-  assert(x == len);
+  type_print(&dst, iu, it);
   return ret;
 }
 
@@ -272,8 +270,7 @@ type_str_index(ir_unit_t *iu, int id)
   int l = type_print_id(NULL, iu, id);
   char *dst = tmpstr(iu, l);
   const char *ret = dst;
-  int x = type_print_id(&dst, iu, id);
-  assert(x == l);
+  type_print_id(&dst, iu, id);
   return ret;
 }
 

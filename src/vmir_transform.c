@@ -2687,9 +2687,6 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
       case IR_IC_RESUME:
         {
           ir_instr_resume_t *st = (ir_instr_resume_t *)ii;
-          const ir_type_t *aggty = type_get(iu, st->values[0].type);
-          assert(aggty->it_code == IR_TYPE_STRUCT);
-          assert(aggty->it_struct.num_elements == num_values);
           st->num_values = num_values;
           assert(num_values < MAX_RESUME_VALUES);
           for(int i = 0; i < num_values; i++) {
