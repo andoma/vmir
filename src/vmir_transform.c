@@ -1640,7 +1640,7 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
     int score = iv->iv_edges;
     vi[num_vertices].value = i;
     vi[num_vertices].score = score;
-    graph_degree = MAX(graph_degree, iv->iv_edges);
+    graph_degree = VMIR_MAX(graph_degree, iv->iv_edges);
     num_vertices++;
   }
 
@@ -1720,12 +1720,12 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
       if(color < JIT_MACHINE_REGS) {
         iv->iv_class = IR_VC_MACHINEREG;
         iv->iv_reg = color;
-        machine_regs_used = MAX(color + 1, machine_regs_used);
+        machine_regs_used = VMIR_MAX(color + 1, machine_regs_used);
       } else {
         // Not enough machine regs, put value in regframe instead
         iv->iv_class = IR_VC_REGFRAME;
         const int rfcol = color - JIT_MACHINE_REGS;
-        regframe_slots = MAX(regframe_slots, rfcol + 1);
+        regframe_slots = VMIR_MAX(regframe_slots, rfcol + 1);
         iv->iv_reg = f->if_regframe_size + rfcol * rsize;
       }
     }
@@ -1751,7 +1751,7 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
       ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_index + ffv);
       iv->iv_class = IR_VC_REGFRAME;
       iv->iv_reg = f->if_regframe_size + color * rsize;
-      regframe_slots = MAX(regframe_slots, color + 1);
+      regframe_slots = VMIR_MAX(regframe_slots, color + 1);
     }
     f->if_regframe_size += regframe_slots * rsize;
 

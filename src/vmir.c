@@ -584,7 +584,7 @@ addstrf(char **dst, const char *fmt, ...)
 #include "vmir_vm.h"
 #include "vmir_instr_parse.c"
 #include "vmir_function.c"
-#if defined(__arm__) && defined(__linux__)
+#if defined(__arm__) && (defined(__linux__) || defined(__ANDROID__))
 #include "vmir_jit_arm.c"
 #endif
 #include "vmir_transform.c"

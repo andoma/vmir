@@ -56,7 +56,7 @@ vmir_heap_malloc(ir_unit_t *iu, int size)
   void *p = tlsf_malloc(iu->iu_heap, size);
   iu->iu_heap_usage += tlsf_block_size(p);
   iu->iu_stats.peak_heap_size =
-    MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
+    VMIR_MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
   if(p == NULL)
     vmir_log(iu, VMIR_LOG_ERROR, "malloc(%d) failed", size);
 
@@ -80,7 +80,7 @@ vmir_heap_realloc(ir_unit_t *iu, void *ptr, int size)
   if(p) {
     iu->iu_heap_usage += tlsf_block_size(p);
     iu->iu_stats.peak_heap_size =
-      MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
+      VMIR_MAX(iu->iu_stats.peak_heap_size, iu->iu_heap_usage);
   } else {
 
     if(size)
@@ -635,7 +635,7 @@ static const struct {
 
 
 
-#ifdef __APPLE__
+#if  defined(__APPLE__) || defined(__ANDROID__)
 #define USE_FUNOPEN 1
 #endif
 
@@ -1256,7 +1256,7 @@ fmt_sn(void *opaque, const char *str, int len)
     return;
 
   // Figure out how much to copy, we always reserve one byte for trailing 0
-  int to_copy = MIN(aux->remain - 1, len);
+  int to_copy = VMIR_MIN(aux->remain - 1, len);
 
   memcpy(aux->dst, str, to_copy);
   aux->dst += to_copy;

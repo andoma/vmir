@@ -49,7 +49,7 @@ read_bits(bcbitstream_t *bs, int num)
       bs->remain = 8;
     }
 
-    int pick = MIN(num, bs->remain);
+    int pick = VMIR_MIN(num, bs->remain);
     r |= (bs->tmp & ((1 << pick) - 1)) << off;
     bs->tmp = bs->tmp >> pick;
     off += pick;

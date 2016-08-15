@@ -4820,7 +4820,7 @@ vmir_vm_function_call(ir_unit_t *iu, ir_function_t *f, void *out, ...)
                f->if_name, allocapeak - allocaptr, iu->iu_asize);
     } else {
       iu->iu_stats.peak_stack_size =
-        MAX(iu->iu_stats.peak_stack_size, stackuse);
+        VMIR_MAX(iu->iu_stats.peak_stack_size, stackuse);
       vmir_log(iu, VMIR_LOG_DEBUG, "%s() peak stack usage: %d",
                f->if_name, allocapeak - allocaptr);
     }

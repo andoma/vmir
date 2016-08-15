@@ -672,7 +672,7 @@ type_struct_layout(ir_unit_t *iu, ir_type_t *it)
     if(!packed) {
       int a = type_alignment_ptr(iu, ty);
       offset = VMIR_ALIGN(offset, a);
-      ba = MAX(ba, a);
+      ba = VMIR_MAX(ba, a);
     }
     it->it_struct.elements[i].offset = offset;
     offset += s;
