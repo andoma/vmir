@@ -679,7 +679,7 @@ cookie_write(void *fh, const char *buf, size_t size)
 }
 
 static int
-cookie_seek(void *fh, off64_t *offsetp, int whence)
+cookie_seek(void *fh, int64_t *offsetp, int whence)
 {
   vFILE_t *vf = fh;
   int64_t r = vfd_seek(vf->iu, vf->fd, *offsetp, whence);
