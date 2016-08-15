@@ -44,6 +44,9 @@
 
 // #define VM_TRACE
 
+#if defined(__SANITIZE_ADDRESS__) && !defined(VM_DONT_USE_COMPUTED_GOTO)
+#define VM_DONT_USE_COMPUTED_GOTO
+#endif
 
 #if defined(VM_TRACE) && !defined(VM_DONT_USE_COMPUTED_GOTO)
 #define VM_DONT_USE_COMPUTED_GOTO
