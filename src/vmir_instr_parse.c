@@ -94,13 +94,23 @@ instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
     type = VECTOR_ITEM(&iu->iu_values, val)->iv_type;
   } else {
 
-    if(val >= VECTOR_LEN(&iu->iu_values))
-      VECTOR_RESIZE(&iu->iu_values, val + 1);
+    type = argv[1].i64;
 
-    ir_value_t *iv = calloc(1, sizeof(ir_value_t));
-    VECTOR_ITEM(&iu->iu_values, val) = iv;
-    iv->iv_class = IR_VC_UNDEF;
-    type = iv->iv_type = argv[1].i64;
+    if(val >= VECTOR_LEN(&iu->iu_values)) {
+      size_t prevsize = VECTOR_LEN(&iu->iu_values);
+      VECTOR_RESIZE(&iu->iu_values, val + 1);
+      for(int i = prevsize; i <= val; i++) {
+        VECTOR_ITEM(&iu->iu_values, i) = NULL;
+      }
+    }
+    ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val);
+
+    if(iv == NULL) {
+      iv = calloc(1, sizeof(ir_value_t));
+      VECTOR_ITEM(&iu->iu_values, val) = iv;
+      iv->iv_class = IR_VC_UNDEF;
+    }
+    iv->iv_type = type;
 
     *argvp = argv + 2;
     *argcp = argc - 2;

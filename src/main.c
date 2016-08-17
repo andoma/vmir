@@ -157,9 +157,11 @@ main(int argc, char **argv)
 
   if(vmir_load(iu, buf, st.st_size)) {
     free(mem);
+    free(buf);
     vmir_destroy(iu);
     return -1;
   }
+  free(buf);
 
   if(run) {
     int64_t ts = get_ts();
@@ -174,9 +176,9 @@ main(int argc, char **argv)
 
   vmir_instrumentation_dump(iu);
 
-  free(mem);
-
   vmir_destroy(iu);
+
+  free(mem);
 
   return 0;
 }

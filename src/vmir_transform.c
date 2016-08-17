@@ -1765,6 +1765,7 @@ reg_alloc(ir_unit_t *iu, const uint32_t *mtx, int temp_values, int ffv,
   for(int i = 0; i < RA_CLASSES; i++) {
     free(colortab[i]);
   }
+  free(colors);
   free(vi);
 }
 

@@ -723,12 +723,28 @@ initialize_globals(ir_unit_t *iu, void *mem)
 static void
 iu_cleanup(ir_unit_t *iu)
 {
+  value_resize(iu, 0);
+
+  VECTOR_CLEAR(&iu->iu_argv);
   VECTOR_CLEAR(&iu->iu_branch_fixups);
   VECTOR_CLEAR(&iu->iu_jit_vmbb_fixups);
   VECTOR_CLEAR(&iu->iu_jit_branch_fixups);
   VECTOR_CLEAR(&iu->iu_jit_bb_to_addr_fixups);
   VECTOR_CLEAR(&iu->iu_initializers);
-  value_resize(iu, 0);
+  VECTOR_CLEAR(&iu->iu_values);
+
+
+  ir_attr_t *ia;
+  while((ia = LIST_FIRST(&iu->iu_attribute_groups)) != NULL) {
+    LIST_REMOVE(ia, ia_link);
+    free(ia);
+  }
+
+  for(int i = 0; i < VECTOR_LEN(&iu->iu_attrsets); i++) {
+    ir_attrset_t *ias = &VECTOR_ITEM(&iu->iu_attrsets, i);
+    free(ias->ias_list);
+  }
+  VECTOR_CLEAR(&iu->iu_attrsets);
 
   iu->iu_current_bb = NULL;
   iu->iu_current_function = NULL;
@@ -750,22 +766,27 @@ iu_cleanup(ir_unit_t *iu)
 void
 vmir_destroy(ir_unit_t *iu)
 {
+  libc_terminate(iu);
+
   for(int i = 0; i < VECTOR_LEN(&iu->iu_functions); i++) {
     function_destroy(VECTOR_ITEM(&iu->iu_functions, i));
   }
+
+  free(iu->iu_vm_funcs);
+  free(iu->iu_function_table);
+  VECTOR_CLEAR(&iu->iu_functions);
 
   for(int i = 0; i < VECTOR_LEN(&iu->iu_types); i++) {
     ir_type_t *it = &VECTOR_ITEM(&iu->iu_types, i);
     type_clean(it);
   }
 
-  free(iu->iu_vm_funcs);
-  free(iu->iu_function_table);
-
   VECTOR_CLEAR(&iu->iu_types);
 
   free(iu->iu_triple);
   free(iu->iu_debugged_function);
+
+  VECTOR_CLEAR(&iu->iu_vfds);
   free(iu);
 }
 

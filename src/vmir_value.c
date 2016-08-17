@@ -197,21 +197,42 @@ instr_bind_clear_inputs(ir_instr_t *ii)
  *
  */
 static void
+value_clear(ir_value_t *iv)
+{
+  free(iv->iv_name);
+  iv->iv_name = NULL;
+
+  free(iv->iv_data);
+  iv->iv_data = NULL;
+
+  ir_value_instr_t *ivi;
+  while((ivi = LIST_FIRST(&iv->iv_instructions)) != NULL)
+    ivi_destroy(ivi);
+
+  switch(iv->iv_class) {
+  case IR_VC_GLOBALVAR:
+    free(iv->iv_gvar->ig_name);
+    free(iv->iv_gvar);
+    break;
+  default:
+    break;
+  }
+  iv->iv_class = IR_VC_UNDEF;
+}
+
+/**
+ *
+ */
+static void
 value_resize(ir_unit_t *iu, int newsize)
 {
-  for(int i = newsize; i < iu->iu_next_value; i++) {
+  assert(newsize <= VECTOR_LEN(&iu->iu_values));
+  for(int i = newsize; i < VECTOR_LEN(&iu->iu_values); i++) {
     ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, i);
+    if(iv == NULL)
+      continue;
     VECTOR_ITEM(&iu->iu_values, i) = NULL;
-
-    free(iv->iv_name);
-    iv->iv_name = NULL;
-
-    free(iv->iv_data);
-    iv->iv_data = NULL;
-
-    ir_value_instr_t *ivi;
-    while((ivi = LIST_FIRST(&iv->iv_instructions)) != NULL)
-      ivi_destroy(ivi);
+    value_clear(iv);
     free(iv);
   }
   iu->iu_next_value = newsize;
@@ -224,13 +245,20 @@ value_resize(ir_unit_t *iu, int newsize)
 static int
 value_append(ir_unit_t *iu)
 {
-  ir_value_t *iv = calloc(1, sizeof(ir_value_t));
+  ir_value_t *iv;
 
   if(iu->iu_next_value == VECTOR_LEN(&iu->iu_values)) {
+    iv = calloc(1, sizeof(ir_value_t));
     VECTOR_PUSH_BACK(&iu->iu_values, iv);
   } else {
     assert(iu->iu_next_value < VECTOR_LEN(&iu->iu_values));
-    VECTOR_ITEM(&iu->iu_values, iu->iu_next_value) = iv;
+
+    if(VECTOR_ITEM(&iu->iu_values, iu->iu_next_value) == NULL) {
+      iv = calloc(1, sizeof(ir_value_t));
+      VECTOR_ITEM(&iu->iu_values, iu->iu_next_value) = iv;
+    } else {
+      iv = VECTOR_ITEM(&iu->iu_values, iu->iu_next_value);
+    }
   }
   iv->iv_id = iu->iu_next_value;
   return iu->iu_next_value++;
