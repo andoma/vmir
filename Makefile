@@ -29,6 +29,9 @@ vmir: ${DEPS}
 vmir.dbg: ${DEPS}
 	$(CC) -Og -DVM_DONT_USE_COMPUTED_GOTO ${CFLAGS} -g ${SRCS} -lm -o $@
 
+vmir.asan: ${DEPS}
+	$(CC) -fno-omit-frame-pointer --sanitize=address  -Og -DVM_DONT_USE_COMPUTED_GOTO ${CFLAGS} -g ${SRCS} -lm -o $@
+
 vmir.armv7: ${DEPS}
 	arm-linux-gnueabihf-gcc -O2 -static -march=armv7-a -mtune=cortex-a8 -mfpu=neon ${CFLAGS} -g ${SRCS} -lm -o $@
 
