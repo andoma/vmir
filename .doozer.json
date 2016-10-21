@@ -1,17 +1,17 @@
 {
   "targets": {
-    "precise-amd64": {
+    "xenial-amd64": {
 
-      "buildenv": "precise-amd64",
+      "buildenv": "xenial-amd64",
       "builddeps": [
         "build-essential",
       ],
       "buildcmd": "make"
     },
 
-    "precise-i386": {
+    "xenial-i386": {
 
-      "buildenv": "precise-i386",
+      "buildenv": "xenial-i386",
       "builddeps": [
         "build-essential",
       ],
