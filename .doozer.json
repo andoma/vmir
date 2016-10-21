@@ -1,0 +1,22 @@
+{
+  "targets": {
+    "precise-amd64": {
+
+      "buildenv": "precise-amd64",
+      "builddeps": [
+        "build-essential",
+      ],
+      "buildcmd": "make"
+    },
+
+    "precise-i386": {
+
+      "buildenv": "precise-i386",
+      "builddeps": [
+        "build-essential",
+      ],
+      "buildcmd": "make"
+    },
+  }
+}
+
