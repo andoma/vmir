@@ -17,6 +17,14 @@
       ],
       "buildcmd": "make"
     },
+
+    "fedora24-x86_64": {
+      "buildenv": "fedora24-x86_64",
+      "builddeps": [
+        "gcc", "make"
+      ],
+      "buildcmd": "make"
+    },
   }
 }
 
