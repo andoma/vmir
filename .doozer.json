@@ -25,6 +25,19 @@
       ],
       "buildcmd": "make"
     },
+
+    "centos7-x86_64": {
+      "buildenv": "centos7-x86_64",
+      "builddeps": [
+        "gcc", "make"
+      ],
+      "buildcmd": "make"
+    },
+
+    "osx": {
+      "buildenv": "osx",
+      "buildcmd": "make"
+    },
   }
 }
 
