@@ -4499,6 +4499,7 @@ branch_fixup(ir_unit_t *iu)
       I[2] = bb_to_offset_delta(iu, f, I[2], off);
       I[3] = bb_to_offset_delta(iu, f, I[3], off);
       break;
+    case VM_INVOKE:
     case VM_INVOKE_VM:
     case VM_INVOKE_EXT:
     case VM_INVOKE_R:
