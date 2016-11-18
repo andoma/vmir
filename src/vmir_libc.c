@@ -175,8 +175,9 @@ vmir_heap_init(ir_unit_t *iu)
 
 
 static void *
-vmir_heap_malloc(heap_t *h, int size)
+vmir_heap_malloc(ir_unit_t *iu, int size)
 {
+  heap_t *h = iu->iu_heap;
   heap_block_t *hb;
   size += sizeof(heap_block_t);
   size = VMIR_ALIGN(size, 16);
@@ -206,7 +207,7 @@ vmir_heap_malloc(heap_t *h, int size)
 
 
 static void
-vmir_heap_merge_next(ir_unit_t *iu, heap_block_t *hb)
+vmir_heap_merge_next(heap_t *h, heap_block_t *hb)
 {
   heap_block_t *next = TAILQ_NEXT(hb, hb_link);
   if(next == NULL || next->hb_magic != HEAP_MAGIC_FREE)
@@ -221,6 +222,7 @@ vmir_heap_free(ir_unit_t *iu, void *ptr)
 {
   if(ptr == NULL)
     return;
+  heap_t *h = iu->iu_heap;
   heap_block_t *hb = ptr;
   hb--;
   assert(hb->hb_magic == HEAP_MAGIC_ALLOC);
@@ -235,7 +237,7 @@ vmir_heap_free(ir_unit_t *iu, void *ptr)
 }
 
 static int
-vmir_heap_usable_size(ir_unit_t *iu, void *ptr)
+vmir_heap_usable_size(void *ptr)
 {
   heap_block_t *hb = ptr;
   hb--;
@@ -248,7 +250,7 @@ vmir_heap_realloc(ir_unit_t *iu, void *ptr, int size)
 {
   void *n = NULL;
   if(size) {
-    int cursize = vmir_heap_usable_size(h, ptr);
+    int cursize = vmir_heap_usable_size(ptr);
     if(size < cursize)
       return ptr;
 
@@ -259,7 +261,7 @@ vmir_heap_realloc(ir_unit_t *iu, void *ptr, int size)
     if(ptr != NULL)
       memcpy(n, ptr, cursize);
   }
-  vmir_heap_free(h, ptr);
+  vmir_heap_free(iu, ptr);
   return n;
 }
 
@@ -267,6 +269,7 @@ static void
 vmir_heap_print0(ir_unit_t *iu)
 {
   heap_block_t *hb;
+  heap_t *h = iu->iu_heap;
   printf(" --- Heap allocation dump ---\n");
   TAILQ_FOREACH(hb, &h->h_blocks, hb_link) {
     printf("%s 0x%x bytes\n",
