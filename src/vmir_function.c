@@ -58,6 +58,7 @@ bb_destroy(ir_bb_t *ib, ir_function_t *f)
   while((ii = TAILQ_FIRST(&ib->ib_instrs)) != NULL) {
     instr_destroy(ii);
   }
+  free(ib->ib_name);
   free(ib);
 }
 
@@ -98,7 +99,11 @@ function_print(ir_unit_t *iu, ir_function_t *f, const char *what)
   ir_bb_t *ib;
   TAILQ_FOREACH(ib, &f->if_bbs, ib_link) {
     ir_instr_t *ii;
-    printf(".%d:%s%s", ib->ib_id, ib->ib_jit ? " (JIT)" : "",
+    printf(".%d:%s%s%s%s%s", ib->ib_id,
+           ib->ib_name ? " \"" : "",
+           ib->ib_name ?: "",
+           ib->ib_name ? "\"" : "",
+           ib->ib_jit ? " (JIT)" : "",
            ib->ib_only_jit_sucessors ? " (Only JIT succ)" : "");
 
     ir_bb_edge_t *ibe;

@@ -377,6 +377,9 @@ typedef struct ir_bb {
   struct ir_bb_edge_list ib_outgoing_edges;
 
   LIST_ENTRY(ir_bb) ib_traversal_link; // Temporary for graph traversal
+
+  char *ib_name;
+
 } ir_bb_t;
 
 

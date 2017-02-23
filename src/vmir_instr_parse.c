@@ -62,6 +62,19 @@ bb_add_before(ir_function_t *f, ir_bb_t *before)
 /**
  *
  */
+__attribute__((unused))
+static ir_bb_t *
+bb_add_named(ir_function_t *f, ir_bb_t *after, const char *name)
+{
+  ir_bb_t *ib = bb_add(f, after);
+  ib->ib_name = strdup(name);
+  return ib;
+}
+
+
+/**
+ *
+ */
 static void
 cfg_create_edge(ir_function_t *f, ir_bb_t *from, ir_bb_t *to)
 {
