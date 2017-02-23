@@ -2664,6 +2664,12 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
              value_reg(ret), value_reg(src));
     emit_i16(iu, immediate_offset);
     break;
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 1):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 1):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 1):
+    emit_op1(iu, VM_LOAD32_G, value_reg(ret));
+    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
+    return;
 
 
   case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64, 0):
@@ -2852,6 +2858,16 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     emit_i32(iu, value_get_const32(iu, ptr));
     return;
 
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
+    emit_op1(iu, VM_STORE32_G, value_reg(val));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
+    return;
+
   case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
@@ -2870,6 +2886,15 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     emit_i32(iu, value_get_const32(iu, val));
     emit_op1(iu, VM_STORE32_G, 0);
     emit_i32(iu, value_get_const32(iu, ptr));
+    return;
+
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
+    emit_op1(iu, VM_MOV32_C, 0);
+    emit_i32(iu, value_get_const32(iu, val));
+    emit_op1(iu, VM_STORE32_G, 0);
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
