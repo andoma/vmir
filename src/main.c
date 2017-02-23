@@ -148,7 +148,7 @@ main(int argc, char **argv)
 
 #define MB(x) ((x) * 1024 * 1024)
 
-  void *mem = malloc(MB(64));
+  void *mem = calloc(1, MB(64));
 
   ir_unit_t *iu = vmir_create(mem, MB(64), MB(1), MB(1), NULL);
 
@@ -165,10 +165,12 @@ main(int argc, char **argv)
 
   if(run) {
     int64_t ts = get_ts();
-    vmir_run(iu, NULL, argc, argv);
+    int rval;
+    vmir_run(iu, &rval, argc, argv);
     ts = get_ts() - ts;
     if(print_stats)
       printf("main() executed for %d ms\n", (int)(ts / 1000LL));
+    printf("main() returned 0x%x\n", rval);
   }
 
   if(print_stats)

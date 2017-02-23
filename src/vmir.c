@@ -99,6 +99,16 @@ typedef struct ir_block {
 
 LIST_HEAD(ir_block_list, ir_block);
 
+/**
+ *
+ */
+typedef struct ir_valuetype {
+  int value;
+  int type;
+} ir_valuetype_t;
+
+
+
 struct ir_unit;
 
 typedef void (rec_handler_t)(struct ir_unit *iu, int op,
@@ -245,6 +255,14 @@ struct ir_unit {
   int         iu_err_line;
   int         iu_failed;
   int         iu_vstoffset;
+
+  // WASM
+
+  VECTOR_HEAD(, int) iu_wasm_type_map;
+  VECTOR_HEAD(, int) iu_wasm_functions;
+  VECTOR_HEAD(, ir_valuetype_t) iu_wasm_value_stack;
+  VECTOR_HEAD(, struct ir_bb *) iu_wasm_cfg_stack;
+
   // Stats
 
   vmir_stats_t iu_stats;
@@ -425,14 +443,6 @@ typedef enum {
   IR_IC_MLA,
 } instr_class_t;
 
-/**
- *
- */
-typedef struct ir_valuetype {
-  int value;
-  int type;
-} ir_valuetype_t;
-
 
 /**
  *
@@ -483,6 +493,7 @@ vmir_set_logger(ir_unit_t *iu, vmir_logger_t *logger)
 
 static void type_print_list(ir_unit_t *iu);
 static void value_print_list(ir_unit_t *iu);
+static void function_print(ir_unit_t *iu, ir_function_t *f, const char *what);
 
 #define parser_error(iu, fmt...) \
   parser_error0(iu, __FILE__, __LINE__, fmt)
@@ -574,6 +585,7 @@ addstrf(char **dst, const char *fmt, ...)
 #include "vmir_vm.c"
 #include "vmir_libc.c"
 #include "vmir_bitcode_parser.c"
+#include "vmir_wasm_parser.c"
 
 
 /**
@@ -867,13 +879,8 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   bs.rdata = u8;
   bs.bytes_length = len;
 
-  uint32_t x = read_bits(&bs, 32);
-
-  if(x != 0xdec04342)
-    return VMIR_ERR_NOT_BITCODE;
 
   TAILQ_INIT(&iu->iu_functions_with_bodies);
-  iu->iu_data_ptr = 4096;
 
   if(setjmp(iu->iu_parser_jmp)) {
     iu_cleanup(iu);
@@ -884,7 +891,23 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
   jit_init(iu);
 #endif
 
-  ir_parse_blocks(iu, 2, NULL, NULL, &bs);
+  const uint32_t magic = read_bits(&bs, 32);
+  switch(magic) {
+
+  case 0x6d736100: // WebAssembly
+    iu->iu_mode = VMIR_WASM;
+    wasm_parse_module(iu, u8 + 4, u8 + len);
+    break;
+
+  case 0xdec04342: // LLVM Bitcode
+    // Webassembly need memory at 0. Bitcode dont really.
+    iu->iu_data_ptr = 4096;
+    ir_parse_blocks(iu, 2, NULL, NULL, &bs);
+    break;
+  default:
+    return VMIR_ERR_NOT_BITCODE;
+  }
+
   free(iu->iu_text_alloc);
 
 #ifdef VMIR_VM_JIT
