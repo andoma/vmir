@@ -1869,3 +1869,42 @@ swap_pred(int pred)
     case FCMP_ULE: return FCMP_UGE;
   }
 }
+
+
+static int
+instr_have_side_effects(const ir_instr_t *ii)
+{
+  switch(ii->ii_class) {
+  case IR_IC_UNREACHABLE:
+  case IR_IC_RET:
+  case IR_IC_VAARG:
+  case IR_IC_STORE:
+  case IR_IC_BR:
+  case IR_IC_ALLOCA:
+  case IR_IC_CALL:
+  case IR_IC_VMOP:
+  case IR_IC_INVOKE:
+  case IR_IC_RESUME:
+  case IR_IC_INSERTVAL:
+  case IR_IC_LANDINGPAD:
+  case IR_IC_STACKCOPY:
+  case IR_IC_STACKSHRINK:
+  case IR_IC_CMP_BRANCH:
+    return 1;
+
+  case IR_IC_GEP:
+  case IR_IC_CAST:
+  case IR_IC_LOAD:
+  case IR_IC_BINOP:
+  case IR_IC_CMP2:
+  case IR_IC_SELECT:
+  case IR_IC_LEA:
+  case IR_IC_SWITCH:
+  case IR_IC_PHI:
+  case IR_IC_MOVE:
+  case IR_IC_EXTRACTVAL:
+  case IR_IC_CMP_SELECT:
+  case IR_IC_MLA:
+    return 0;
+  }
+}

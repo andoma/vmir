@@ -1798,11 +1798,15 @@ liveness_update(ir_function_t *f, int setwords, int ffv)
   uint32_t *new_in  = alloca(setwords * sizeof(uint32_t));
   uint32_t *new_out = alloca(setwords * sizeof(uint32_t));
   ir_bb_t *ib;
-  ir_instr_t *ii;
+  ir_instr_t *ii, *k, *kn;
   int rounds = 0;
+
+  SLIST_HEAD(, ir_instr) dead_instr;
+
   while(1) {
 
     int stable = 1;
+    SLIST_INIT(&dead_instr);
 
     // Liveness analysis reach stable state a lot faster if iterating
     // backwards
@@ -1838,6 +1842,11 @@ liveness_update(ir_function_t *f, int setwords, int ffv)
             bitclr(new_in, ii->ii_rets[j].value - ffv);
           }
         } else if(ii->ii_ret.value >= 0) {
+
+          if(stable && !bitchk(o, ii->ii_ret.value - ffv) &&
+             !instr_have_side_effects(ii)) {
+            SLIST_INSERT_HEAD(&dead_instr, ii, ii_tmplink);
+          }
           bitclr(new_in, ii->ii_ret.value - ffv);
         }
 
@@ -1848,8 +1857,9 @@ liveness_update(ir_function_t *f, int setwords, int ffv)
         bitset_or(new_in, gen, setwords);
 
         if(!memcmp(out, o,       setwords * sizeof(uint32_t)) &&
-           !memcmp(in,  new_in,  setwords * sizeof(uint32_t)))
+           !memcmp(in,  new_in,  setwords * sizeof(uint32_t))) {
           continue;
+        }
 
         stable = 0;
         memcpy(out, o,       setwords * sizeof(uint32_t));
@@ -1857,8 +1867,18 @@ liveness_update(ir_function_t *f, int setwords, int ffv)
       }
     }
     rounds++;
-    if(stable)
-      break;
+    if(!stable)
+      continue;
+
+    k = SLIST_FIRST(&dead_instr);
+    if(k != NULL) {
+      for(; k != NULL; k = kn) {
+        kn = SLIST_NEXT(k, ii_tmplink);
+        instr_destroy(k);
+      }
+      continue;
+    }
+    return;
   }
 }
 

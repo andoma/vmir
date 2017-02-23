@@ -469,7 +469,7 @@ typedef struct ir_instr {
                           * of temporaries in each function
                           */
   struct ir_bb **ii_succ;
-
+  SLIST_ENTRY(ir_instr) ii_tmplink;
   int16_t ii_num_succ;
   uint8_t ii_jit;
 } ir_instr_t;
