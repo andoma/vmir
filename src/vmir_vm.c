@@ -581,6 +581,54 @@ vm_trace_instruction(const vm_frame_t *frame,
 }
 #endif
 
+static inline uint8_t
+rol8(uint8_t x, int r)
+{
+  return (x << r) | (x >> (8 - r));
+}
+
+static inline uint16_t
+rol16(uint16_t x, int r)
+{
+  return (x << r) | (x >> (16 - r));
+}
+
+static inline uint32_t
+rol32(uint32_t x, int r)
+{
+  return (x << r) | (x >> (32 - r));
+}
+
+static inline uint64_t
+rol64(uint64_t x, int r)
+{
+  return (x << r) | (x >> (64 - r));
+}
+
+
+static inline uint8_t
+ror8(uint8_t x, int r)
+{
+  return (x >> r) | (x << (8 - r));
+}
+
+static inline uint16_t
+ror16(uint16_t x, int r)
+{
+  return (x >> r) | (x << (16 - r));
+}
+
+static inline uint32_t
+ror32(uint32_t x, int r)
+{
+  return (x >> r) | (x << (32 - r));
+}
+
+static inline uint64_t
+ror64(uint64_t x, int r)
+{
+  return (x >> r) | (x << (64 - r));
+}
 
 static int16_t vm_resolve(uint16_t opcode);
 
@@ -783,14 +831,20 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(SDIV_R8) AR32(0,  S8(1) /  S8(2)); NEXT(3);
   VMOP(SREM_R8) AR32(0,  S8(1) %  S8(2)); NEXT(3);
   VMOP(ASHR_R8) AR32(0,  S8(1) >> R8(2)); NEXT(3);
+  VMOP(ROL_R8)  AR32(0,  rol8(R8(1), R8(2))); NEXT(3);
+  VMOP(ROR_R8)  AR32(0,  ror8(R8(1), R8(2))); NEXT(3);
 
   VMOP(SDIV_R8C) AR32(0, S8(1) /  SIMM8(2)); NEXT(3);
   VMOP(SREM_R8C) AR32(0, S8(1) %  SIMM8(2)); NEXT(3);
   VMOP(ASHR_R8C) AR32(0, S8(1) >> UIMM8(2)); NEXT(3);
+  VMOP(ROL_R8C)  AR32(0,  rol8(R8(1), SIMM8(2))); NEXT(3);
+  VMOP(ROR_R8C)  AR32(0,  ror8(R8(1), SIMM8(2))); NEXT(3);
 
   VMOP(SDIV_R16) AR32(0, S16(1) /  S16(2)); NEXT(3);
   VMOP(SREM_R16) AR32(0, S16(1) %  S16(2)); NEXT(3);
   VMOP(ASHR_R16) AR32(0, S16(1) >> R16(2)); NEXT(3);
+  VMOP(ROL_R16)  AR32(0,  rol16(R16(1), R16(2))); NEXT(3);
+  VMOP(ROR_R16)  AR32(0,  ror16(R16(1), R16(2))); NEXT(3);
 
   VMOP(ADD_R16C)  AR32(0, R16(1) +  UIMM16(2)); NEXT(3);
   VMOP(SUB_R16C)  AR32(0, R16(1) -  UIMM16(2)); NEXT(3);
@@ -805,6 +859,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(AND_R16C)  AR32(0, R16(1) &  UIMM16(2)); NEXT(3);
   VMOP(OR_R16C)   AR32(0, R16(1) |  UIMM16(2)); NEXT(3);
   VMOP(XOR_R16C)  AR32(0, R16(1) ^  UIMM16(2)); NEXT(3);
+  VMOP(ROL_R16C)  AR32(0,  rol16(R16(1), SIMM16(2))); NEXT(3);
+  VMOP(ROR_R16C)  AR32(0,  ror16(R16(1), SIMM16(2))); NEXT(3);
 
   VMOP(ADD_R32)  AR32(0, R32(1) +  R32(2)); NEXT(3);
   VMOP(SUB_R32)  AR32(0, R32(1) -  R32(2)); NEXT(3);
@@ -819,6 +875,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(AND_R32)  AR32(0, R32(1) &  R32(2)); NEXT(3);
   VMOP(OR_R32)   AR32(0, R32(1) |  R32(2)); NEXT(3);
   VMOP(XOR_R32)  AR32(0, R32(1) ^  R32(2)); NEXT(3);
+  VMOP(ROL_R32)  AR32(0,  rol32(R32(1), R32(2))); NEXT(3);
+  VMOP(ROR_R32)  AR32(0,  ror32(R32(1), R32(2))); NEXT(3);
 
   VMOP(INC_R32)  AR32(0, R32(1) + 1); NEXT(2);
   VMOP(DEC_R32)  AR32(0, R32(1) - 1); NEXT(2);
@@ -836,8 +894,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(AND_R32C)  AR32(0, R32(1) &  UIMM32(2)); NEXT(4);
   VMOP(OR_R32C)   AR32(0, R32(1) |  UIMM32(2)); NEXT(4);
   VMOP(XOR_R32C)  AR32(0, R32(1) ^  UIMM32(2)); NEXT(4);
-
-
+  VMOP(ROL_R32C)  AR32(0,  rol32(R32(1), SIMM32(2))); NEXT(4);
+  VMOP(ROR_R32C)  AR32(0,  ror32(R32(1), SIMM32(2))); NEXT(4);
 
 
   VMOP(ADD_R64)  AR64(0, R64(1) +  R64(2)); NEXT(3);
@@ -853,6 +911,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(AND_R64)  AR64(0, R64(1) &  R64(2)); NEXT(3);
   VMOP(OR_R64)   AR64(0, R64(1) |  R64(2)); NEXT(3);
   VMOP(XOR_R64)  AR64(0, R64(1) ^  R64(2)); NEXT(3);
+  VMOP(ROL_R64)  AR64(0,  rol64(R64(1), R64(2))); NEXT(3);
+  VMOP(ROR_R64)  AR64(0,  ror64(R64(1), R64(2))); NEXT(3);
 
   VMOP(ADD_R64C)  AR64(0, R64(1) +  UIMM64(2)); NEXT(6);
   VMOP(SUB_R64C)  AR64(0, R64(1) -  UIMM64(2)); NEXT(6);
@@ -867,6 +927,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(AND_R64C)  AR64(0, R64(1) &  UIMM64(2)); NEXT(6);
   VMOP(OR_R64C)   AR64(0, R64(1) |  UIMM64(2)); NEXT(6);
   VMOP(XOR_R64C)  AR64(0, R64(1) ^  UIMM64(2)); NEXT(6);
+  VMOP(ROL_R64C)  AR32(0,  rol64(R64(1), SIMM64(2))); NEXT(6);
+  VMOP(ROR_R64C)  AR32(0,  ror64(R64(1), SIMM64(2))); NEXT(6);
 
   VMOP(MLA32)     AR32(0, R32(1) * R32(2) + R32(3)); NEXT(4);
 
@@ -1658,14 +1720,20 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_SDIV_R8:  return &&SDIV_R8 - &&opz;     break;
   case VM_SREM_R8:  return &&SREM_R8 - &&opz;     break;
   case VM_ASHR_R8:  return &&ASHR_R8 - &&opz;     break;
+  case VM_ROL_R8:   return &&ROL_R8  - &&opz;     break;
+  case VM_ROR_R8:   return &&ROR_R8  - &&opz;     break;
 
   case VM_SDIV_R8C:  return &&SDIV_R8C - &&opz;     break;
   case VM_SREM_R8C:  return &&SREM_R8C - &&opz;     break;
   case VM_ASHR_R8C:  return &&ASHR_R8C - &&opz;     break;
+  case VM_ROL_R8C:   return &&ROL_R8C  - &&opz;     break;
+  case VM_ROR_R8C:   return &&ROR_R8C  - &&opz;     break;
 
   case VM_SDIV_R16:  return &&SDIV_R16 - &&opz;     break;
   case VM_SREM_R16:  return &&SREM_R16 - &&opz;     break;
   case VM_ASHR_R16:  return &&ASHR_R16 - &&opz;     break;
+  case VM_ROL_R16:   return &&ROL_R16  - &&opz;     break;
+  case VM_ROR_R16:   return &&ROR_R16  - &&opz;     break;
 
   case VM_ADD_R16C:   return &&ADD_R16C  - &&opz;     break;
   case VM_SUB_R16C:   return &&SUB_R16C  - &&opz;     break;
@@ -1680,6 +1748,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_AND_R16C:   return &&AND_R16C  - &&opz;     break;
   case VM_OR_R16C:    return &&OR_R16C   - &&opz;     break;
   case VM_XOR_R16C:   return &&XOR_R16C  - &&opz;     break;
+  case VM_ROL_R16C:   return &&ROL_R16C  - &&opz;     break;
+  case VM_ROR_R16C:   return &&ROR_R16C  - &&opz;     break;
 
   case VM_ADD_R32:   return &&ADD_R32  - &&opz;     break;
   case VM_SUB_R32:   return &&SUB_R32  - &&opz;     break;
@@ -1694,6 +1764,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_AND_R32:   return &&AND_R32  - &&opz;     break;
   case VM_OR_R32:    return &&OR_R32   - &&opz;     break;
   case VM_XOR_R32:   return &&XOR_R32  - &&opz;     break;
+  case VM_ROL_R32:   return &&ROL_R32  - &&opz;     break;
+  case VM_ROR_R32:   return &&ROR_R32  - &&opz;     break;
 
   case VM_INC_R32:   return &&INC_R32  - &&opz;     break;
   case VM_DEC_R32:   return &&DEC_R32  - &&opz;     break;
@@ -1711,6 +1783,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_AND_R32C:   return &&AND_R32C  - &&opz;     break;
   case VM_OR_R32C:    return &&OR_R32C   - &&opz;     break;
   case VM_XOR_R32C:   return &&XOR_R32C  - &&opz;     break;
+  case VM_ROL_R32C:   return &&ROL_R32C  - &&opz;     break;
+  case VM_ROR_R32C:   return &&ROR_R32C  - &&opz;     break;
 
 
 
@@ -1727,6 +1801,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_AND_R64:   return &&AND_R64  - &&opz;     break;
   case VM_OR_R64:    return &&OR_R64   - &&opz;     break;
   case VM_XOR_R64:   return &&XOR_R64  - &&opz;     break;
+  case VM_ROL_R64:   return &&ROL_R64  - &&opz;     break;
+  case VM_ROR_R64:   return &&ROR_R64  - &&opz;     break;
 
   case VM_ADD_R64C:  return &&ADD_R64C  - &&opz;     break;
   case VM_SUB_R64C:  return &&SUB_R64C  - &&opz;     break;
@@ -1741,6 +1817,8 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_AND_R64C:  return &&AND_R64C  - &&opz;     break;
   case VM_OR_R64C:   return &&OR_R64C   - &&opz;     break;
   case VM_XOR_R64C:  return &&XOR_R64C  - &&opz;     break;
+  case VM_ROL_R64C:  return &&ROL_R64C  - &&opz;     break;
+  case VM_ROR_R64C:  return &&ROR_R64C  - &&opz;     break;
 
   case VM_MLA32:     return &&MLA32     - &&opz;     break;
 
@@ -2483,6 +2561,8 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       case BINOP_SDIV: op = VM_SDIV_R8;         break;
       case BINOP_SREM: op = VM_SREM_R8;         break;
       case BINOP_ASHR: op = VM_ASHR_R8;         break;
+      case BINOP_ROL:  op = VM_ROL_R8;          break;
+      case BINOP_ROR:  op = VM_ROR_R8;          break;
       default:         op = VM_ADD_R32 + binop; break;
         break;
       }
@@ -2494,6 +2574,8 @@ emit_binop(ir_unit_t *iu, ir_instr_binary_t *ii)
       case BINOP_SDIV: op = VM_SDIV_R16;        break;
       case BINOP_SREM: op = VM_SREM_R16;        break;
       case BINOP_ASHR: op = VM_ASHR_R16;        break;
+      case BINOP_ROL:  op = VM_ROL_R16;         break;
+      case BINOP_ROR:  op = VM_ROR_R16;         break;
       default:         op = VM_ADD_R32 + binop; break;
         break;
       }

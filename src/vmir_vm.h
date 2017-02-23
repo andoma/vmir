@@ -33,14 +33,20 @@ typedef enum {
   VM_SDIV_R8,
   VM_SREM_R8,
   VM_ASHR_R8,
+  VM_ROL_R8,
+  VM_ROR_R8,
 
   VM_SDIV_R8C,
   VM_SREM_R8C,
   VM_ASHR_R8C,
+  VM_ROL_R8C,
+  VM_ROR_R8C,
 
   VM_SDIV_R16,
   VM_SREM_R16,
   VM_ASHR_R16,
+  VM_ROL_R16,
+  VM_ROR_R16,
 
   // These must be in same order as enum BinaryOpcodes
   VM_ADD_R16C,
@@ -56,6 +62,8 @@ typedef enum {
   VM_AND_R16C,
   VM_OR_R16C,
   VM_XOR_R16C,
+  VM_ROL_R16C,
+  VM_ROR_R16C,
 
 
   // These must be in same order as enum BinaryOpcodes
@@ -72,6 +80,8 @@ typedef enum {
   VM_AND_R32,
   VM_OR_R32,
   VM_XOR_R32,
+  VM_ROL_R32,
+  VM_ROR_R32,
 
   VM_INC_R32,
   VM_DEC_R32,
@@ -90,6 +100,8 @@ typedef enum {
   VM_AND_R32C,
   VM_OR_R32C,
   VM_XOR_R32C,
+  VM_ROL_R32C,
+  VM_ROR_R32C,
 
   // These must be in same order as enum BinaryOpcodes
   VM_ADD_R64,
@@ -105,6 +117,8 @@ typedef enum {
   VM_AND_R64,
   VM_OR_R64,
   VM_XOR_R64,
+  VM_ROL_R64,
+  VM_ROR_R64,
 
   // These must be in same order as enum BinaryOpcodes
   VM_ADD_R64C,
@@ -120,6 +134,8 @@ typedef enum {
   VM_AND_R64C,
   VM_OR_R64C,
   VM_XOR_R64C,
+  VM_ROL_R64C,
+  VM_ROR_R64C,
 
 
   VM_ADD_DBL,

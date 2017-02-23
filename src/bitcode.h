@@ -87,6 +87,8 @@
 #define BINOP_AND  10
 #define BINOP_OR   11
 #define BINOP_XOR  12
+#define BINOP_ROL  13
+#define BINOP_ROR  14
 
 
 #define ICMP_EQ    32
