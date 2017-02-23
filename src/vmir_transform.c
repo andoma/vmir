@@ -1092,9 +1092,16 @@ unmark_outgoing_blocks(ir_bb_t *bb)
 static void
 construct_cfg(ir_function_t *f)
 {
-  ir_bb_t *bb;
-  TAILQ_FOREACH(bb, &f->if_bbs, ib_link) {
+  ir_bb_t *bb, *next;
+  for(bb = TAILQ_FIRST(&f->if_bbs); bb != NULL; bb = next) {
+    next = TAILQ_NEXT(bb, ib_link);
+
     ir_instr_t *ii = TAILQ_LAST(&bb->ib_instrs, ir_instr_queue);
+    if(ii == NULL) {
+      bb_destroy(bb, f);
+      continue;
+    }
+
     switch(ii->ii_class) {
     case IR_IC_BR:
       {
