@@ -70,6 +70,12 @@ bb_destroy(ir_bb_t *ib, ir_function_t *f)
 static void
 function_prepare_parse(ir_unit_t *iu, ir_function_t *f)
 {
+  if(iu->iu_debugged_function != NULL &&
+     strcmp(iu->iu_debugged_function, f->if_name))
+    iu->iu_debug_flags_func = 0;
+  else
+    iu->iu_debug_flags_func = iu->iu_debug_flags;
+
   f->if_regframe_size = 8; // Make space for temporary register for VM use
   f->if_callarg_size = 0;
 

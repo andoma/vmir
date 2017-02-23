@@ -680,26 +680,6 @@ metadata_attachment_rec_handler(ir_unit_t *iu, int op,
  *
  */
 static void
-function_process(ir_unit_t *iu, ir_function_t *f)
-{
-  //  assert(iu->iu_next_value == VECTOR_LEN(&iu->iu_values));
-
-  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_PARSED_FUNCTION)
-    function_print(iu, iu->iu_current_function, "parsed");
-
-  transform_function(iu, f);
-
-  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_LOWERED_FUNCTION)
-    function_print(iu, iu->iu_current_function, "lowered");
-
-  vm_emit_function(iu, f);
-}
-
-
-/**
- *
- */
-static void
 ir_enter_subblock(ir_unit_t *iu, bcbitstream_t *bs, int outer_id_width)
 {
   const uint32_t blockid = read_vbr(bs, 8);
@@ -756,12 +736,6 @@ ir_enter_subblock(ir_unit_t *iu, bcbitstream_t *bs, int outer_id_width)
 
     if(f == NULL)
       parser_error(iu, "Function body without matching function");
-
-    if(iu->iu_debugged_function != NULL &&
-       strcmp(iu->iu_debugged_function, f->if_name))
-      iu->iu_debug_flags_func = 0;
-    else
-      iu->iu_debug_flags_func = iu->iu_debug_flags;
 
     function_prepare_parse(iu, f);
     rh = function_rec_handler;

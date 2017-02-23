@@ -4644,6 +4644,29 @@ vm_emit_function(ir_unit_t *iu, ir_function_t *f)
 
 
 
+ 
+
+/**
+ *
+ */
+static void
+function_process(ir_unit_t *iu, ir_function_t *f)
+{
+  //  assert(iu->iu_next_value == VECTOR_LEN(&iu->iu_values));
+  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_PARSED_FUNCTION)
+    function_print(iu, iu->iu_current_function, "parsed");
+
+  transform_function(iu, f);
+
+  if(iu->iu_debug_flags_func & VMIR_DBG_DUMP_LOWERED_FUNCTION)
+    function_print(iu, iu->iu_current_function, "lowered");
+
+  vm_emit_function(iu, f);
+}
+
+
+
+
 
 typedef struct {
   const char *name;
