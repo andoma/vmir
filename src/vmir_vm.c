@@ -661,6 +661,7 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
 
   VMOP(RET_R32)
     *(uint32_t *)ret = R32(0);
+    vm_tracef(&F, "Returning 0x%x", *(uint32_t *)ret);
     return 0;
   VMOP(RET_R64)
     *(uint64_t *)ret = R64(0);
@@ -2794,10 +2795,10 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
       emit_i16(iu, ii->immediate_offset);
       break;
     default:
-      parser_error(iu, "Can't load+cast to %s from %s cast:%d",
+      parser_error(iu, "Can't load+cast to %s from %s cast:%d (%s)",
                    type_str(iu, retty),
                    type_str(iu, pointee),
-                   ii->cast);
+                   ii->cast, instr_str(iu, &ii->super, 0));
     }
     if(roff != NULL) {
       emit_i16(iu, value_reg(roff));
