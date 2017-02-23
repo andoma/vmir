@@ -204,6 +204,57 @@ vm_abort(void *ret, const void *rf, ir_unit_t *iu)
 }
 
 
+static uint32_t
+vmir_vm_vaarg32(const void **rfp, ir_unit_t *iu)
+{
+  const uint32_t *p;
+  if(iu->iu_mode == VMIR_WASM) {
+    p = *rfp;
+    *rfp = *rfp + 4;
+  } else {
+    p = *rfp = *rfp - 4;
+  }
+  return *p;
+}
+
+static uint64_t
+vmir_vm_vaarg64(const void **rfp, ir_unit_t *iu)
+{
+  const uint64_t *p;
+  if(iu->iu_mode == VMIR_WASM) {
+    p = *rfp;
+    *rfp = *rfp + 8;
+  } else {
+    p = *rfp = *rfp - 8;
+  }
+  return *p;
+}
+
+static double
+vmir_vm_vaarg_dbl(const void **rfp, ir_unit_t *iu)
+{
+  const double *p;
+  if(iu->iu_mode == VMIR_WASM) {
+    p = *rfp;
+    *rfp = *rfp + 8;
+  } else {
+    p = *rfp = *rfp - 8;
+  }
+  return *p;
+}
+
+static void *
+vmir_vm_vaptr(const void **rfp, ir_unit_t *iu)
+{
+  return vmir_vm_vaarg32(rfp, iu) + iu->iu_mem;
+}
+
+
+
+
+
+
+
 static uint32_t __attribute__((noinline))
 vm_strchr(uint32_t a, int b, void *mem)
 {

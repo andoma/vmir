@@ -1002,16 +1002,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_INT:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vmir_vm_arg32(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_vaarg32(va, iu));
         break;
       case 1:
-        l1 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vmir_vm_arg32(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_vaarg32(va, iu));
         break;
       case 2:
-        l1 = vmir_vm_arg32(va);
-        l2 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg32(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        l2 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_vaarg32(va, iu));
         break;
       default:
         goto done;
@@ -1021,16 +1021,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_INT64:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vmir_vm_arg64(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_vaarg64(va, iu));
         break;
       case 1:
-        l1 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vmir_vm_arg64(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_vaarg64(va, iu));
         break;
       case 2:
-        l1 = vmir_vm_arg32(va);
-        l2 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg64(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        l2 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_vaarg64(va, iu));
         break;
       default:
         goto done;
@@ -1040,18 +1040,18 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_PTR:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, (void *)(intptr_t)vmir_vm_arg32(va));
+        n = snprintf(dst, dz, fmt, (void *)(intptr_t)vmir_vm_vaarg32(va, iu));
         break;
       case 1:
-        l1 = vmir_vm_arg32(va);
+        l1 = vmir_vm_vaarg32(va, iu);
         n = snprintf(dst, dz, fmt, l1,
-                     (void *)(intptr_t)vmir_vm_arg32(va));
+                     (void *)(intptr_t)vmir_vm_vaarg32(va, iu));
         break;
       case 2:
-        l1 = vmir_vm_arg32(va);
-        l2 = vmir_vm_arg32(va);
+        l1 = vmir_vm_vaarg32(va, iu);
+        l2 = vmir_vm_vaarg32(va, iu);
         n = snprintf(dst, dz, fmt, l1, l2,
-                     (void *)(intptr_t)vmir_vm_arg32(va));
+                     (void *)(intptr_t)vmir_vm_vaarg32(va, iu));
         break;
       default:
         goto done;
@@ -1061,16 +1061,16 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_STR:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vmir_vm_ptr(va, iu));
+        n = snprintf(dst, dz, fmt, vmir_vm_vaptr(va, iu));
         break;
       case 1:
-        l1 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, vmir_vm_ptr(va, iu));
+        l1 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, vmir_vm_vaptr(va, iu));
         break;
       case 2:
-        l1 = vmir_vm_arg32(va);
-        l2 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_ptr(va, iu));
+        l1 = vmir_vm_vaarg32(va, iu);
+        l2 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_vaptr(va, iu));
         break;
       default:
         goto done;
@@ -1080,16 +1080,17 @@ dofmt2(void (*output)(void *opaque, const char *str, int len),
     case FMT_TYPE_DOUBLE:
       switch(num_field_args) {
       case 0:
-        n = snprintf(dst, dz, fmt, vmir_vm_arg_dbl(va));
+        n = snprintf(dst, dz, fmt, vmir_vm_vaarg_dbl(va, iu));
         break;
       case 1:
-        l1 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, vmir_vm_arg32(va), vmir_vm_arg_dbl(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, vmir_vm_vaarg32(va, iu),
+                     vmir_vm_vaarg_dbl(va, iu));
         break;
       case 2:
-        l1 = vmir_vm_arg32(va);
-        l2 = vmir_vm_arg32(va);
-        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_arg_dbl(va));
+        l1 = vmir_vm_vaarg32(va, iu);
+        l2 = vmir_vm_vaarg32(va, iu);
+        n = snprintf(dst, dz, fmt, l1, l2, vmir_vm_vaarg_dbl(va, iu));
         break;
       default:
         goto done;
@@ -1294,6 +1295,9 @@ vmir_snprintf(void *ret, const void *rf, ir_unit_t *iu)
   int dstlen = vmir_vm_arg32(&rf);
   const char *fmt = vmir_vm_ptr(&rf, iu);
 
+  if(iu->iu_mode == VMIR_WASM)
+    rf = (const void *)vmir_vm_ptr(&rf, iu);
+
   fmt_sn_aux_t aux;
   aux.dst = dst;
   aux.remain = dstlen;
@@ -1336,6 +1340,9 @@ vmir_sprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
   const char *fmt = vmir_vm_ptr(&rf, iu);
+
+  if(iu->iu_mode == VMIR_WASM)
+    rf = (const void *)vmir_vm_ptr(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1390,6 +1397,9 @@ vmir_printf(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *fmt = vmir_vm_ptr(&rf, iu);
 
+  if(iu->iu_mode == VMIR_WASM)
+    rf = (const void *)vmir_vm_ptr(&rf, iu);
+
   fmt_file_aux_t aux;
   aux.vfile = iu->iu_stdout;
   aux.total = 0;
@@ -1422,6 +1432,9 @@ vmir_fprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   const char *fmt = vmir_vm_ptr(&rf, iu);
+
+  if(iu->iu_mode == VMIR_WASM)
+    rf = (const void *)vmir_vm_ptr(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = vfile;

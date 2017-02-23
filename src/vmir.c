@@ -180,6 +180,11 @@ struct ir_unit {
   int iu_jit_ptr;
   uint32_t iu_jit_cpuflags;
 
+  enum {
+    VMIR_BITCODE,
+    VMIR_WASM,
+  } iu_mode;
+
   vmir_exception_t iu_exception;
 
   const struct vm_frame *iu_current_frame;
