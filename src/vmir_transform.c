@@ -334,13 +334,33 @@ replace_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *self)
 }
 
 
+static int
+is_reg(ir_unit_t *iu, ir_valuetype_t vt)
+{
+  ir_value_t *v = value_get(iu, vt.value);
+  return v->iv_class == IR_VC_TEMPORARY || v->iv_class == IR_VC_REGFRAME;
+}
+
 /**
  * We only support left-hand side of binary op in register
- * This could be relaxed for commutative binops
  */
 static void
 binop_prep_args(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
+  switch(ii->op) {
+  case BINOP_ADD:
+  case BINOP_MUL:
+  case BINOP_AND:
+  case BINOP_OR:
+  case BINOP_XOR:
+    if(is_reg(iu, ii->rhs_value) && !is_reg(iu, ii->lhs_value)) {
+      ir_valuetype_t tmp = ii->lhs_value;
+      ii->lhs_value = ii->rhs_value;
+      ii->rhs_value = tmp;
+    }
+    break;
+  }
+
   registerify(iu, &ii->super, &ii->lhs_value);
 }
 
