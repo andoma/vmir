@@ -76,15 +76,6 @@ static void vmir_access_trap(struct ir_unit *iu, const void *p,
 TAILQ_HEAD(ir_abbrev_queue, ir_abbrev);
 LIST_HEAD(ir_blockinfo_list, ir_blockinfo);
 
-typedef enum {
-  IAOT_LITTERAL = 0,
-  IAOT_FIXED_WIDTH = 1,
-  IAOT_VBR = 2,
-  IAOT_ARRAY = 3,
-  IAOT_CHAR6 = 4,
-  IAOT_BLOB = 5,
-} ia_abbrev_operand_type_t;
-
 
 LIST_HEAD(ir_attr_list, ir_attr);
 
@@ -98,22 +89,6 @@ typedef struct ir_blockinfo {
   struct ir_abbrev_queue ib_abbrevs;
 } ir_blockinfo_t;
 
-/**
- *
- */
-typedef struct ir_abbrev_operand {
-  ia_abbrev_operand_type_t iao_type;
-  uint32_t iao_data;
-} ir_abbrev_operand_t;
-
-/**
- *
- */
-typedef struct ir_abbrev {
-  TAILQ_ENTRY(ir_abbrev) ia_link;
-  int ia_nops;
-  ir_abbrev_operand_t ia_ops[0];
-} ir_abbrev_t;
 
 typedef struct ir_block {
   LIST_ENTRY(ir_block) ib_link;

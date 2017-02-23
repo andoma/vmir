@@ -1,3 +1,29 @@
+typedef enum {
+  IAOT_LITTERAL = 0,
+  IAOT_FIXED_WIDTH = 1,
+  IAOT_VBR = 2,
+  IAOT_ARRAY = 3,
+  IAOT_CHAR6 = 4,
+  IAOT_BLOB = 5,
+} ia_abbrev_operand_type_t;
+
+/**
+ *
+ */
+typedef struct ir_abbrev_operand {
+  ia_abbrev_operand_type_t iao_type;
+  uint32_t iao_data;
+} ir_abbrev_operand_t;
+
+
+/**
+ *
+ */
+typedef struct ir_abbrev {
+  TAILQ_ENTRY(ir_abbrev) ia_link;
+  int ia_nops;
+  ir_abbrev_operand_t ia_ops[0];
+} ir_abbrev_t;
 
 static void ir_parse_blocks(ir_unit_t *iu, int abbrev_id_width,
                             rec_handler_t *rh, const ir_blockinfo_t *ibi,
@@ -221,6 +247,7 @@ module_rec_handler(ir_unit_t *iu, int op,
 
   case MODULE_CODE_COMDAT:
   case MODULE_CODE_METADATA_VALUES_UNUSED:
+  case MODULE_CODE_SOURCE_FILENAME:
     break;
 
   default:
@@ -863,7 +890,7 @@ ir_define_abbrev(ir_unit_t *iu, bcbitstream_t *bs)
 /**
  *
  */
-static int
+static void
 load_array(bcbitstream_t *bs, ir_unit_t *iu, const ir_abbrev_operand_t *type)
 {
   const int arraysize = read_vbr(bs, 6);
@@ -887,9 +914,24 @@ load_array(bcbitstream_t *bs, ir_unit_t *iu, const ir_abbrev_operand_t *type)
     }
     VECTOR_PUSH_BACK(&iu->iu_argv, a);
   }
-  return arraysize;
 }
 
+/**
+ *
+ */
+static void
+load_blob(bcbitstream_t *bs, ir_unit_t *iu)
+{
+  const int blobsize = read_vbr(bs, 6);
+  align_bits32(bs);
+  for(int i = 0; i < blobsize; i++) {
+    ir_arg_t a;
+    a.i64 = read_bits(bs, 8);
+    VECTOR_PUSH_BACK(&iu->iu_argv, a);
+  }
+  int tailpad = VMIR_ALIGN(blobsize, 4) - blobsize;
+  read_bits(bs, tailpad * 8);
+}
 
 /**
  *
@@ -942,6 +984,9 @@ ir_dispatch_abbrev(ir_unit_t *iu, unsigned int id, rec_handler_t *rh,
       assert(i == ia->ia_nops - 2);
       load_array(bs, iu, &ia->ia_ops[i + 1]);
       nops--; // Cut off last argument (which was array type)
+      continue;
+    case IAOT_BLOB:
+      load_blob(bs, iu);
       continue;
 
     default:
