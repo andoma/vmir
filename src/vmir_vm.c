@@ -4875,6 +4875,9 @@ static const vmop_tab_t vmop_map[] = {
   FN_VMOP("sqrtf",  VM_SQRTF,  1),
   FN_VMOP("expf",   VM_EXPF,   1),
   FN_VMOP("ceilf",  VM_CEILF,  1),
+
+  FN_VMOP("llvm.floor.f64", VM_FLOOR, 1),
+  FN_VMOP("llvm.floor.f32", VM_FLOORF, 1),
 };
 
 
