@@ -554,6 +554,22 @@ value_create_const32(ir_unit_t *iu, int v)
   return (ir_valuetype_t) {.value = ret, .type = type};
 }
 
+/**
+ *
+ */
+static ir_valuetype_t
+value_create_const64(ir_unit_t *iu, int64_t v, int code)
+{
+  int type = type_find_by_code(iu, code);
+  int ret = value_append(iu);
+  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, ret);
+
+  iv->iv_class = IR_VC_CONSTANT;
+  iv->iv_type = type;
+  iv->iv_u64 = v;
+  return (ir_valuetype_t) {.value = ret, .type = type};
+}
+
 
 /**
  *
