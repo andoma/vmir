@@ -248,8 +248,9 @@ typedef struct ir_instr_load {
   int immediate_offset;
   ir_valuetype_t value_offset;
   int value_offset_multiply;
+
+  int load_type; // Only valid when cast != -1
   int8_t cast;
-  uint8_t load_type; // Only valid when cast != -1
 } ir_instr_load_t;
 
 
