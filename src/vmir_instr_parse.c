@@ -1625,7 +1625,7 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
 
       if(f != NULL) {
         len += addstr(dstp, " ");
-        len += addstr(dstp, f->if_name);
+        len += addstr(dstp, f->if_name ?: "<anon>");
       } else {
         len += addstr(dstp, " fptr in ");
         len += value_print_vt(dstp, iu, p->callee);

@@ -133,7 +133,7 @@ vmir_find_function(ir_unit_t *iu, const char *name)
 {
   for(int i = 0; i < VECTOR_LEN(&iu->iu_functions); i++) {
     ir_function_t *f = VECTOR_ITEM(&iu->iu_functions, i);
-    if(!strcmp(f->if_name, name))
+    if(f->if_name != NULL && !strcmp(f->if_name, name))
       return f;
   }
   return NULL;
