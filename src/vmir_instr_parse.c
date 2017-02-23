@@ -1403,6 +1403,8 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
       case BINOP_AND:        op = "and"; break;
       case BINOP_OR:         op = "or"; break;
       case BINOP_XOR:        op = "xor"; break;
+      case BINOP_ROL:        op = "rol"; break;
+      case BINOP_ROR:        op = "ror"; break;
       }
       len += addstr(dstp, op);
       len += addstr(dstp, " ");
