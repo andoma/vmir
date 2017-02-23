@@ -1923,4 +1923,5 @@ instr_have_side_effects(const ir_instr_t *ii)
   case IR_IC_MLA:
     return 0;
   }
+  return 1;
 }
