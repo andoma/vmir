@@ -557,6 +557,7 @@ value_create_const32(ir_unit_t *iu, int v)
 /**
  *
  */
+__attribute__((unused))
 static ir_valuetype_t
 value_create_const64(ir_unit_t *iu, int64_t v, int code)
 {
