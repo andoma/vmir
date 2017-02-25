@@ -2290,7 +2290,9 @@ combine_get_upstream_instruction(ir_unit_t *iu, ir_valuetype_t vt,
     switch(ivi->ivi_relation) {
     case IVI_OUTPUT:
       if(upstream != NULL)
-        parser_error(iu, "Multiplte writes to temporary in instr-combine");
+        return NULL; /* Multiple instructions write to this value
+                      * Happens only when in non SSA form
+                      */
       upstream = ivi->ivi_instr;
       break;
     case IVI_INPUT:
