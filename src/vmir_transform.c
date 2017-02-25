@@ -296,7 +296,8 @@ replace_call(ir_unit_t *iu, ir_instr_call_t *ii, ir_function_t *self)
       c->callee = ii->callee;
       c->argc = 2;
       c->argv[0] = ii->argv[0];
-      c->argv[1].value = value_create_const32(iu, self->if_callarg_size);
+      c->argv[1].value = value_create_const32(iu, self->if_callarg_size,
+                                              IR_TYPE_INT32);
       c->argv[1].copy_size = 0;
 
       instr_destroy(&ii->super);

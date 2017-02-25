@@ -603,13 +603,19 @@ wasm_const(ir_unit_t *iu, int code, wasm_bytestream_t *wbs)
 
   switch(code) {
   case 0x41:
-    vt = value_create_const32(iu, wbs_get_v32(wbs));
+    vt = value_create_const32(iu, wbs_get_v32(wbs), IR_TYPE_INT32);
     break;
   case 0x42:
     vt = value_create_const64(iu, wbs_get_v64(wbs), IR_TYPE_INT64);
     break;
+  case 0x43:
+    vt = value_create_const32(iu, wbs_get_u32(wbs), IR_TYPE_FLOAT);
+    break;
+  case 0x44:
+    vt = value_create_const64(iu, wbs_get_u64(wbs), IR_TYPE_DOUBLE);
+    break;
   default:
-    abort();
+    parser_error(iu, "Can't handle const type 0x%x", code);
   }
   vstack_push(iu, vt);
 }

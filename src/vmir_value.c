@@ -542,9 +542,9 @@ value_get_const64(ir_unit_t *iu, const ir_value_t *iv)
  *
  */
 static ir_valuetype_t
-value_create_const32(ir_unit_t *iu, int v)
+value_create_const32(ir_unit_t *iu, int v, ir_type_code_t code)
 {
-  int type = type_find_by_code(iu, IR_TYPE_INT32);
+  int type = type_find_by_code(iu, code);
   int ret = value_append(iu);
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, ret);
 
@@ -559,7 +559,7 @@ value_create_const32(ir_unit_t *iu, int v)
  */
 __attribute__((unused))
 static ir_valuetype_t
-value_create_const64(ir_unit_t *iu, int64_t v, int code)
+value_create_const64(ir_unit_t *iu, uint64_t v, ir_type_code_t code)
 {
   int type = type_find_by_code(iu, code);
   int ret = value_append(iu);
