@@ -1289,6 +1289,13 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(LOAD8_SEXT_32_ROFF)
     LOAD8_SEXT_32(0, R32(1) + SIMM16(2) + R32(3) * SIMM16(4));
     NEXT(5);
+  VMOP(LOAD8_G_ZEXT_32)
+    LOAD8_ZEXT_32(0, SIMM32(1));
+    NEXT(3);
+  VMOP(LOAD8_G_SEXT_32)
+    LOAD8_SEXT_32(0, SIMM32(1));
+    NEXT(3);
+
 
 
   VMOP(STORE8_G)     STORE8(SIMM32(1), R8(0));              NEXT(3);
@@ -1317,6 +1324,12 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   VMOP(LOAD16_SEXT_32_ROFF)
     LOAD16_SEXT_32(0, R32(1) + SIMM16(2) + R32(3) * SIMM16(4));
     NEXT(5);
+  VMOP(LOAD16_G_ZEXT_32)
+    LOAD16_ZEXT_32(0, SIMM32(1));
+    NEXT(3);
+  VMOP(LOAD16_G_SEXT_32)
+    LOAD16_SEXT_32(0, SIMM32(1));
+    NEXT(3);
   VMOP(LOAD16_G)     LOAD16(0, SIMM32(1));          NEXT(3);
 
   VMOP(STORE16_G)    STORE16(SIMM32(1), R16(0));             NEXT(3);
@@ -1879,6 +1892,9 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_LOAD8_ZEXT_32_ROFF: return &&LOAD8_ZEXT_32_ROFF  - &&opz;     break;
   case VM_LOAD8_SEXT_32_ROFF: return &&LOAD8_SEXT_32_ROFF  - &&opz;     break;
 
+  case VM_LOAD8_G_ZEXT_32: return &&LOAD8_G_ZEXT_32  - &&opz;     break;
+  case VM_LOAD8_G_SEXT_32: return &&LOAD8_G_SEXT_32  - &&opz;     break;
+
   case VM_STORE8_G:    return &&STORE8_G    - &&opz;     break;
   case VM_STORE8C_OFF: return &&STORE8C_OFF - &&opz;     break;
   case VM_STORE8_OFF:  return &&STORE8_OFF  - &&opz;     break;
@@ -1893,6 +1909,9 @@ vm_exec(uint16_t *I, void *rf, void *ret, const vm_frame_t *P)
   case VM_LOAD16_ROFF: return &&LOAD16_ROFF  - &&opz;     break;
   case VM_LOAD16_ZEXT_32_ROFF: return &&LOAD16_ZEXT_32_ROFF  - &&opz;     break;
   case VM_LOAD16_SEXT_32_ROFF: return &&LOAD16_SEXT_32_ROFF  - &&opz;     break;
+
+  case VM_LOAD16_G_ZEXT_32: return &&LOAD16_G_ZEXT_32  - &&opz;     break;
+  case VM_LOAD16_G_SEXT_32: return &&LOAD16_G_SEXT_32  - &&opz;     break;
 
   case VM_STORE16_G:    return &&STORE16_G    - &&opz;     break;
   case VM_STORE16C_OFF: return &&STORE16C_OFF - &&opz;     break;
@@ -2326,6 +2345,19 @@ emit_i16(ir_unit_t *iu, uint16_t i16)
   iu->iu_text_ptr += 2;
 }
 
+
+/**
+ *
+ */
+static void
+emit_imm16(ir_unit_t *iu, int immediate)
+{
+  if(immediate < INT16_MIN || immediate > INT16_MAX)
+    parser_error(iu, "Immediate offset too big");
+  emit_i16(iu, immediate);
+}
+
+
 /**
  *
  */
@@ -2736,9 +2768,6 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
 {
   const int has_offset = immediate_offset != 0 || roff != NULL;
 
-  assert(immediate_offset >= INT16_MIN &&
-         immediate_offset <= INT16_MAX);
-
   switch(COMBINE3(src->iv_class, legalize_type(retty), has_offset)) {
 
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT1, 0):
@@ -2748,12 +2777,14 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT8, 1):
     emit_op2(iu, roff ? VM_LOAD8_ROFF : VM_LOAD8_OFF,
              value_reg(ret), value_reg(src));
-    emit_i16(iu, immediate_offset);
+    emit_imm16(iu, immediate_offset);
     break;
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT8, 0):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT8, 0):
   case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT8, 0):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT8, 1):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT8, 1):
     emit_op1(iu, VM_LOAD8_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
+    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
     return;
 
   case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT1, 0):
@@ -2767,14 +2798,16 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
     emit_op2(iu, VM_LOAD16, value_reg(ret), value_reg(src));
     return;
   case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT16, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT16, 0):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT16, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT16, 1):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT16, 1):
     emit_op1(iu, VM_LOAD16_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
+    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
     return;
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT16, 1):
     emit_op2(iu, roff ? VM_LOAD16_ROFF : VM_LOAD16_OFF,
              value_reg(ret), value_reg(src));
-    emit_i16(iu, immediate_offset);
+    emit_imm16(iu, immediate_offset);
     break;
 
   case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT32, 0):
@@ -2783,8 +2816,11 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
   case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 0):
   case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 0):
   case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 0):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 1):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 1):
+  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 1):
     emit_op1(iu, VM_LOAD32_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
+    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
     return;
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT32, 0):
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_POINTER, 0):
@@ -2796,22 +2832,20 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_FLOAT, 1):
     emit_op2(iu, roff ? VM_LOAD32_ROFF : VM_LOAD32_OFF,
              value_reg(ret), value_reg(src));
-    emit_i16(iu, immediate_offset);
+    emit_imm16(iu, immediate_offset);
     break;
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT32, 1):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_POINTER, 1):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_FLOAT, 1):
-    emit_op1(iu, VM_LOAD32_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
-    return;
 
 
-  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64,  0):
   case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_DOUBLE, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_INT64, 0):
-  case COMBINE3(IR_VC_CONSTANT, IR_TYPE_DOUBLE, 0):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT64,  0):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_DOUBLE, 0):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_INT64,  1):
+  case COMBINE3(IR_VC_GLOBALVAR, IR_TYPE_DOUBLE, 1):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_INT64,  1):
+  case COMBINE3(IR_VC_CONSTANT,  IR_TYPE_DOUBLE, 1):
     emit_op1(iu, VM_LOAD64_G, value_reg(ret));
-    emit_i32(iu, value_get_const32(iu, src));
+    emit_i32(iu, value_get_const32(iu, src) + immediate_offset);
     return;
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_INT64, 0):
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 0):
@@ -2821,7 +2855,7 @@ emit_load1(ir_unit_t *iu, const ir_value_t *src,
   case COMBINE3(IR_VC_REGFRAME, IR_TYPE_DOUBLE, 1):
     emit_op2(iu, roff ? VM_LOAD64_ROFF : VM_LOAD64_OFF,
              value_reg(ret), value_reg(src));
-    emit_i16(iu, immediate_offset);
+    emit_imm16(iu, immediate_offset);
     break;
 
   default:
@@ -2852,30 +2886,51 @@ emit_load(ir_unit_t *iu, ir_instr_load_t *ii)
   if(ii->cast != -1) {
     // Load + Cast
     ir_type_t *pointee = type_get(iu, ii->load_type);
-    assert(src->iv_class == IR_VC_REGFRAME);
 
-    switch(COMBINE3(legalize_type(retty), legalize_type(pointee),
-                    ii->cast)) {
-    case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT8, CAST_ZEXT):
+    switch(COMBINE4(src->iv_class, legalize_type(retty),
+                    legalize_type(pointee), ii->cast)) {
+    case COMBINE4(IR_VC_REGFRAME, IR_TYPE_INT32, IR_TYPE_INT8, CAST_ZEXT):
       emit_op2(iu, roff ? VM_LOAD8_ZEXT_32_ROFF :
                VM_LOAD8_ZEXT_32_OFF, value_reg(ret), value_reg(src));
-      emit_i16(iu, ii->immediate_offset);
+      emit_imm16(iu, ii->immediate_offset);
       break;
-    case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT8, CAST_SEXT):
+    case COMBINE4(IR_VC_REGFRAME, IR_TYPE_INT32, IR_TYPE_INT8, CAST_SEXT):
       emit_op2(iu, roff ? VM_LOAD8_SEXT_32_ROFF : VM_LOAD8_SEXT_32_OFF,
                value_reg(ret), value_reg(src));
-      emit_i16(iu, ii->immediate_offset);
+      emit_imm16(iu, ii->immediate_offset);
       break;
-    case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT16, CAST_ZEXT):
+    case COMBINE4(IR_VC_REGFRAME, IR_TYPE_INT32, IR_TYPE_INT16, CAST_ZEXT):
       emit_op2(iu, roff ? VM_LOAD16_ZEXT_32_ROFF: VM_LOAD16_ZEXT_32_OFF,
                value_reg(ret), value_reg(src));
-      emit_i16(iu, ii->immediate_offset);
+      emit_imm16(iu, ii->immediate_offset);
       break;
-    case COMBINE3(IR_TYPE_INT32, IR_TYPE_INT16, CAST_SEXT):
+    case COMBINE4(IR_VC_REGFRAME, IR_TYPE_INT32, IR_TYPE_INT16, CAST_SEXT):
       emit_op2(iu, roff ? VM_LOAD16_SEXT_32_ROFF : VM_LOAD16_SEXT_32_OFF,
                value_reg(ret), value_reg(src));
-      emit_i16(iu, ii->immediate_offset);
+      emit_imm16(iu, ii->immediate_offset);
       break;
+
+    case COMBINE4(IR_VC_CONSTANT, IR_TYPE_INT32, IR_TYPE_INT8, CAST_ZEXT):
+      emit_op1(iu, VM_LOAD8_G_ZEXT_32, value_reg(ret));
+      emit_i32(iu, value_get_const32(iu, src) + ii->immediate_offset);
+      break;
+
+    case COMBINE4(IR_VC_CONSTANT, IR_TYPE_INT32, IR_TYPE_INT8, CAST_SEXT):
+      emit_op1(iu, VM_LOAD8_G_SEXT_32, value_reg(ret));
+      emit_i32(iu, value_get_const32(iu, src) + ii->immediate_offset);
+      break;
+
+    case COMBINE4(IR_VC_CONSTANT, IR_TYPE_INT32, IR_TYPE_INT16, CAST_ZEXT):
+      emit_op1(iu, VM_LOAD16_G_ZEXT_32, value_reg(ret));
+      emit_i32(iu, value_get_const32(iu, src) + ii->immediate_offset);
+      break;
+
+    case COMBINE4(IR_VC_CONSTANT, IR_TYPE_INT32, IR_TYPE_INT16, CAST_SEXT):
+      emit_op1(iu, VM_LOAD16_G_SEXT_32, value_reg(ret));
+      emit_i32(iu, value_get_const32(iu, src) + ii->immediate_offset);
+      break;
+
+
     default:
       parser_error(iu, "Can't load+cast to %s from %s cast:%d (%s)",
                    type_str(iu, retty),
@@ -2902,9 +2957,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 {
   const ir_value_t *ptr = value_get(iu, ii->ptr.value);
   const ir_value_t *val = value_get(iu, ii->value.value);
-  int has_offset = ii->immediate_offset != 0;
-  assert(ii->immediate_offset >= INT16_MIN &&
-         ii->immediate_offset <= INT16_MAX);
+  const int has_offset = ii->immediate_offset != 0;
 
   switch(COMBINE4(legalize_type(type_get(iu, ii->value.type)),
                   val->iv_class,
@@ -2919,23 +2972,29 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE8_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT1, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
+  case COMBINE4(IR_TYPE_INT1, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
     emit_op1(iu, VM_STORE8_G, value_reg(val));
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT1, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
+  case COMBINE4(IR_TYPE_INT1, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 1):
     emit_op1(iu, VM_MOV8_C, 0);
     emit_i8(iu, value_get_const32(iu, val));
     emit_op1(iu, VM_STORE8_G, 0);
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT1, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
@@ -2943,7 +3002,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_INT8, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE8C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     emit_i8(iu, value_get_const32(iu, val));
     return;
 
@@ -2954,30 +3013,34 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
     emit_op2(iu, VM_STORE16, value_reg(ptr), value_reg(val));
     return;
 
-  case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
     emit_op1(iu, VM_STORE16_G, value_reg(val));
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT16, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE16_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE16C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     emit_i16(iu, value_get_const32(iu, val));
     return;
 
   case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_INT16, IR_VC_CONSTANT, IR_VC_CONSTANT,  1):
     emit_op1(iu, VM_MOV16_C, 0);
     emit_i16(iu, value_get_const32(iu, val));
     emit_op1(iu, VM_STORE16_G, 0);
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
     // ---
@@ -2985,43 +3048,38 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
-  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
-  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
-    emit_op1(iu, VM_STORE32_G, value_reg(val));
-    emit_i32(iu, value_get_const32(iu, ptr));
-    return;
-
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
-  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
-  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
-  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_CONSTANT, 1):
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
     emit_op1(iu, VM_STORE32_G, value_reg(val));
     emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
-  case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_POINTER, IR_VC_GLOBALVAR, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_GLOBALVAR,  0):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_GLOBALVAR,  0):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_GLOBALVAR,  0):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_GLOBALVAR, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_GLOBALVAR, IR_VC_GLOBALVAR, 0):
+  case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_GLOBALVAR,  1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_GLOBALVAR,  1):
+  case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_GLOBALVAR,  1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_GLOBALVAR, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_POINTER, IR_VC_GLOBALVAR, IR_VC_GLOBALVAR, 1):
     emit_op1(iu, VM_MOV32_C, 0);
     emit_i32(iu, value_get_const32(iu, val));
     emit_op1(iu, VM_STORE32_G, 0);
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
-    emit_op1(iu, VM_MOV32_C, 0);
-    emit_i32(iu, value_get_const32(iu, val));
-    emit_op1(iu, VM_STORE32_G, 0);
-    emit_i32(iu, value_get_const32(iu, ptr));
-    return;
-
   case COMBINE4(IR_TYPE_INT32,   IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
   case COMBINE4(IR_TYPE_POINTER, IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_CONSTANT, IR_VC_CONSTANT, 1):
@@ -3044,7 +3102,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_GLOBALVAR, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_GLOBALVAR, IR_VC_REGFRAME, 0):
     emit_op1(iu, VM_STORE32C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     emit_i32(iu, value_get_const32(iu, val));
     return;
 
@@ -3053,7 +3111,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_POINTER, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_FLOAT,   IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE32_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT32,   IR_VC_REGFRAME, IR_VC_REGFRAME, 0):
@@ -3066,21 +3124,29 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
 
   case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 0):
-  case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
-  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_CONSTANT,  1):
     emit_op1(iu, VM_STORE64_G, value_reg(val));
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
-  case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
-  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_CONSTANT, 0):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_CONSTANT,  0):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_CONSTANT,  0):
   case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 0):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_CONSTANT,  1):
+  case COMBINE4(IR_TYPE_INT64,  IR_VC_CONSTANT, IR_VC_GLOBALVAR, 1):
+  case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_GLOBALVAR, 1):
     vm_align32(iu, 0);
     emit_op1(iu, VM_MOV64_C, 0);
     emit_i64(iu, value_get_const64(iu, val));
     emit_op1(iu, VM_STORE64_G, 0);
-    emit_i32(iu, value_get_const32(iu, ptr));
+    emit_i32(iu, value_get_const32(iu, ptr) + ii->immediate_offset);
     return;
 
 
@@ -3090,14 +3156,14 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_CONSTANT, IR_VC_REGFRAME, 0):
     vm_align32(iu, 1);
     emit_op1(iu, VM_STORE64C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     emit_i64(iu, value_get_const64(iu, val));
     return;
 
   case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
   case COMBINE4(IR_TYPE_DOUBLE, IR_VC_REGFRAME, IR_VC_REGFRAME, 1):
     emit_op2(iu, VM_STORE64_OFF, value_reg(ptr), value_reg(val));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     return;
 
   case COMBINE4(IR_TYPE_INT64,  IR_VC_REGFRAME, IR_VC_REGFRAME, 0):
@@ -3111,7 +3177,7 @@ emit_store(ir_unit_t *iu, ir_instr_store_t *ii)
   case COMBINE4(IR_TYPE_FUNCTION, IR_VC_FUNCTION, IR_VC_REGFRAME, 0):
   case COMBINE4(IR_TYPE_FUNCTION, IR_VC_FUNCTION, IR_VC_REGFRAME, 1):
     emit_op1(iu, VM_STORE32C_OFF, value_reg(ptr));
-    emit_i16(iu, ii->immediate_offset);
+    emit_imm16(iu, ii->immediate_offset);
     emit_i32(iu, value_function_addr(val));
     return;
 
