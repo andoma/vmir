@@ -493,15 +493,22 @@ wasm_numeric(ir_unit_t *iu, ir_bb_t *ib, int code)
   case 0x7a:  return wasm_vmop(iu, ib, 1, VM_CTZ64, WASM_TYPE_I64);
   case 0x7b:  return wasm_vmop(iu, ib, 1, VM_POP64, WASM_TYPE_I64);
 
+  case 0x9c:  return wasm_vmop(iu, ib, 1, VM_FLOOR,  WASM_TYPE_F64);
+  case 0x8e:  return wasm_vmop(iu, ib, 1, VM_FLOORF, WASM_TYPE_F32);
+
+  case 0x92:
   case 0xa0:
   case 0x7c:
   case 0x6a: binop = BINOP_ADD;  break;
+  case 0x93:
   case 0xa1:
   case 0x7d:
   case 0x6b: binop = BINOP_SUB;  break;
+  case 0x94:
   case 0xa2:
   case 0x7e:
   case 0x6c: binop = BINOP_MUL;  break;
+  case 0x95:
   case 0xa3:
   case 0x7f:
   case 0x6d: binop = BINOP_SDIV; break;
@@ -574,6 +581,10 @@ wasm_convert(ir_unit_t *iu, ir_bb_t *ib, int code)
   case 0xb9:  op = CAST_SITOFP;  type = WASM_TYPE_F64;   break;
   case 0xba:  op = CAST_UITOFP;  type = WASM_TYPE_F64;   break;
   case 0xbb:  op = CAST_FPEXT;   type = WASM_TYPE_F64;   break;
+  case 0xbc:  op = CAST_BITCAST; type = WASM_TYPE_I32;   break;
+  case 0xbd:  op = CAST_BITCAST; type = WASM_TYPE_I64;   break;
+  case 0xbe:  op = CAST_BITCAST; type = WASM_TYPE_F32;   break;
+  case 0xbf:  op = CAST_BITCAST; type = WASM_TYPE_F64;   break;
 
   default:
     parser_error(iu, "Can't handle convert opcode 0x%x", code);
@@ -1046,7 +1057,7 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
     case 0x67 ... 0xa6:
       wasm_numeric(iu, ib, code);
       break;
-    case 0xa7 ... 0xbb:
+    case 0xa7 ... 0xbf:
       wasm_convert(iu, ib, code);
       break;
 
