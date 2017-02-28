@@ -685,7 +685,7 @@ value_print(char **dstp, ir_unit_t *iu, const ir_value_t *iv,
       snprintf(tmpbuf, sizeof(tmpbuf), "#0x%x", iv->iv_u32);
       break;
     case IR_TYPE_INT64:
-      snprintf(tmpbuf, sizeof(tmpbuf), "#%"PRIx64, iv->iv_u64);
+      snprintf(tmpbuf, sizeof(tmpbuf), "#0x%"PRIx64, iv->iv_u64);
       break;
     case IR_TYPE_FLOAT:
       snprintf(tmpbuf, sizeof(tmpbuf), "#%f", iv->iv_float);
