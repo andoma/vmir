@@ -1255,7 +1255,7 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
 
   iu->iu_data_ptr = VMIR_ALIGN(iu->iu_data_ptr, 4096);
 
-  iu->iu_data_ptr += 32768;
+  iu->iu_data_ptr += 1024 * 1024;
 
   // WASM stack
   uint32_t *u32p = iu->iu_mem;
