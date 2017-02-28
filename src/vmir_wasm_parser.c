@@ -90,7 +90,7 @@ static uint8_t
 wbs_get_byte(wasm_bytestream_t *wbs)
 {
   if(wbs->ptr >= wbs->end)
-    return 0;
+    return 0xff;
 
   uint8_t r = *wbs->ptr;
   wbs->ptr += 1;
@@ -981,7 +981,7 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
 
   while(wbs->ptr < wbs->end) {
 
-    const uint8_t code = wbs_get_byte(wbs);
+    uint8_t code = wbs_get_byte(wbs);
     //    printf("%*.scode=%x @ 0x%zx\n", depth * 2, "", code, wbs->ptr - wbs->start);
     if(code == 0xb)
       break;
@@ -1004,7 +1004,10 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
 
     case 0x0:
       wasm_unreachable(iu, ib);
-      if(wbs_get_byte(wbs) != 0xb)
+      code = wbs_get_byte(wbs);
+      while(code == 0)
+        code = wbs_get_byte(wbs);
+      if(code != 0xb)
         parser_error(iu, "unreachable not followed by end");
       if(depth == 0)
         return NULL;
