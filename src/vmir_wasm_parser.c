@@ -5,8 +5,6 @@
  wast -> sexpr webassembly
  wasm -> acctual binary stuff
 
-
-
  */
 
 
@@ -33,18 +31,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 typedef struct {
   const uint8_t *ptr;
   const uint8_t *end;
@@ -63,10 +49,25 @@ wbs_get_u32(wasm_bytestream_t *wbs)
   if(wbs->ptr + 4 > wbs->end)
     return 0;
 
-  uint32_t r =  *(uint32_t *)wbs->ptr;
+  uint32_t r;
+  memcpy(&r, wbs->ptr, 4);
   wbs->ptr += 4;
   return r;
 }
+
+static uint64_t
+wbs_get_u64(wasm_bytestream_t *wbs)
+{
+  if(wbs->ptr + 8 > wbs->end)
+    return 0;
+
+  uint64_t r;
+  memcpy(&r, wbs->ptr, 8);
+  wbs->ptr += 8;
+  return r;
+}
+
+
 #endif
 
 
@@ -171,7 +172,8 @@ wasm_parse_value_type(ir_unit_t *iu, wasm_bytestream_t *wbs)
   case 0x7c:
     return 0x7f - arg_type + 1;
   default:
-    parser_error(iu, "Bad type code (byte) 0x%x", arg_type);
+    parser_error(iu, "Bad type code (byte) 0x%x at 0x%zx",
+                 arg_type, wbs->ptr - wbs->start - 1);
     break;
   }
 }
@@ -451,20 +453,39 @@ wasm_binop(ir_unit_t *iu, ir_bb_t *ib, int code)
 {
   int binop = -1;
   switch(code) {
+  case 0xa0:
+  case 0x7c:
   case 0x6a: binop = BINOP_ADD;  break;
+  case 0xa1:
+  case 0x7d:
   case 0x6b: binop = BINOP_SUB;  break;
+  case 0xa2:
+  case 0x7e:
   case 0x6c: binop = BINOP_MUL;  break;
+  case 0xa3:
+  case 0x7f:
   case 0x6d: binop = BINOP_SDIV; break;
+  case 0x80:
   case 0x6e: binop = BINOP_UDIV; break;
+  case 0x81:
   case 0x6f: binop = BINOP_SREM; break;
+  case 0x82:
   case 0x70: binop = BINOP_UREM; break;
+  case 0x83:
   case 0x71: binop = BINOP_AND;  break;
+  case 0x84:
   case 0x72: binop = BINOP_OR;   break;
+  case 0x85:
   case 0x73: binop = BINOP_XOR;  break;
+  case 0x86:
   case 0x74: binop = BINOP_SHL;  break;
+  case 0x87:
   case 0x75: binop = BINOP_ASHR; break;
+  case 0x88:
   case 0x76: binop = BINOP_LSHR; break;
+  case 0x89:
   case 0x77: binop = BINOP_ROL;  break;
+  case 0x8a:
   case 0x78: binop = BINOP_ROR;  break;
   default:
     parser_error(iu, "Can't handle binop 0x%x", code);
@@ -475,6 +496,51 @@ wasm_binop(ir_unit_t *iu, ir_bb_t *ib, int code)
   i->lhs_value = vstack_pop(iu);
   i->op = binop;
   value_alloc_instr_ret(iu, i->lhs_value.type, &i->super);
+  vstack_push(iu, i->super.ii_ret);
+}
+
+
+/**
+ *
+ */
+static void
+wasm_convert(ir_unit_t *iu, ir_bb_t *ib, int code)
+{
+  ir_instr_unary_t *i = instr_add(ib, sizeof(ir_instr_unary_t), IR_IC_CAST);
+  int op;
+  int type;
+  switch(code) {
+  case 0xa7:  op = CAST_TRUNC;   type = WASM_TYPE_I32;   break;
+  case 0xa8:  op = CAST_FPTOSI;  type = WASM_TYPE_I32;   break;
+  case 0xa9:  op = CAST_FPTOUI;  type = WASM_TYPE_I32;   break;
+  case 0xaa:  op = CAST_FPTOSI;  type = WASM_TYPE_I32;   break;
+  case 0xab:  op = CAST_FPTOUI;  type = WASM_TYPE_I32;   break;
+
+  case 0xac:  op = CAST_SEXT;    type = WASM_TYPE_I64;   break;
+  case 0xad:  op = CAST_ZEXT;    type = WASM_TYPE_I64;   break;
+  case 0xae:  op = CAST_FPTOSI;  type = WASM_TYPE_I64;   break;
+  case 0xaf:  op = CAST_FPTOUI;  type = WASM_TYPE_I64;   break;
+  case 0xb0:  op = CAST_FPTOSI;  type = WASM_TYPE_I64;   break;
+  case 0xb1:  op = CAST_FPTOUI;  type = WASM_TYPE_I64;   break;
+
+  case 0xb2:  op = CAST_SITOFP;  type = WASM_TYPE_F32;   break;
+  case 0xb3:  op = CAST_UITOFP;  type = WASM_TYPE_F32;   break;
+  case 0xb4:  op = CAST_SITOFP;  type = WASM_TYPE_F32;   break;
+  case 0xb5:  op = CAST_UITOFP;  type = WASM_TYPE_F32;   break;
+  case 0xb6:  op = CAST_FPTRUNC; type = WASM_TYPE_F32;   break;
+
+  case 0xb7:  op = CAST_SITOFP;  type = WASM_TYPE_F64;   break;
+  case 0xb8:  op = CAST_UITOFP;  type = WASM_TYPE_F64;   break;
+  case 0xb9:  op = CAST_SITOFP;  type = WASM_TYPE_F64;   break;
+  case 0xba:  op = CAST_UITOFP;  type = WASM_TYPE_F64;   break;
+  case 0xbb:  op = CAST_FPEXT;   type = WASM_TYPE_F64;   break;
+
+  default:
+    parser_error(iu, "Can't handle convert opcode 0x%x", code);
+  }
+  i->op = op;
+  i->value = vstack_pop(iu);
+  value_alloc_instr_ret(iu, type, &i->super);
   vstack_push(iu, i->super.ii_ret);
 }
 
@@ -489,23 +555,54 @@ wasm_cmp(ir_unit_t *iu, ir_bb_t *ib, int code)
 
   switch(code) {
   case 0x45:
-    i->lhs_value = value_create_const32(iu, 0);
+    i->lhs_value = value_create_const32(iu, 0, IR_TYPE_INT32);
     i->rhs_value = vstack_pop(iu);
     i->op = ICMP_EQ;
-    value_alloc_instr_ret(iu, i->lhs_value.type, &i->super);
+    value_alloc_instr_ret(iu, WASM_TYPE_I32, &i->super);
     vstack_push(iu, i->super.ii_ret);
     return;
 
+  case 0x50:
+    i->lhs_value = value_create_const32(iu, 0, IR_TYPE_INT64);
+    i->rhs_value = vstack_pop(iu);
+    i->op = ICMP_EQ;
+    value_alloc_instr_ret(iu, WASM_TYPE_I32, &i->super);
+    vstack_push(iu, i->super.ii_ret);
+    return;
+
+  case 0x51:
   case 0x46:  cmpop = ICMP_EQ;   break;
+  case 0x52:
   case 0x47:  cmpop = ICMP_NE;   break;
+  case 0x53:
   case 0x48:  cmpop = ICMP_SLT;  break;
+  case 0x54:
   case 0x49:  cmpop = ICMP_ULT;  break;
+  case 0x55:
   case 0x4a:  cmpop = ICMP_SGT;  break;
+  case 0x56:
   case 0x4b:  cmpop = ICMP_UGT;  break;
+  case 0x57:
   case 0x4c:  cmpop = ICMP_SLE;  break;
+  case 0x58:
   case 0x4d:  cmpop = ICMP_ULE;  break;
+  case 0x59:
   case 0x4e:  cmpop = ICMP_SGE;  break;
+  case 0x5a:
   case 0x4f:  cmpop = ICMP_UGE;  break;
+
+  case 0x61:
+  case 0x5b:  cmpop = FCMP_OEQ;   break;
+  case 0x62:
+  case 0x5c:  cmpop = FCMP_UNE;   break;
+  case 0x63:
+  case 0x5d:  cmpop = FCMP_OLT;   break;
+  case 0x64:
+  case 0x5e:  cmpop = FCMP_OGT;   break;
+  case 0x65:
+  case 0x5f:  cmpop = FCMP_OLE;   break;
+  case 0x66:
+  case 0x60:  cmpop = FCMP_OGE;   break;
   default:
     parser_error(iu, "Can't handle cmp 0x%x", code);
   }
@@ -513,7 +610,7 @@ wasm_cmp(ir_unit_t *iu, ir_bb_t *ib, int code)
   i->rhs_value = vstack_pop(iu);
   i->lhs_value = vstack_pop(iu);
   i->op = cmpop;
-  value_alloc_instr_ret(iu, i->lhs_value.type, &i->super);
+  value_alloc_instr_ret(iu, WASM_TYPE_I32, &i->super);
   vstack_push(iu, i->super.ii_ret);
 }
 
@@ -648,24 +745,42 @@ wasm_set_local(ir_unit_t *iu, ir_bb_t *ib, const int localvar)
 
 
 static void
-wasm_call(ir_unit_t *iu, ir_bb_t *ib, wasm_bytestream_t *wbs)
+wasm_call(ir_unit_t *iu, ir_bb_t *ib, wasm_bytestream_t *wbs,
+          int indirect)
 {
-  const int callee_index = wbs_get_vu32(wbs);
-  ir_function_t *callee = VECTOR_ITEM(&iu->iu_functions, callee_index);
-  const ir_type_t *it = type_get(iu, callee->if_type);
+  int callee_type;
+
+  if(indirect) {
+    const int wasm_callee_type = wbs_get_vu32(wbs);
+    callee_type = VECTOR_ITEM(&iu->iu_wasm_type_map, wasm_callee_type);
+
+  } else {
+
+    const int callee_index = wbs_get_vu32(wbs);
+    ir_function_t *callee = VECTOR_ITEM(&iu->iu_functions, callee_index);
+    callee_type = callee->if_type;
+
+    ir_value_t *iv = value_append_and_get(iu);
+    iv->iv_class = IR_VC_FUNCTION;
+    iv->iv_type = callee_type;
+    iv->iv_func = callee;
+  }
+
+  const ir_type_t *it = type_get(iu, callee_type);
   const int num_args = it->it_function.num_parameters;
 
   ir_instr_call_t *i =
     instr_add(ib, sizeof(ir_instr_call_t) +
               sizeof(ir_instr_arg_t) * num_args, IR_IC_CALL);
 
-  i->callee.value = iu->iu_next_value;
+  if(indirect) {
 
-  ir_value_t *iv = value_append_and_get(iu);
-  iv->iv_class = IR_VC_FUNCTION;
-  iv->iv_type = callee->if_type;
-  iv->iv_func = callee;
+    i->callee = vstack_pop(iu);
+    wbs_get_vu32(wbs); // reserved
 
+  } else {
+    i->callee.value = iu->iu_next_value - 1;
+  }
   i->argc = num_args;
   for(int j = num_args - 1; j >= 0; j--) {
     i->argv[j].value = vstack_pop(iu);
@@ -688,8 +803,8 @@ wasm_select(ir_unit_t *iu, ir_bb_t *ib)
   ir_instr_select_t *i = instr_add(ib, sizeof(ir_instr_select_t), IR_IC_SELECT);
 
   i->pred        = vstack_pop(iu);
-  i->true_value  = vstack_pop(iu);
   i->false_value = vstack_pop(iu);
+  i->true_value  = vstack_pop(iu);
 
   value_alloc_instr_ret(iu, i->true_value.type, &i->super);
   vstack_push(iu, i->super.ii_ret);
@@ -760,7 +875,7 @@ wasm_unreachable(ir_unit_t *iu, ir_bb_t *ib)
 static ir_bb_t *
 wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
                  wasm_bytestream_t *wbs, uint32_t local_var_base,
-                 label_stack_frame_t *parent, int type)
+                 label_stack_frame_t *parent, int type, int depth)
 {
   unsigned int local_var;
   uint8_t rettype;
@@ -787,7 +902,7 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
   while(wbs->ptr < wbs->end) {
 
     const uint8_t code = wbs_get_byte(wbs);
-
+    //    printf("%*.scode=%x @ 0x%zx\n", depth * 2, "", code, wbs->ptr - wbs->start);
     if(code == 0xb)
       break;
 
@@ -797,19 +912,23 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       if(rettype != 0x40)
         parser_error(iu, "Can't handle block with non-void rettype (0x%x)",
                      rettype);
-      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code);
+      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code, depth + 1);
       break;
     case WASM_OP_LOOP:
       rettype = wbs_get_byte(wbs);
       if(rettype != 0x40)
-        parser_error(iu, "Can't handle loop with non-void rettype (0x%x)",
-                     rettype);
-      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code);
+        parser_error(iu, "Can't handle loop with non-void rettype (0x%x) @ %zx",
+                     rettype, wbs->ptr - wbs->start - 2);
+      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code, depth + 1);
       break;
 
     case 0x0:
       wasm_unreachable(iu, ib);
-      return NULL;
+      if(wbs_get_byte(wbs) != 0xb)
+        parser_error(iu, "unreachable not followed by end");
+      if(depth == 0)
+        return NULL;
+      return exitblock;
 
     case 0xf:  // Return
       wasm_return(iu, ib);
@@ -820,7 +939,8 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       ib = wasm_branch(iu, ib, code, wbs_get_vu32(wbs), &lsf);
       break;
     case 0x10:
-      wasm_call(iu, ib, wbs);
+    case 0x11:
+      wasm_call(iu, ib, wbs, code == 0x11);
       break;
     case 0x1a:
       vstack_pop(iu);
@@ -848,11 +968,14 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
     case 0x41 ... 0x44:
       wasm_const(iu, code, wbs);
       break;
-    case 0x6a ... 0x78:
+    case 0x6a ... 0xa6:
       wasm_binop(iu, ib, code);
       break;
     case 0x45 ... 0x66:
       wasm_cmp(iu, ib, code);
+      break;
+    case 0xa7 ... 0xbb:
+      wasm_convert(iu, ib, code);
       break;
 
     default:
@@ -902,7 +1025,7 @@ wasm_parse_section_code(ir_unit_t *iu, wasm_bytestream_t *wbs)
 
     unconditional_branch(preamble, ib);
 
-    ib = wasm_parse_block(iu, ib, wbs, local_var_base, NULL, 0x02);
+    ib = wasm_parse_block(iu, ib, wbs, local_var_base, NULL, 0x02, 0);
 
     if(ib != NULL)
       wasm_return(iu, ib);
@@ -1046,7 +1169,7 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
 
   iu->iu_data_ptr = VMIR_ALIGN(iu->iu_data_ptr, 4096);
 
-  iu->iu_data_ptr += 8192;
+  iu->iu_data_ptr += 32768;
 
   // WASM stack
   uint32_t *u32p = iu->iu_mem;
