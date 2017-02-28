@@ -458,16 +458,41 @@ init_local_vars(ir_unit_t *iu, ir_bb_t *ib, wasm_bytestream_t *wbs,
   }
 }
 
+/**
+ *
+ */
+static void
+wasm_vmop(ir_unit_t *iu, ir_bb_t *ib, int num_args, int vmop, int return_type)
+{
+  ir_instr_call_t *i =
+    instr_add(ib, sizeof(ir_instr_call_t) +
+              sizeof(ir_instr_arg_t) * num_args, IR_IC_VMOP);
+  i->vmop = vmop;
+  i->argc = num_args;
+  for(int j = num_args - 1; j >= 0; j--) {
+    i->argv[j].value = vstack_pop(iu);
+  }
+
+  value_alloc_instr_ret(iu, return_type, &i->super);
+  vstack_push(iu, i->super.ii_ret);
+}
 
 
 /**
  *
  */
 static void
-wasm_binop(ir_unit_t *iu, ir_bb_t *ib, int code)
+wasm_numeric(ir_unit_t *iu, ir_bb_t *ib, int code)
 {
   int binop = -1;
   switch(code) {
+  case 0x67:  return wasm_vmop(iu, ib, 1, VM_CLZ32, WASM_TYPE_I32);
+  case 0x68:  return wasm_vmop(iu, ib, 1, VM_CTZ32, WASM_TYPE_I32);
+  case 0x69:  return wasm_vmop(iu, ib, 1, VM_POP32, WASM_TYPE_I32);
+  case 0x79:  return wasm_vmop(iu, ib, 1, VM_CLZ64, WASM_TYPE_I64);
+  case 0x7a:  return wasm_vmop(iu, ib, 1, VM_CTZ64, WASM_TYPE_I64);
+  case 0x7b:  return wasm_vmop(iu, ib, 1, VM_POP64, WASM_TYPE_I64);
+
   case 0xa0:
   case 0x7c:
   case 0x6a: binop = BINOP_ADD;  break;
@@ -983,11 +1008,11 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
     case 0x41 ... 0x44:
       wasm_const(iu, code, wbs);
       break;
-    case 0x6a ... 0xa6:
-      wasm_binop(iu, ib, code);
-      break;
     case 0x45 ... 0x66:
       wasm_cmp(iu, ib, code);
+      break;
+    case 0x67 ... 0xa6:
+      wasm_numeric(iu, ib, code);
       break;
     case 0xa7 ... 0xbb:
       wasm_convert(iu, ib, code);
