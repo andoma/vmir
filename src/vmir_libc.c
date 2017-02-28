@@ -1242,6 +1242,15 @@ dofmt(void (*output)(void *opaque, const char *str, int len),
   }
 }
 
+static const void *
+vmir_valist(const void **rf, ir_unit_t *iu)
+{
+  if(iu->iu_mode == VMIR_WASM)
+    return (const void *)vmir_vm_ptr(rf, iu);
+  else
+    return *(void **)vmir_vm_ptr(rf, iu);
+}
+
 
 typedef struct fmt_sn_aux {
   char *dst;
@@ -1274,7 +1283,7 @@ vmir_vsnprintf(void *ret, const void *rf, ir_unit_t *iu)
   char *dst = vmir_vm_ptr(&rf, iu);
   int dstlen = vmir_vm_arg32(&rf);
   const char *fmt = vmir_vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
+  const void *va_rf = vmir_valist(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1319,7 +1328,7 @@ vmir_vsprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   char *dst = vmir_vm_ptr(&rf, iu);
   const char *fmt = vmir_vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
+  const void *va_rf = vmir_valist(&rf, iu);
 
   fmt_sn_aux_t aux;
   aux.dst = dst;
@@ -1380,7 +1389,7 @@ static int
 vmir_vprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *fmt = vmir_vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
+  const void *va_rf = vmir_valist(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = iu->iu_stdout;
@@ -1415,7 +1424,7 @@ vmir_vfprintf(void *ret, const void *rf, ir_unit_t *iu)
 {
   vFILE_t *vfile = vmir_vm_ptr(&rf, iu);
   const char *fmt = vmir_vm_ptr(&rf, iu);
-  const void *va_rf = *(void **)vmir_vm_ptr(&rf, iu);
+  const void *va_rf = vmir_valist(&rf, iu);
 
   fmt_file_aux_t aux;
   aux.vfile = vfile;
