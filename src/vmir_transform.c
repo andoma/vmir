@@ -370,6 +370,22 @@ binop_prep_args(ir_unit_t *iu, ir_instr_binary_t *ii)
  *
  */
 static void
+registerify_cmp(ir_unit_t *iu, ir_instr_binary_t *ii)
+{
+  const ir_value_t *lhs = value_get(iu, ii->lhs_value.value);
+  if(lhs->iv_class != IR_VC_CONSTANT)
+    return;
+  const ir_value_t *rhs = value_get(iu, ii->rhs_value.value);
+  if(rhs->iv_class == IR_VC_CONSTANT) {
+    registerify(iu, &ii->super, &ii->lhs_value);
+  }
+}
+
+
+/**
+ *
+ */
+static void
 binop_transform_cast(ir_unit_t *iu, ir_instr_unary_t *ii)
 {
   ir_type_t *srcty = type_get(iu, ii->value.type);
@@ -472,6 +488,8 @@ replace_instructions(ir_unit_t *iu, ir_function_t *f)
         ii = replace_call(iu, (ir_instr_call_t *)ii, f);
       if(ii->ii_class == IR_IC_BINOP)
         binop_prep_args(iu, (ir_instr_binary_t *)ii);
+      if(ii->ii_class == IR_IC_CMP2)
+        registerify_cmp(iu, (ir_instr_binary_t *)ii);
       if(ii->ii_class == IR_IC_CAST)
         binop_transform_cast(iu, (ir_instr_unary_t *)ii);
     }
