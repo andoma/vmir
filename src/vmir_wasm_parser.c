@@ -859,20 +859,25 @@ typedef struct label_stack_frame {
 } label_stack_frame_t;
 
 
-
-static ir_bb_t *
-wasm_branch(ir_unit_t *iu, ir_bb_t *ib, int code, int relative_depth,
-            label_stack_frame_t *lsf)
+static int
+bb_from_relative_depth(const label_stack_frame_t *lsf, int relative_depth)
 {
-  ir_bb_t *next = bb_add_named(iu->iu_current_function, ib, "Branch split");
-
   for(int i = 0; i < relative_depth; i++) {
     lsf = lsf->parent;
   }
+  return lsf->label->ib_id;
+}
+
+
+static ir_bb_t *
+wasm_branch(ir_unit_t *iu, ir_bb_t *ib, int code, int relative_depth,
+            const label_stack_frame_t *lsf)
+{
+  ir_bb_t *next = bb_add_named(iu->iu_current_function, ib, "Branch split");
 
   ir_instr_br_t *i = instr_add(ib, sizeof(ir_instr_br_t), IR_IC_BR);
 
-  i->true_branch = lsf->label->ib_id;
+  i->true_branch = bb_from_relative_depth(lsf, relative_depth);
 
   switch(code) {
   case 0xc:
@@ -883,6 +888,30 @@ wasm_branch(ir_unit_t *iu, ir_bb_t *ib, int code, int relative_depth,
     i->condition = vstack_pop(iu);
     break;
   }
+  return next;
+}
+
+
+
+
+static ir_bb_t *
+wasm_branch_table(ir_unit_t *iu, ir_bb_t *ib, wasm_bytestream_t *wbs,
+                  const label_stack_frame_t *lsf)
+{
+  ir_bb_t *next = bb_add_named(iu->iu_current_function, ib, "Branch-table split");
+
+  const int paths = wbs_get_vu32(wbs);
+
+  ir_instr_switch_t *i = instr_add(ib, sizeof(ir_instr_switch_t) +
+                                   sizeof(ir_instr_path_t) * paths, IR_IC_SWITCH);
+  i->value = vstack_pop(iu);
+  i->num_paths = paths;
+
+  for(int n = 0; n < paths; n++) {
+    i->paths[n].v64 = n;
+    i->paths[n].block = bb_from_relative_depth(lsf, wbs_get_vu32(wbs));
+  }
+  i->defblock = bb_from_relative_depth(lsf, wbs_get_vu32(wbs));
   return next;
 }
 
@@ -974,9 +1003,12 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       wasm_return(iu, ib);
       ib = bb_add_named(iu->iu_current_function, ib, "Return split");
       break;
-    case 0xc:
+    case 0xc:  // branch
     case 0xd:  // br_if
       ib = wasm_branch(iu, ib, code, wbs_get_vu32(wbs), &lsf);
+      break;
+    case 0xe:  // br_table
+      ib = wasm_branch_table(iu, ib, wbs, &lsf);
       break;
     case 0x10:
     case 0x11:
