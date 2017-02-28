@@ -115,7 +115,7 @@ wbs_get_vu32(wasm_bytestream_t *wbs)
 /**
  *
  */
-static int __attribute__((unused))
+static int32_t
 wbs_get_v32(wasm_bytestream_t *wbs)
 {
   uint32_t v = 0;
@@ -136,7 +136,7 @@ wbs_get_v32(wasm_bytestream_t *wbs)
 /**
  *
  */
-static int __attribute__((unused))
+static int64_t
 wbs_get_v64(wasm_bytestream_t *wbs)
 {
   uint64_t v = 0;
@@ -148,9 +148,9 @@ wbs_get_v64(wasm_bytestream_t *wbs)
     shift += 7;
   } while(b & 0x80);
 
-  if(shift < 64 && (b & 0x40))
-    v |= - (1 << shift);
-
+  if(shift < 64 && (b & 0x40)) {
+    v |= - (1LL << shift);
+  }
   return v;
 }
 
