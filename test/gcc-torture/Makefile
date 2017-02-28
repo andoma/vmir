@@ -32,10 +32,11 @@ build-O2/%.bc: src/%.c Makefile
 	${CLANG} -O2 ${CFLAGS_BC} ${CFLAGS} -c $< -o $@
 
 
+.PRECIOUS: wasm-Oz/%.bc wasm-Oz/%.s wasm-Oz/%.wast
 
 wasm-Oz/%.bc: src/%.c Makefile
 	@mkdir -p "$(@D)"
-	${CLANG} -O0 ${CFLAGS_WASM} ${CFLAGS} -c $< -o $@
+	${CLANG} -Oz ${CFLAGS_WASM} ${CFLAGS} -c $< -o $@
 
 wasm-Oz/%.s: wasm-Oz/%.bc Makefile
 	${LLC} -asm-verbose=false -o $@ $<
