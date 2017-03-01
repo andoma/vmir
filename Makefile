@@ -5,7 +5,7 @@ SRCS  = src/main.c \
 DEPS = ${SRCS} \
 	Makefile \
 	src/vmir.h \
-	src/vmir_instr_parse.c \
+	src/vmir_instr.c \
 	src/vmir_value.c \
 	src/vmir_type.c \
 	src/vmir_jit_arm.c \
@@ -13,10 +13,11 @@ DEPS = ${SRCS} \
 	src/vmir_vm.h \
 	src/vmir_transform.c \
 	src/vmir_bitstream.c \
-	src/vmir_bitcode_parser.c \
 	src/vmir_support.c \
 	src/vmir_function.c \
 	src/vmir_libc.c \
+	src/vmir_bitcode_parser.c \
+	src/vmir_bitcode_instr.c \
 	src/vmir_wasm_parser.c \
 
 CFLAGS = -std=gnu99 -Wall -Werror -Wmissing-prototypes \
