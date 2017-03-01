@@ -4,14 +4,14 @@
  *
  */
 static ir_valuetype_t
-instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
+instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const int64_t **argvp)
 {
-  const ir_arg_t *argv = *argvp;
+  const int64_t *argv = *argvp;
   int argc = *argcp;
   if(argc < 1)
     parser_error(iu, "Missing value code");
 
-  unsigned int val = iu->iu_next_value - argv[0].i64;
+  unsigned int val = iu->iu_next_value - argv[0];
   int type;
 
   if(val < iu->iu_next_value) {
@@ -20,7 +20,7 @@ instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
     type = VECTOR_ITEM(&iu->iu_values, val)->iv_type;
   } else {
 
-    type = argv[1].i64;
+    type = argv[1];
 
     if(val >= VECTOR_LEN(&iu->iu_values)) {
       size_t prevsize = VECTOR_LEN(&iu->iu_values);
@@ -50,10 +50,10 @@ instr_get_vtp(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
  *
  */
 static ir_valuetype_t
-instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp,
+instr_get_value(ir_unit_t *iu, unsigned int *argcp, const int64_t **argvp,
                 int type)
 {
-  const ir_arg_t *argv = *argvp;
+  const int64_t *argv = *argvp;
   int argc = *argcp;
 
   if(argc < 1)
@@ -62,7 +62,7 @@ instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp,
   *argvp = argv + 1;
   *argcp = argc - 1;
 
-  int val = iu->iu_next_value - argv[0].i64;
+  int val = iu->iu_next_value - argv[0];
   ir_valuetype_t r = {.type = type, .value = val};
   return r;
 }
@@ -73,10 +73,10 @@ instr_get_value(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp,
  */
 static ir_valuetype_t
 instr_get_value_signed(ir_unit_t *iu,
-                       unsigned int *argcp, const ir_arg_t **argvp,
+                       unsigned int *argcp, const int64_t **argvp,
                        int type)
 {
-  const ir_arg_t *argv = *argvp;
+  const int64_t *argv = *argvp;
   int argc = *argcp;
 
   if(argc < 1)
@@ -96,9 +96,9 @@ instr_get_value_signed(ir_unit_t *iu,
  *
  */
 static unsigned int
-instr_get_uint(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
+instr_get_uint(ir_unit_t *iu, unsigned int *argcp, const int64_t **argvp)
 {
-  const ir_arg_t *argv = *argvp;
+  const int64_t *argv = *argvp;
   int argc = *argcp;
 
   if(argc < 1)
@@ -106,7 +106,7 @@ instr_get_uint(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
 
   *argvp = argv + 1;
   *argcp = argc - 1;
-  return argv[0].i64;
+  return argv[0];
 }
 
 
@@ -114,7 +114,7 @@ instr_get_uint(ir_unit_t *iu, unsigned int *argcp, const ir_arg_t **argvp)
  *
  */
 static void
-parse_ret(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_ret(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -144,7 +144,7 @@ parse_unreachable(ir_unit_t *iu)
  *
  */
 static void
-parse_binop(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_binop(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -161,7 +161,7 @@ parse_binop(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_cast(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_cast(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -177,7 +177,7 @@ parse_cast(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_load(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_load(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -189,7 +189,7 @@ parse_load(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   i->cast = -1;
   if(argc == 3) {
     // Explicit type
-    value_alloc_instr_ret(iu, argv[0].i64, &i->super);
+    value_alloc_instr_ret(iu, argv[0], &i->super);
   } else {
     value_alloc_instr_ret(iu, type_get_pointee(iu, i->ptr.type), &i->super);
   }
@@ -200,7 +200,7 @@ parse_load(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_store(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
+parse_store(ir_unit_t *iu, unsigned int argc, const int64_t *argv,
             int old)
 {
   ir_bb_t *ib = iu->iu_current_bb;
@@ -217,7 +217,7 @@ parse_store(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
 }
 
 static void
-parse_insertval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_insertval(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -247,7 +247,7 @@ parse_insertval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_gep(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv, int op)
+parse_gep(ir_unit_t *iu, unsigned int argc, const int64_t *argv, int op)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -321,7 +321,7 @@ parse_gep(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv, int op)
  *
  */
 static void
-parse_cmp2(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_cmp2(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -337,7 +337,7 @@ parse_cmp2(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_br(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_br(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -370,7 +370,7 @@ phi_sort(const void *A, const void *B)
  *
  */
 static void
-parse_phi(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_phi(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -407,7 +407,7 @@ parse_phi(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_call_or_invoke(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
+parse_call_or_invoke(ir_unit_t *iu, unsigned int argc, const int64_t *argv,
                      int ii_class)
 {
   // http://llvm.org/docs/LangRef.html#call-instruction
@@ -557,7 +557,7 @@ parse_call_or_invoke(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
  *
  */
 static void
-parse_landingpad(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
+parse_landingpad(ir_unit_t *iu, unsigned int argc, const int64_t *argv,
                  int old)
 {
   ir_bb_t *ib = iu->iu_current_bb;
@@ -593,7 +593,7 @@ parse_landingpad(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv,
  */
 
 static void
-parse_resume(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_resume(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -624,7 +624,7 @@ switch_sort64(const void *A, const void *B)
  *
  */
 static void
-parse_switch(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_switch(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -662,19 +662,19 @@ parse_switch(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_alloca(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_alloca(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   if(argc != 4)
     parser_error(iu, "Invalid number of args to alloca");
 
-  int flags = argv[3].i64;
+  int flags = argv[3];
 
   ir_bb_t *ib = iu->iu_current_bb;
 
   ir_instr_alloca_t *i =
     instr_add(ib, sizeof(ir_instr_alloca_t), IR_IC_ALLOCA);
 
-  unsigned int rtype  = argv[0].i64;
+  unsigned int rtype  = argv[0];
 
   if(flags & (1 << 6)) { // ExplicitType
     i->size = type_sizeof(iu, rtype);
@@ -687,8 +687,8 @@ parse_alloca(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   value_alloc_instr_ret(iu, rtype, &i->super);
 
   i->alignment = vmir_llvm_alignment(flags & 0x1f, 4);
-  i->num_items_value.value = argv[2].i64;
-  i->num_items_value.type = argv[1].i64;
+  i->num_items_value.value = argv[2];
+  i->num_items_value.type = argv[1];
 }
 
 
@@ -696,7 +696,7 @@ parse_alloca(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_vselect(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_vselect(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -713,12 +713,12 @@ parse_vselect(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_vaarg(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_vaarg(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
   ir_instr_unary_t *i = instr_add(ib, sizeof(ir_instr_unary_t), IR_IC_VAARG);
-  int type = argv[0].i64;
+  int type = argv[0];
   argc--;
   argv++;
   i->value = instr_get_value(iu, &argc, &argv, type);
@@ -730,7 +730,7 @@ parse_vaarg(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *
  */
 static void
-parse_extractval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+parse_extractval(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   ir_bb_t *ib = iu->iu_current_bb;
 
@@ -747,7 +747,7 @@ parse_extractval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
 
   for(int i = 0; i < num_indicies; i++) {
     ir_type_t *ty = type_get(iu, current_type_index);
-    int idx = argv[i].i64;
+    int idx = argv[i];
     ii->indicies[i] = idx;
     switch(ty->it_code) {
     default:
@@ -772,7 +772,7 @@ parse_extractval(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  */
 static void
 function_rec_handler(ir_unit_t *iu, int op,
-                     unsigned int argc, const ir_arg_t *argv)
+                     unsigned int argc, const int64_t *argv)
 {
   ir_function_t *f = iu->iu_current_function;
 
@@ -782,7 +782,7 @@ function_rec_handler(ir_unit_t *iu, int op,
     if(TAILQ_FIRST(&f->if_bbs) != NULL)
       parser_error(iu, "Multiple BB decl in function");
 
-    unsigned int numbbs = argv[0].i64;
+    unsigned int numbbs = argv[0];
     if(numbbs == 0)
       parser_error(iu, "Declareblocks: Zero basic blocks");
     if(numbbs > 65535)

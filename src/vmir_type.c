@@ -494,7 +494,7 @@ type_alignment(ir_unit_t *iu, int index)
  */
 static void
 types_new_rec_handler(struct ir_unit *iu, int op,
-                      unsigned int argc, const ir_arg_t *argv)
+                      unsigned int argc, const int64_t *argv)
 {
   ir_type_t it;
   const char *ctx = "types";
@@ -506,7 +506,7 @@ types_new_rec_handler(struct ir_unit *iu, int op,
     if(argc < 1)
       parser_error(iu, "%s: Short NUMENTRY record", ctx);
 
-    VECTOR_SET_CAPACITY(&iu->iu_types, argv[0].i64);
+    VECTOR_SET_CAPACITY(&iu->iu_types, argv[0]);
     return;
 
   case TYPE_CODE_VOID:
@@ -519,28 +519,28 @@ types_new_rec_handler(struct ir_unit *iu, int op,
     it.it_code = IR_TYPE_DOUBLE;
     break;
   case TYPE_CODE_INTEGER:
-    if(argv[0].i64 == 1) {
+    if(argv[0] == 1) {
       it.it_code = IR_TYPE_INT1;
-    } else if(argv[0].i64 == 8) {
+    } else if(argv[0] == 8) {
       it.it_code = IR_TYPE_INT8;
-    } else if(argv[0].i64 == 16) {
+    } else if(argv[0] == 16) {
       it.it_code = IR_TYPE_INT16;
-    } else if(argv[0].i64 == 32) {
+    } else if(argv[0] == 32) {
       it.it_code = IR_TYPE_INT32;
-    } else if(argv[0].i64 == 64) {
+    } else if(argv[0] == 64) {
       it.it_code = IR_TYPE_INT64;
-    } else if(argv[0].i64 < 64) {
+    } else if(argv[0] < 64) {
       it.it_code = IR_TYPE_INTx;
-      it.it_bits = argv[0].i64;
+      it.it_bits = argv[0];
     } else {
       parser_error(iu, "%s: Integer width %d bit not supported",
-                   ctx, (int)argv[0].i64);
+                   ctx, (int)argv[0]);
     }
     break;
   case TYPE_CODE_ARRAY:
     it.it_code = IR_TYPE_ARRAY;
-    it.it_array.num_elements = argv[0].i64;
-    it.it_array.element_type = argv[1].i64;
+    it.it_array.num_elements = argv[0];
+    it.it_array.element_type = argv[1];
     break;
 
   case TYPE_CODE_STRUCT_NAME:
@@ -562,15 +562,15 @@ types_new_rec_handler(struct ir_unit *iu, int op,
     it.it_struct.num_elements = argc - 1;
     it.it_struct.elements = malloc(it.it_struct.num_elements *
                                    sizeof(it.it_struct.elements[0]));
-    it.it_struct.packed = !!argv[0].i64;
+    it.it_struct.packed = !!argv[0];
     for(int i = 0; i < it.it_struct.num_elements; i++) {
-      it.it_struct.elements[i].type = argv[i + 1].i64;
+      it.it_struct.elements[i].type = argv[i + 1];
     }
     break;
 
   case TYPE_CODE_POINTER:
     it.it_code = IR_TYPE_POINTER;
-    it.it_pointer.pointee = argv[0].i64;
+    it.it_pointer.pointee = argv[0];
     break;
 
   case TYPE_CODE_FUNCTION:
@@ -579,13 +579,13 @@ types_new_rec_handler(struct ir_unit *iu, int op,
                    ctx, argc);
 
     it.it_code = IR_TYPE_FUNCTION;
-    it.it_function.varargs = argv[0].i64;
-    it.it_function.return_type = argv[1].i64;
+    it.it_function.varargs = argv[0];
+    it.it_function.return_type = argv[1];
     it.it_function.num_parameters = argc - 2;
     it.it_function.parameters =
       malloc(it.it_function.num_parameters * sizeof(int));
     for(int i = 0; i < it.it_function.num_parameters; i++)
-      it.it_function.parameters[i] = argv[2 + i].i64;
+      it.it_function.parameters[i] = argv[2 + i];
     break;
 
   case TYPE_CODE_METADATA:
@@ -602,8 +602,8 @@ types_new_rec_handler(struct ir_unit *iu, int op,
 
   case TYPE_CODE_VECTOR:
     printf("Vector of %s x %d\n",
-           type_str_index(iu, argv[1].i64),
-           (int)argv[0].i64);
+           type_str_index(iu, argv[1]),
+           (int)argv[0]);
 
            //    break;
 

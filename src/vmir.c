@@ -112,7 +112,7 @@ typedef struct ir_valuetype {
 struct ir_unit;
 
 typedef void (rec_handler_t)(struct ir_unit *iu, int op,
-                             unsigned int argc, const ir_arg_t *argv);
+                             unsigned int argc, const int64_t *argv);
 
 VECTOR_HEAD(ir_op_vector, struct ir_op);
 VECTOR_HEAD(ir_attrset_vector, struct ir_attrset);
@@ -248,7 +248,7 @@ struct ir_unit {
   void *iu_text_ptr;
   size_t iu_text_alloc_memsize;
 
-  VECTOR_HEAD(, ir_arg_t) iu_argv;
+  VECTOR_HEAD(, int64_t) iu_argv;
 
   char        iu_err_buf[256];
   const char *iu_err_file;

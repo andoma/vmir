@@ -124,22 +124,17 @@ read_vbr64(bcbitstream_t *bs, int width)
 }
 
 
-typedef struct ir_arg {
-  int64_t i64;
-} ir_arg_t;
-
-
 /**
  *
  */
 static char *
-read_zstr_from_argv(unsigned int *argcp, const ir_arg_t **argvp)
+read_zstr_from_argv(unsigned int *argcp, const int64_t **argvp)
 {
   int len = 0;
-  const ir_arg_t *argv = *argvp;
+  const int64_t *argv = *argvp;
   int argc = *argcp;
   for(len = 0; len < argc; len++) {
-    if(argv[len].i64 == 0)
+    if(argv[len] == 0)
       break;
   }
   if(len == argc)
@@ -152,8 +147,8 @@ read_zstr_from_argv(unsigned int *argcp, const ir_arg_t **argvp)
 
 
   for(len = 0; len < argc; len++) {
-    s[len] = argv[len].i64;
-    if(argv[len].i64 == 0)
+    s[len] = argv[len];
+    if(argv[len] == 0)
       break;
   }
   return s;
@@ -164,12 +159,12 @@ read_zstr_from_argv(unsigned int *argcp, const ir_arg_t **argvp)
  *
  */
 static char *
-read_str_from_argv(unsigned int argc, const ir_arg_t *argv)
+read_str_from_argv(unsigned int argc, const int64_t *argv)
 {
   char *r = malloc(argc + 1);
   r[argc] = 0;
   for(int i = 0; i < argc; i++)
-    r[i] = argv[i].i64;
+    r[i] = argv[i];
   return r;
 }
 
@@ -178,9 +173,9 @@ read_str_from_argv(unsigned int argc, const ir_arg_t *argv)
  *
  */
 static int64_t
-read_sign_rotated(const ir_arg_t *argv)
+read_sign_rotated(const int64_t *argv)
 {
-  uint64_t u64 = argv->i64;
+  uint64_t u64 = *argv;
   if((u64 & 1) == 0)
     return u64 >> 1;
   if(u64 != 1)
@@ -192,13 +187,13 @@ read_sign_rotated(const ir_arg_t *argv)
  *
  */
 static void
-printargs(const ir_arg_t *argv, unsigned int argc)
+printargs(const int64_t *argv, unsigned int argc)
 {
   int i, x;
   int64_t v;
   for(x = 0; x < 2; x++) {
     for(i = 0; i < argc; i++) {
-      v = argv[i].i64;
+      v = argv[i];
       if(x == 0) {
         printf("%c", (v >= ' ' && v <= 0x7f) ? (char)v : '.');
       } else {

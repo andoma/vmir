@@ -86,7 +86,7 @@ block_destroy(ir_block_t *ib)
  */
 static void
 blockinfo_rec_handler(ir_unit_t *iu, int op,
-                      unsigned int argc, const ir_arg_t *argv)
+                      unsigned int argc, const int64_t *argv)
 {
   ir_block_t *ib = LIST_FIRST(&iu->iu_blocks);
   switch(op) {
@@ -95,7 +95,7 @@ blockinfo_rec_handler(ir_unit_t *iu, int op,
     if(argc != 1)
       parser_error(iu, "Bad number of args (%d) for SETBID", argc);
 
-    ib->ib_blockinfo = blockinfo_find(iu, argv[0].i64);
+    ib->ib_blockinfo = blockinfo_find(iu, argv[0]);
     break;
   }
 }
@@ -107,30 +107,30 @@ blockinfo_rec_handler(ir_unit_t *iu, int op,
  *             unnamed_addr, dllstorageclass]
  */
 static void
-module_globalvar(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+module_globalvar(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   if(argc < 6)
     parser_error(iu, "Bad number of args for global var def");
 
-  int explicit_type = argv[1].i64 & 2;
+  int explicit_type = argv[1] & 2;
   unsigned int type, pointee;
 
 
   if(explicit_type) {
-    pointee = argv[0].i64;
+    pointee = argv[0];
     type = type_make_pointer(iu, pointee, 0);
     if(type == -1)
       parser_error(iu, "No pointer type for pointee '%s'",
                    type_str_index(iu, pointee));
   } else {
-    type = argv[0].i64;
+    type = argv[0];
     pointee = type_get_pointee(iu, type);
   }
 
   ir_globalvar_t *ig = calloc(1, sizeof(ir_globalvar_t));
   ig->ig_type = pointee;
 
-  unsigned int alignment = vmir_llvm_alignment(argv[4].i64, 4);
+  unsigned int alignment = vmir_llvm_alignment(argv[4], 4);
   const int val_id = value_append(iu);
   ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_id);
   iv->iv_class = IR_VC_GLOBALVAR;
@@ -142,7 +142,7 @@ module_globalvar(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ig->ig_size = type_sizeof(iu, pointee);
   iu->iu_data_ptr += type_sizeof(iu, pointee);
 
-  const unsigned int initializer = argv[2].i64;
+  const unsigned int initializer = argv[2];
 
   if(initializer > 0) {
     ir_initializer_t ii = {val_id, initializer - 1};
@@ -157,12 +157,12 @@ module_globalvar(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  *             dllstorageclass]
  */
 static void
-module_function(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+module_function(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   if(argc < 8)
     parser_error(iu, "Bad number of args");
 
-  unsigned int type = argv[0].i64;
+  unsigned int type = argv[0];
   ir_type_t *it = type_get(iu, type);
   if(it->it_code == IR_TYPE_POINTER)
     type = it->it_pointer.pointee;
@@ -170,7 +170,7 @@ module_function(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
   ir_function_t *f = calloc(1, sizeof(ir_function_t));
 
   TAILQ_INIT(&f->if_bbs);
-  f->if_isproto = !!argv[2].i64;
+  f->if_isproto = !!argv[2];
   f->if_type = type;
 
   if(!f->if_isproto)
@@ -189,15 +189,15 @@ module_function(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  * ALIAS: [alias type, aliasee val#, linkage]
  */
 static void
-module_alias(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+module_alias(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   if(argc < 3)
     parser_error(iu, "Bad number of args");
 
   ir_value_t *iv = value_append_and_get(iu);
   iv->iv_class = IR_VC_ALIAS;
-  iv->iv_type = argv[0].i64;
-  iv->iv_reg = argv[1].i64;
+  iv->iv_type = argv[0];
+  iv->iv_reg = argv[1];
 }
 
 
@@ -205,11 +205,11 @@ module_alias(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  * Value symtab offset
  */
 static void
-module_vstoffset(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
+module_vstoffset(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
 {
   if(argc != 1)
     parser_error(iu, "Bad number of args");
-  iu->iu_vstoffset = (int)argv[0].i64;
+  iu->iu_vstoffset = (int)argv[0];
 }
 
 
@@ -218,11 +218,11 @@ module_vstoffset(ir_unit_t *iu, unsigned int argc, const ir_arg_t *argv)
  */
 static void
 module_rec_handler(ir_unit_t *iu, int op,
-                   unsigned int argc, const ir_arg_t *argv)
+                   unsigned int argc, const int64_t *argv)
 {
   switch(op) {
   case MODULE_CODE_VERSION:
-    iu->iu_version = argv[0].i64;
+    iu->iu_version = argv[0];
     break;
 
   case MODULE_CODE_TRIPLE:
@@ -262,7 +262,7 @@ module_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 paramattr_group_rec_handler(ir_unit_t *iu, int op,
-                            unsigned int argc, const ir_arg_t *argv)
+                            unsigned int argc, const int64_t *argv)
 {
   char *key, *value;
   const char *ctx = "PARAMATTR_GRP_CODE_ENTRY";
@@ -274,12 +274,12 @@ paramattr_group_rec_handler(ir_unit_t *iu, int op,
     ir_attr_t *ia = calloc(1, sizeof(ir_attr_t));
     LIST_INSERT_HEAD(&iu->iu_attribute_groups, ia, ia_link);
 
-    ia->ia_group_id = argv[0].i64;
-    ia->ia_index    = argv[1].i64;
+    ia->ia_group_id = argv[0];
+    ia->ia_index    = argv[1];
     argv += 2;
     argc -= 2;
     while(argc > 0) {
-      int type = argv[0].i64;
+      int type = argv[0];
       argv++;
       argc--;
       if(argc == 0)
@@ -288,7 +288,7 @@ paramattr_group_rec_handler(ir_unit_t *iu, int op,
       switch(type) {
       case 0:
         // ENUM attribute
-        ia->ia_flags |= (1ULL << argv[0].i64);
+        ia->ia_flags |= (1ULL << argv[0]);
         argv++;
         argc--;
         break;
@@ -335,7 +335,7 @@ paramattr_group_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 paramattr_rec_handler(ir_unit_t *iu, int op,
-                      unsigned int argc, const ir_arg_t *argv)
+                      unsigned int argc, const int64_t *argv)
 {
   int off;
   const char *ctx = "paramattr";
@@ -350,13 +350,13 @@ paramattr_rec_handler(ir_unit_t *iu, int op,
     for(int i = 0; i < argc; i++) {
       const ir_attr_t *ia;
       LIST_FOREACH(ia, &iu->iu_attribute_groups, ia_link) {
-        if(ia->ia_group_id == argv[i].i64)
+        if(ia->ia_group_id == argv[i])
           break;
       }
 
       if(ia == NULL)
         parser_error(iu, "%s: Group %d not found",
-                            ctx, (int)argv[i].i64);
+                            ctx, (int)argv[i]);
 
       ias->ias_list[i] = ia;
     }
@@ -373,7 +373,7 @@ paramattr_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 metadata_rec_handler(ir_unit_t *iu, int op,
-                     unsigned int argc, const ir_arg_t *argv)
+                     unsigned int argc, const int64_t *argv)
 {
   //  printf("metadata: Handling rec %d\n", op);
   //  prinargs(argv, argc);
@@ -387,7 +387,7 @@ metadata_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 dummy_rec_handler(ir_unit_t *iu, int op,
-                  unsigned int argc, const ir_arg_t *argv)
+                  unsigned int argc, const int64_t *argv)
 {
 }
 
@@ -451,7 +451,7 @@ set_value_name(ir_unit_t *iu, int vid, char *str)
  */
 static void
 value_symtab_rec_handler(ir_unit_t *iu, int op,
-                         unsigned int argc, const ir_arg_t *argv)
+                         unsigned int argc, const int64_t *argv)
 {
   unsigned int vid;
   char *str;
@@ -460,7 +460,7 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
     if(argc < 2)
       parser_error(iu, "Bad args to VST_CODE_ENTRY");
 
-    vid = argv[0].i64;
+    vid = argv[0];
     str = read_str_from_argv(argc - 1, argv + 1);
     set_value_name(iu, vid, str);
     break;
@@ -472,7 +472,7 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
     if(argc < 3)
       parser_error(iu, "Bad args to VST_CODE_FNENTRY");
 
-    vid = argv[0].i64;
+    vid = argv[0];
     str = read_str_from_argv(argc - 2, argv + 2);
     set_value_name(iu, vid, str);
     break;
@@ -488,7 +488,7 @@ value_symtab_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 constants_rec_handler(ir_unit_t *iu, int op,
-                      unsigned int argc, const ir_arg_t *argv)
+                      unsigned int argc, const int64_t *argv)
 {
   ir_value_t *iv;
   ir_constexpr_t *ic;
@@ -497,7 +497,7 @@ constants_rec_handler(ir_unit_t *iu, int op,
     if(argc < 1)
       parser_error(iu, "Bad # of args for CST_CODE_SETTYPE");
     assert(argc > 0);
-    iu->iu_current_type = argv[0].i64;
+    iu->iu_current_type = argv[0];
     return;
   }
 
@@ -559,10 +559,10 @@ constants_rec_handler(ir_unit_t *iu, int op,
     iv->iv_class = IR_VC_CONSTANT;
     switch(type_get(iu, iv->iv_type)->it_code) {
     case IR_TYPE_FLOAT:
-      iv->iv_u32 = argv[0].i64; // iv_u32 is union with iv_float
+      iv->iv_u32 = argv[0]; // iv_u32 is union with iv_float
       break;
     case IR_TYPE_DOUBLE:
-      iv->iv_u64 = argv[0].i64; // iv_u64 is union with iv_double
+      iv->iv_u64 = argv[0]; // iv_u64 is union with iv_double
       break;
     default:
       parser_error(iu, "Bad type (%s) for float constant",
@@ -578,8 +578,8 @@ constants_rec_handler(ir_unit_t *iu, int op,
     ir_valuetype_t *values = malloc(sizeof(ir_valuetype_t) * iv->iv_num_values);
     iv->iv_data = values;
     for(int i = 0; i < iv->iv_num_values; i++) {
-      ir_value_t *ivx = value_get(iu, argv[i].i64);
-      values[i].value = argv[i].i64;
+      ir_value_t *ivx = value_get(iu, argv[i]);
+      values[i].value = argv[i];
       values[i].type = ivx->iv_type;
     }
     break;
@@ -597,20 +597,20 @@ constants_rec_handler(ir_unit_t *iu, int op,
         case IR_TYPE_DOUBLE:
           iv->iv_data = malloc(sizeof(uint64_t) * argc);
           for(int i = 0; i < argc; i++)
-            host_wr64(iv->iv_data + i * sizeof(uint64_t), argv[i].i64);
+            host_wr64(iv->iv_data + i * sizeof(uint64_t), argv[i]);
           return;
 
         case IR_TYPE_INT32:
         case IR_TYPE_FLOAT:
           iv->iv_data = malloc(sizeof(uint32_t) * argc);
           for(int i = 0; i < argc; i++)
-            host_wr32(iv->iv_data + i * sizeof(uint32_t), argv[i].i64);
+            host_wr32(iv->iv_data + i * sizeof(uint32_t), argv[i]);
           return;
 
         case IR_TYPE_INT16:
           iv->iv_data = malloc(sizeof(uint16_t) * argc);
           for(int i = 0; i < argc; i++)
-            host_wr16(iv->iv_data + i * sizeof(uint16_t), argv[i].i64);
+            host_wr16(iv->iv_data + i * sizeof(uint16_t), argv[i]);
           return;
 
         default:
@@ -634,8 +634,8 @@ constants_rec_handler(ir_unit_t *iu, int op,
     iv->iv_class = IR_VC_CE;
     ic = iv->iv_ce = malloc(sizeof(ir_constexpr_t));
     ic->ic_code = op;
-    ic->ic_cast.op  = argv[0].i64;
-    ic->ic_cast.src = argv[2].i64;
+    ic->ic_cast.op  = argv[0];
+    ic->ic_cast.src = argv[2];
     break;
 
   case CST_CODE_CE_GEP:
@@ -651,7 +651,7 @@ constants_rec_handler(ir_unit_t *iu, int op,
     ic->ic_gep.num_values = argc / 2;
     ic->ic_gep.values = malloc(iv->iv_ce->ic_gep.num_values * sizeof(int));
     for(int i = 0; i < ic->ic_gep.num_values; i++)
-      ic->ic_gep.values[i] = argv[1 + i * 2].i64;
+      ic->ic_gep.values[i] = argv[1 + i * 2];
     break;
 
   case CST_CODE_CE_BINOP:
@@ -660,9 +660,9 @@ constants_rec_handler(ir_unit_t *iu, int op,
       parser_error(iu, "CST_CODE_CE_BINOP with invalid number of args %d", argc);
     ic = iv->iv_ce = malloc(sizeof(ir_constexpr_t));
     ic->ic_code = op;
-    ic->ic_binop.op  = argv[0].i64;
-    ic->ic_binop.lhs = argv[1].i64;
-    ic->ic_binop.rhs = argv[2].i64;
+    ic->ic_binop.op  = argv[0];
+    ic->ic_binop.lhs = argv[1];
+    ic->ic_binop.rhs = argv[2];
     break;
 
   case CST_CODE_CE_CMP:
@@ -671,10 +671,10 @@ constants_rec_handler(ir_unit_t *iu, int op,
       parser_error(iu, "CST_CODE_CE_CMP with invalid number of args %d", argc);
     ic = iv->iv_ce = malloc(sizeof(ir_constexpr_t));
     ic->ic_code = op;
-    ic->ic_cmp.opty = argv[0].i64;
-    ic->ic_cmp.lhs  = argv[1].i64;
-    ic->ic_cmp.rhs  = argv[2].i64;
-    ic->ic_cmp.pred = argv[3].i64;
+    ic->ic_cmp.opty = argv[0];
+    ic->ic_cmp.lhs  = argv[1];
+    ic->ic_cmp.rhs  = argv[2];
+    ic->ic_cmp.pred = argv[3];
     break;
 
   case CST_CODE_BLOCKADDRESS:
@@ -696,7 +696,7 @@ constants_rec_handler(ir_unit_t *iu, int op,
  */
 static void
 metadata_attachment_rec_handler(ir_unit_t *iu, int op,
-                                unsigned int argc, const ir_arg_t *argv)
+                                unsigned int argc, const int64_t *argv)
 {
   //  printf("metadata_attachment: Handling rec %d\n", op);
   //  prinargs(argv, argc);
@@ -820,9 +820,9 @@ ir_unabbrev_record(ir_unit_t *iu, rec_handler_t *rh, bcbitstream_t *bs)
   const uint32_t code = read_vbr(bs, 6);
   const uint32_t numops = read_vbr(bs, 6);
 
-  ir_arg_t *argv = malloc(numops * sizeof(ir_arg_t));
+  int64_t *argv = malloc(numops * sizeof(int64_t));
   for(i = 0; i < numops; i++) {
-    argv[i].i64 = read_vbr64(bs, 6);
+    argv[i] = read_vbr64(bs, 6);
   }
 
   rh(iu, code, numops, argv);
@@ -896,17 +896,17 @@ load_array(bcbitstream_t *bs, ir_unit_t *iu, const ir_abbrev_operand_t *type)
   const int arraysize = read_vbr(bs, 6);
   for(int i = 0; i < arraysize; i++) {
 
-    ir_arg_t a;
+    int64_t a;
 
     switch(type->iao_type) {
     case IAOT_FIXED_WIDTH:
-      a.i64 = read_bits(bs, type->iao_data);
+      a = read_bits(bs, type->iao_data);
       break;
     case IAOT_VBR:
-      a.i64 = read_vbr(bs, type->iao_data);
+      a = read_vbr(bs, type->iao_data);
       break;
     case IAOT_CHAR6:
-      a.i64 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      a = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "0123456789._"[read_bits(bs, 6)];
       break;
     default:
@@ -925,8 +925,8 @@ load_blob(bcbitstream_t *bs, ir_unit_t *iu)
   const int blobsize = read_vbr(bs, 6);
   align_bits32(bs);
   for(int i = 0; i < blobsize; i++) {
-    ir_arg_t a;
-    a.i64 = read_bits(bs, 8);
+    int64_t a;
+    a = read_bits(bs, 8);
     VECTOR_PUSH_BACK(&iu->iu_argv, a);
   }
   int tailpad = VMIR_ALIGN(blobsize, 4) - blobsize;
@@ -969,16 +969,16 @@ ir_dispatch_abbrev(ir_unit_t *iu, unsigned int id, rec_handler_t *rh,
   int nops = ia->ia_nops;
 
   for(i = 0; i < nops; i++) {
-    ir_arg_t a;
+    int64_t a;
     switch(ia->ia_ops[i].iao_type) {
     case IAOT_LITTERAL:
-      a.i64 = ia->ia_ops[i].iao_data;
+      a = ia->ia_ops[i].iao_data;
       break;
     case IAOT_FIXED_WIDTH:
-      a.i64 = read_bits(bs, ia->ia_ops[i].iao_data);
+      a = read_bits(bs, ia->ia_ops[i].iao_data);
       break;
     case IAOT_VBR:
-      a.i64 = read_vbr64(bs, ia->ia_ops[i].iao_data);
+      a = read_vbr64(bs, ia->ia_ops[i].iao_data);
       break;
     case IAOT_ARRAY:
       assert(i == ia->ia_nops - 2);
@@ -996,7 +996,7 @@ ir_dispatch_abbrev(ir_unit_t *iu, unsigned int id, rec_handler_t *rh,
     VECTOR_PUSH_BACK(&iu->iu_argv, a);
   }
 
-  rh(iu, iu->iu_argv.vh_p[0].i64, iu->iu_argv.vh_length - 1,
+  rh(iu, iu->iu_argv.vh_p[0], iu->iu_argv.vh_length - 1,
      &iu->iu_argv.vh_p[1]);
 }
 
