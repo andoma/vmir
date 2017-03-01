@@ -285,7 +285,6 @@ wasm_parse_section_import_decl(ir_unit_t *iu, wasm_bytestream_t *wbs)
       break;
 
     default:
-      printf("WARNING: Import give up on kind %d\n", kind);
       break;
 
     }
@@ -320,11 +319,7 @@ wasm_parse_section_exports(ir_unit_t *iu, wasm_bytestream_t *wbs)
     case 0:
       export_function(iu, field, index);
       break;
-    case 1:
-      //      import_table(iu, module, field, wbs);
-
     default:
-      printf("WARNING: Export give up on kind %d\n", kind);
       break;
 
     }
@@ -1246,7 +1241,7 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
       wasm_parse_section_data(iu, &bs);
       break;
     default:
-      vmir_log(iu, VMIR_LOG_ERROR, "Skipping section type %d", section_code);
+      vmir_log(iu, VMIR_LOG_DEBUG, "Skipping section type %d", section_code);
       break;
     }
     bs.ptr = section_end;

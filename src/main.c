@@ -75,7 +75,9 @@ main(int argc, char **argv)
   int opt;
   const char *argv0 = argv[0];
   int print_stats = 0;
-  while((opt = getopt(argc, argv, "plidf:nhrbsjI")) != -1) {
+  int verbose = 0;
+
+  while((opt = getopt(argc, argv, "plidf:nhrbsjIv")) != -1) {
     switch(opt) {
     case 'p':
       debug_flags |= VMIR_DBG_DUMP_PARSED_FUNCTION;
@@ -112,6 +114,9 @@ main(int argc, char **argv)
       break;
     case 's':
       print_stats = 1;
+      break;
+    case 'v':
+      verbose = 1;
       break;
     default:
       usage(argv0);
@@ -155,6 +160,9 @@ main(int argc, char **argv)
   vmir_set_debug_flags(iu, debug_flags);
   vmir_set_debugged_function(iu, debugged_function);
 
+  if(verbose)
+    vmir_set_log_level(iu, VMIR_LOG_DEBUG);
+
   if(vmir_load(iu, buf, st.st_size)) {
     free(mem);
     free(buf);
@@ -170,7 +178,6 @@ main(int argc, char **argv)
     ts = get_ts() - ts;
     if(print_stats)
       printf("main() executed for %d ms\n", (int)(ts / 1000LL));
-    printf("main() returned 0x%x\n", rval);
   }
 
   if(print_stats)

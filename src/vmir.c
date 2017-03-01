@@ -267,6 +267,7 @@ struct ir_unit {
 
   vmir_stats_t iu_stats;
   vmir_logger_t *iu_logger;
+  vmir_log_level_t iu_log_level;
 };
 
 static uint32_t
@@ -471,6 +472,9 @@ typedef struct ir_instr {
 static void
 vmir_log(ir_unit_t *iu, vmir_log_level_t level, const char *fmt, ...)
 {
+  if(level > iu->iu_log_level)
+    return;
+
   va_list ap;
   char tmp[1024];
   va_start(ap, fmt);
@@ -489,6 +493,12 @@ void
 vmir_set_logger(ir_unit_t *iu, vmir_logger_t *logger)
 {
   iu->iu_logger = logger;
+}
+
+void
+vmir_set_log_level(ir_unit_t *iu, vmir_log_level_t level)
+{
+  iu->iu_log_level = level;
 }
 
 static void type_print_list(ir_unit_t *iu);
@@ -798,6 +808,7 @@ vmir_create(void *membase, uint32_t memsize,
             void *opaque)
 {
   ir_unit_t *iu = calloc(1, sizeof(ir_unit_t));
+  iu->iu_log_level = VMIR_LOG_INFO;
   iu->iu_external_function_resolver = vmir_default_external_function_resolver;
 
   iu->iu_opaque = opaque;
@@ -1048,32 +1059,29 @@ vmir_run(ir_unit_t *iu, int *retptr, int argc, char **argv)
   if(retptr != NULL)
     *retptr = ret.u32;
 
-#if 0
   switch(r) {
   case 0:
-    printf("Program returned normally: 0x%x\n", ret.u32);
+    vmir_log(iu, VMIR_LOG_DEBUG, "Program returned normally: 0x%x", ret.u32);
     break;
   case VM_STOP_EXIT:
-    printf("Program exit(): 0x%x\n", iu->iu_exit_code);
+    vmir_log(iu, VMIR_LOG_DEBUG, "Program exit(): 0x%x", iu->iu_exit_code);
     break;
   case VM_STOP_ABORT:
-    printf("Program abort\n");
+    vmir_log(iu, VMIR_LOG_ERROR, "Program abort");
     break;
   case VM_STOP_UNREACHABLE:
-    printf("Unreachable instruction\n");
+    vmir_log(iu, VMIR_LOG_ERROR, "Unreachable instruction");
     break;
   case VM_STOP_BAD_INSTRUCTION:
-    printf("Bad instruction\n");
+    vmir_log(iu, VMIR_LOG_ERROR, "Bad instruction");
     break;
   case VM_STOP_BAD_FUNCTION:
-    printf("Bad function %d\n", iu->iu_exit_code);
+    vmir_log(iu, VMIR_LOG_ERROR, "Bad function %d", iu->iu_exit_code);
     break;
   case VM_STOP_UNCAUGHT_EXCEPTION:
-    printf("Uncaught exception\n");
+    vmir_log(iu, VMIR_LOG_ERROR, "Uncaught exception");
     break;
   }
-  vmir_instrumentation_dump(iu);
-#endif
   return r;
 }
 

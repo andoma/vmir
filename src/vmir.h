@@ -95,9 +95,20 @@ void *vmir_get_opaque(ir_unit_t *iu);
 
 
 /**
+ * Set callback for log messages
  *
+ * If not set, logging will be sent to stdout
  */
 void vmir_set_logger(ir_unit_t *iu, vmir_logger_t *logger);
+
+/**
+ * Set level for log messages
+ *
+ * Only messages with level lower or equal to this value will be
+ * logged. Default is VMIR_LOG_INFO
+ */
+void vmir_set_log_level(ir_unit_t *iu, vmir_log_level_t level);
+
 
 /**
  * Signature for external function (as returned by
