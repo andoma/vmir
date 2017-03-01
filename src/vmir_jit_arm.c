@@ -552,6 +552,7 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
 {
   const int binop = ii->op;
   int typecode = legalize_type(type_get(iu, ii->lhs_value.type));
+  const ir_value_t *rhs;
 
   switch(binop) {
   case BINOP_SDIV:
@@ -565,6 +566,13 @@ jit_binop_check(ir_unit_t *iu, ir_instr_binary_t *ii)
   case BINOP_SREM:
   case BINOP_UREM:
     return 0;
+
+  case BINOP_ROL:
+  case BINOP_ROR:
+    rhs = value_get(iu, ii->rhs_value.value);
+    if(rhs->iv_class != IR_VC_CONSTANT)
+      return 0;
+    break;
 
   case BINOP_ASHR:
     if(typecode != IR_TYPE_INT32)
@@ -670,6 +678,15 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
         goto wb;
       }
       break;
+    case BINOP_ROL:
+      rc = 32 - rc;
+      jit_pushal(iu, (1 << 24) | (1 << 23) | (1 << 21) | (Rd << 12) | Rn |
+                 ((rc & 0x1f) << 7) | (1 << 6) | (1 << 5));
+      goto wb;
+    case BINOP_ROR:
+      jit_pushal(iu, (1 << 24) | (1 << 23) | (1 << 21) | (Rd << 12) | Rn |
+                 ((rc & 0x1f) << 7) | (1 << 6) | (1 << 5));
+      goto wb;
     }
   }
 
@@ -726,6 +743,7 @@ jit_binop(ir_unit_t *iu, ir_instr_binary_t *ii, jitctx_t *jc)
              (Rm << 8) | (Rd << 16) | Rn);
     break;
   default:
+    printf("armjit bad binop %d\n", binop);
     abort();
   }
  wb:
@@ -893,6 +911,7 @@ jit_load(ir_unit_t *iu, ir_instr_load_t *ii, jitctx_t *jc)
 
     switch(legalize_type(pointee)) {
     default:
+      fprintf(stderr, "jit: Bad pointer type in load @ %d\n", __LINE__);
       abort();
     case IR_TYPE_INT32:
     case IR_TYPE_POINTER:
@@ -959,6 +978,7 @@ jit_store(ir_unit_t *iu, ir_instr_store_t *ii, jitctx_t *jc)
 
   switch(legalize_type(type_get(iu, ii->value.type))) {
   default:
+    fprintf(stderr, "jit: Bad pointer type in store @ %d\n", __LINE__);
     abort();
   case IR_TYPE_INT32:
   case IR_TYPE_POINTER:
@@ -1426,6 +1446,7 @@ jit_cast(ir_unit_t *iu, ir_instr_unary_t *ii, jitctx_t *jc)
              (Rd << 12) | (1 << 6) | (1 << 4) | Rm);
     break;
   default:
+    fprintf(stderr, "jit: Bad cast @ %d\n", __LINE__);
     abort();
   }
 
