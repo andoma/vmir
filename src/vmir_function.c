@@ -1,6 +1,71 @@
 
 
 
+static ir_bb_t *
+bb_make(ir_function_t *f)
+{
+  ir_bb_t *ib = calloc(1, sizeof(ir_bb_t));
+  TAILQ_INIT(&ib->ib_instrs);
+  ib->ib_id = f->if_num_bbs++;
+  return ib;
+}
+
+/**
+ *
+ */
+static ir_bb_t *
+bb_add(ir_function_t *f, ir_bb_t *after)
+{
+  ir_bb_t *ib = bb_make(f);
+  if(after != NULL)
+    TAILQ_INSERT_AFTER(&f->if_bbs, after, ib, ib_link);
+  else
+    TAILQ_INSERT_TAIL(&f->if_bbs, ib, ib_link);
+  return ib;
+}
+
+
+/**
+ *
+ */
+static ir_bb_t *
+bb_add_before(ir_function_t *f, ir_bb_t *before)
+{
+  ir_bb_t *ib = bb_make(f);
+  TAILQ_INSERT_BEFORE(before, ib, ib_link);
+  return ib;
+}
+
+
+/**
+ *
+ */
+__attribute__((unused))
+static ir_bb_t *
+bb_add_named(ir_function_t *f, ir_bb_t *after, const char *name)
+{
+  ir_bb_t *ib = bb_add(f, after);
+  ib->ib_name = strdup(name);
+  return ib;
+}
+
+
+/**
+ *
+ */
+static void
+cfg_create_edge(ir_function_t *f, ir_bb_t *from, ir_bb_t *to)
+{
+  ir_bb_edge_t *ibe = malloc(sizeof(ir_bb_edge_t));
+  LIST_INSERT_HEAD(&f->if_edges,             ibe, ibe_function_link);
+  ibe->ibe_from = from;
+  LIST_INSERT_HEAD(&from->ib_outgoing_edges, ibe, ibe_from_link);
+  ibe->ibe_to   = to;
+  LIST_INSERT_HEAD(&to->ib_incoming_edges,   ibe, ibe_to_link);
+}
+
+
+
 /**
  *
  */

@@ -576,15 +576,19 @@ addstrf(char **dst, const char *fmt, ...)
 #include "vmir_type.c"
 #include "vmir_value.c"
 #include "vmir_vm.h"
-#include "vmir_instr_parse.c"
+#include "vmir_instr.c"
 #include "vmir_function.c"
+#include "vmir_instr_parse.c"
 #if defined(__arm__) && (defined(__linux__) || defined(__ANDROID__))
 #include "vmir_jit_arm.c"
 #endif
 #include "vmir_transform.c"
 #include "vmir_vm.c"
 #include "vmir_libc.c"
+
+#include "vmir_bitcode_instr.c"
 #include "vmir_bitcode_parser.c"
+
 #include "vmir_wasm_parser.c"
 
 
