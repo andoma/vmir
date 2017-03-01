@@ -7,7 +7,7 @@ cachegrind.*
 vmir
 vmir.*
 shatest
-
+**/build/
 .DS_Store
 *.xcworkspace
 xcuserdata
