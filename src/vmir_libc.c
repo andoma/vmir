@@ -1176,9 +1176,9 @@ dofmt(void (*output)(void *opaque, const char *str, int len),
         c = *fmt++;
       } while(c >= '0' && c <= '9');
       goto reswitch;
-
-
-
+    case 'z':
+      flags = 0;
+      goto again;
     case 'l':
       if(flags & FMT_FLAGS_LONG)
         flags |= FMT_FLAGS_INT64;
