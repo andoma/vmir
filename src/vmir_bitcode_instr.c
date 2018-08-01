@@ -474,7 +474,7 @@ parse_call_or_invoke(ir_unit_t *iu, unsigned int argc, const int64_t *argv,
     fnty = type_get(iu, type_get_pointee(iu, fn->iv_type));
     break;
   default:
-    parser_error(iu, "Funcation call via value '%s' not supported",
+    parser_error(iu, "Function call via value '%s' not supported",
                  value_str(iu, fn));
     break;
   }

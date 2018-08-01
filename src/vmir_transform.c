@@ -1182,7 +1182,7 @@ break_critical_edge(ir_function_t *f, ir_bb_edge_t *ibe)
   // Create new edge from new bb to target bb
   cfg_add_edge(f, nb, to->ib_id, 0);
 
-  // Adjust final instrction of previous bb to point to new bb
+  // Adjust final instruction of previous bb to point to new bb
   bb_change_branch(from, to, nb, f);
 
   ir_instr_t *ii;
@@ -2645,7 +2645,7 @@ static void
 legalize_aggregate_insertval(ir_unit_t *iu, ir_instr_insertval_t *ins)
 {
   if(ins->num_indicies != 1) {
-    parser_error(iu, "Unable to legalize insertval with %d indicies",
+    parser_error(iu, "Unable to legalize insertval with %d indices",
                  ins->num_indicies);
   }
 
@@ -2722,7 +2722,7 @@ legalize_aggregate(ir_unit_t *iu, ir_value_t *iv)
           ir_instr_extractval_t *iie = (ir_instr_extractval_t *)ii;
 
           if(iie->num_indicies != 1) {
-            parser_error(iu, "Unable to legalize extractval with %d indicies",
+            parser_error(iu, "Unable to legalize extractval with %d indices",
                          iie->num_indicies);
           }
 
