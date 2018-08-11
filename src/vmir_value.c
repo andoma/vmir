@@ -1046,3 +1046,29 @@ eval_constexprs(ir_unit_t *iu)
       eval_constexpr(iu, iv, iv->iv_ce);
   }
 }
+
+
+/**
+ * Create a new global variable
+ */
+static int
+value_create_global(ir_unit_t *iu, int pointee_type, int pointer_type,
+                    int alignment)
+{
+  if(alignment == 0)
+    alignment = type_alignment(iu, pointee_type);
+
+  ir_globalvar_t *ig = calloc(1, sizeof(ir_globalvar_t));
+  ig->ig_type = pointee_type;
+
+  const int val_id = value_append(iu);
+  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_id);
+  iv->iv_class = IR_VC_GLOBALVAR;
+  iv->iv_type = pointer_type;
+  iv->iv_gvar = ig;
+  iu->iu_data_ptr = VMIR_ALIGN(iu->iu_data_ptr, alignment);
+  ig->ig_addr = iu->iu_data_ptr;
+  ig->ig_size = type_sizeof(iu, pointee_type);
+  iu->iu_data_ptr += type_sizeof(iu, pointee_type);
+  return val_id;
+}

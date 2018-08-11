@@ -127,23 +127,10 @@ module_globalvar(ir_unit_t *iu, unsigned int argc, const int64_t *argv)
     pointee = type_get_pointee(iu, type);
   }
 
-  ir_globalvar_t *ig = calloc(1, sizeof(ir_globalvar_t));
-  ig->ig_type = pointee;
-
-  unsigned int alignment = vmir_llvm_alignment(argv[4], 4);
-  const int val_id = value_append(iu);
-  ir_value_t *iv = VECTOR_ITEM(&iu->iu_values, val_id);
-  iv->iv_class = IR_VC_GLOBALVAR;
-  iv->iv_type = type;
-  iv->iv_gvar = ig;
-  assert(alignment > 0);
-  iu->iu_data_ptr = VMIR_ALIGN(iu->iu_data_ptr, alignment);
-  ig->ig_addr = iu->iu_data_ptr;
-  ig->ig_size = type_sizeof(iu, pointee);
-  iu->iu_data_ptr += type_sizeof(iu, pointee);
+  const int val_id =
+    value_create_global(iu, pointee, type, vmir_llvm_alignment(argv[4], 4));
 
   const unsigned int initializer = argv[2];
-
   if(initializer > 0) {
     ir_initializer_t ii = {val_id, initializer - 1};
     VECTOR_PUSH_BACK(&iu->iu_initializers, ii);
