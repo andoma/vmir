@@ -822,7 +822,7 @@ wasm_store(ir_unit_t *iu, ir_bb_t *ib, int code, wasm_bytestream_t *wbs)
   /* int flags =*/ wbs_get_vu32(wbs);
   int offset = wbs_get_vu32(wbs);
 
-  ir_instr_store_t *i = instr_add(ib, sizeof(ir_instr_binary_t), IR_IC_STORE);
+  ir_instr_store_t *i = instr_add(ib, sizeof(ir_instr_store_t), IR_IC_STORE);
   i->value = vstack_pop(iu);
   i->ptr = vstack_pop(iu);
   i->value.type = type;
