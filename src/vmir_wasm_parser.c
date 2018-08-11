@@ -285,8 +285,7 @@ wasm_parse_section_import_decl(ir_unit_t *iu, wasm_bytestream_t *wbs)
       break;
 
     default:
-      break;
-
+      parser_error(iu, "Import section can't handle kind %d", kind);
     }
     free(module);
     free(field);
@@ -320,8 +319,7 @@ wasm_parse_section_exports(ir_unit_t *iu, wasm_bytestream_t *wbs)
       export_function(iu, field, index);
       break;
     default:
-      break;
-
+      parser_error(iu, "Export section can't handle kind %d", kind);
     }
     free(field);
   }
@@ -1060,10 +1058,8 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       break;
 
     default:
-      printf("Can't handle opcode 0x%x\n", code);
       function_print(iu, iu->iu_current_function, "faildump");
-      exit(32);
-      break;
+      parser_error(iu, "Can't handle opcode 0x%x", code);
     }
   }
 
@@ -1135,8 +1131,7 @@ parse_i32_expr(ir_unit_t *iu, wasm_bytestream_t *wbs)
       break;
 
     default:
-      printf("Can't handle opcode 0x%x in init_expr\n", code);
-      exit(32);
+      parser_error(iu, "Init expression: Can't handle opcode 0x%x", code);
     }
   }
   ir_valuetype_t vt = vstack_pop(iu);
