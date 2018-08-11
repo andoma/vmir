@@ -912,6 +912,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
 #endif
 
   const uint32_t magic = read_bits(&bs, 32);
+  iu->iu_data_ptr = 4096;
   switch(magic) {
 
   case 0x6d736100: // WebAssembly
@@ -921,7 +922,6 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
 
   case 0xdec04342: // LLVM Bitcode
     // WebAssembly need memory at 0. Bitcode don't really.
-    iu->iu_data_ptr = 4096;
     ir_parse_blocks(iu, 2, NULL, NULL, &bs);
     break;
   default:
