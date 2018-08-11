@@ -259,6 +259,7 @@ struct ir_unit {
   // WASM
 
   VECTOR_HEAD(, int) iu_wasm_type_map;
+  VECTOR_HEAD(, int) iu_wasm_globalvar_map;
   VECTOR_HEAD(, int) iu_wasm_functions;
   VECTOR_HEAD(, ir_valuetype_t) iu_wasm_value_stack;
   VECTOR_HEAD(, struct ir_bb *) iu_wasm_cfg_stack;
@@ -741,6 +742,11 @@ iu_cleanup(ir_unit_t *iu)
   VECTOR_CLEAR(&iu->iu_initializers);
   VECTOR_CLEAR(&iu->iu_values);
 
+  VECTOR_CLEAR(&iu->iu_wasm_type_map);
+  VECTOR_CLEAR(&iu->iu_wasm_globalvar_map);
+  VECTOR_CLEAR(&iu->iu_wasm_functions);
+  VECTOR_CLEAR(&iu->iu_wasm_value_stack);
+  VECTOR_CLEAR(&iu->iu_wasm_cfg_stack);
 
   ir_attr_t *ia;
   while((ia = LIST_FIRST(&iu->iu_attribute_groups)) != NULL) {

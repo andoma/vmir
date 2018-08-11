@@ -259,12 +259,51 @@ import_function(ir_unit_t *iu, const char *module, const char *name, int type)
   }
 }
 
-/*
+
 static void
-import_table(ir_unit_t *iu, const char *module, const char *name, int type)
+import_table(ir_unit_t *iu, const char *module, const char *name,
+              wasm_bytestream_t *wbs)
 {
+  const uint8_t elem_type = wbs_get_byte(wbs);
+  if(elem_type != 0x70)
+    parser_error(iu, "Table %s::%s is not of type 'anyfunc'",
+                 module, name);
+
+  const uint32_t flags = wbs_get_vu32(wbs);
+  if(flags)
+    parser_error(iu, "Resizable table %s::%s not supported",
+                 module, name);
+
+  const uint32_t initial = wbs_get_vu32(wbs);
+  parser_error(iu, "Imported tables not yet supported: %s.%s size:%u",
+               module, name, initial);
 }
-*/
+
+
+static void
+import_memory(ir_unit_t *iu, const char *module, const char *name,
+              wasm_bytestream_t *wbs)
+{
+  const uint32_t flags = wbs_get_vu32(wbs);
+  if(flags)
+    parser_error(iu, "Resizable memory %s::%s not supported",
+                 module, name);
+
+  const uint32_t initial = wbs_get_vu32(wbs);
+  parser_error(iu, "Importing memory not yet supported: %s.%s initial_size:%u",
+               module, name, initial);
+}
+
+static void
+import_global(ir_unit_t *iu, const char *module, const char *name,
+              wasm_bytestream_t *wbs)
+{
+  const uint8_t type = wasm_parse_value_type(iu, wbs);
+  const uint32_t mutable = wbs_get_vu32(wbs);
+  parser_error(iu, "Importing global not yet supported: "
+               "%s::%s type:0x%x mutable:%d",
+               module, name, type, mutable);
+}
 
 
 
@@ -283,14 +322,65 @@ wasm_parse_section_import_decl(ir_unit_t *iu, wasm_bytestream_t *wbs)
     case 0:
       import_function(iu, module, field, wbs_get_vu32(wbs));
       break;
-
+    case 1:
+      import_table(iu, module, field, wbs);
+      break;
+    case 2:
+      import_memory(iu, module, field, wbs);
+      break;
+    case 3:
+      import_global(iu, module, field, wbs);
+      break;
     default:
-      parser_error(iu, "Import section can't handle kind %d", kind);
+      parser_error(iu, "Import section can't handle kind %d for %s::%s",
+                   kind, module, field);
     }
     free(module);
     free(field);
   }
 }
+
+
+/**
+ *
+ */
+static void
+wasm_parse_section_table(ir_unit_t *iu, wasm_bytestream_t *wbs)
+{
+  uint32_t count = wbs_get_vu32(wbs);
+  for(uint32_t i = 0; i < count; i++) {
+
+    const uint8_t elem_type = wbs_get_byte(wbs);
+    if(elem_type != 0x70)
+      parser_error(iu, "Declared table is not of type 'anyfunc'");
+
+    const uint32_t flags = wbs_get_vu32(wbs);
+    if(flags)
+      parser_error(iu, "Resizable table not supported");
+
+    const uint32_t initial = wbs_get_vu32(wbs);
+    printf("Declared table size:%u\n", initial);
+  }
+}
+
+
+/**
+ *
+ */
+static void
+wasm_parse_section_memory(ir_unit_t *iu, wasm_bytestream_t *wbs)
+{
+  uint32_t count = wbs_get_vu32(wbs);
+  for(uint32_t i = 0; i < count; i++) {
+    const uint32_t flags = wbs_get_vu32(wbs);
+    if(flags)
+      parser_error(iu, "Resizable memory not supported");
+
+    const uint32_t initial = wbs_get_vu32(wbs);
+    printf("Declared memory size:%u\n", initial);
+  }
+}
+
 
 
 /**
@@ -318,8 +408,11 @@ wasm_parse_section_exports(ir_unit_t *iu, wasm_bytestream_t *wbs)
     case 0:
       export_function(iu, field, index);
       break;
+    case 2:
+      break;
     default:
-      parser_error(iu, "Export section can't handle kind %d", kind);
+      parser_error(iu, "Export section can't handle kind %d '%s' index %d",
+                   kind, field, index);
     }
     free(field);
   }
@@ -1038,6 +1131,14 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       wasm_set_local(iu, ib, local_var);
       vstack_push_value(iu, local_var);
       break;
+    case 0x23:
+      vstack_push_value(iu, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
+                                        wbs_get_vu32(wbs)));
+      break;
+    case 0x24:
+      wasm_set_local(iu, ib, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
+                                         wbs_get_vu32(wbs)));
+      break;
     case 0x28 ... 0x35:
       wasm_load(iu, ib, code, wbs);
       break;
@@ -1114,8 +1215,8 @@ wasm_parse_section_code(ir_unit_t *iu, wasm_bytestream_t *wbs)
   }
 }
 
-static uint32_t
-parse_i32_expr(ir_unit_t *iu, wasm_bytestream_t *wbs)
+static void
+parse_init_expr(ir_unit_t *iu, wasm_bytestream_t *wbs)
 {
   vstack_clear(iu);
   iu->iu_first_func_value = iu->iu_next_value;
@@ -1134,11 +1235,6 @@ parse_i32_expr(ir_unit_t *iu, wasm_bytestream_t *wbs)
       parser_error(iu, "Init expression: Can't handle opcode 0x%x", code);
     }
   }
-  ir_valuetype_t vt = vstack_pop(iu);
-  const ir_value_t *iv = value_get(iu, vt.value);
-  uint32_t rval = value_get_const(iu, iv);
-  value_resize(iu, iu->iu_first_func_value);
-  return rval;
 }
 
 /**
@@ -1150,7 +1246,12 @@ wasm_parse_section_data(ir_unit_t *iu, wasm_bytestream_t *wbs)
   uint32_t count = wbs_get_vu32(wbs);
   for(uint32_t i = 0; i < count; i++) {
     const uint32_t index = wbs_get_vu32(wbs);
-    const uint32_t offset = parse_i32_expr(iu, wbs);
+
+    parse_init_expr(iu, wbs); // Will leave value on vstack
+    const uint32_t offset =
+      value_get_const32(iu, value_get(iu, vstack_pop(iu).value));
+    value_resize(iu, iu->iu_first_func_value);
+
     const uint32_t size = wbs_get_vu32(wbs);
     if(index == 0) {
       memcpy(iu->iu_mem + offset, wbs->ptr, size);
@@ -1159,6 +1260,33 @@ wasm_parse_section_data(ir_unit_t *iu, wasm_bytestream_t *wbs)
     wbs->ptr += size;
   }
 }
+
+
+
+/**
+ *
+ */
+static void
+wasm_parse_section_global(ir_unit_t *iu, wasm_bytestream_t *wbs)
+{
+  uint32_t count = wbs_get_vu32(wbs);
+  for(uint32_t i = 0; i < count; i++) {
+    const int pointee_type = wasm_parse_value_type(iu, wbs);
+    const int pointer_type = type_make_pointer(iu, pointee_type, 1);
+    const uint32_t mutable = wbs_get_vu32(wbs);
+
+    const int val_id = value_create_global(iu, pointee_type, pointer_type, 0);
+    VECTOR_PUSH_BACK(&iu->iu_wasm_globalvar_map, val_id);
+
+    parse_init_expr(iu, wbs); // Will leave value on vstack
+    const ir_initializer_t ii = {val_id, vstack_pop(iu).value};
+    VECTOR_PUSH_BACK(&iu->iu_initializers, ii);
+    printf("Global var %s (globaindex: %zd) mutable=%d\n",
+           value_str_id(iu, val_id),
+           VECTOR_LEN(&iu->iu_wasm_globalvar_map) - 1, mutable);
+  }
+}
+
 
 /**
  *
@@ -1210,7 +1338,7 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
 
     if(section_code == 0) {
       char *section_name = wbs_get_string(iu, &bs);
-      vmir_log(iu, VMIR_LOG_ERROR, "Skipping named section %s", section_name);
+      vmir_log(iu, VMIR_LOG_DEBUG, "Skipping named section %s", section_name);
       free(section_name);
       bs.ptr = section_end;
       continue;
@@ -1226,6 +1354,15 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
     case WASM_SECTION_FUNCTION:
       wasm_parse_section_functions(iu, &bs);
       break;
+    case WASM_SECTION_TABLE:
+      wasm_parse_section_table(iu, &bs);
+      break;
+    case WASM_SECTION_MEMORY:
+      wasm_parse_section_memory(iu, &bs);
+      break;
+    case WASM_SECTION_GLOBAL:
+      wasm_parse_section_global(iu, &bs);
+      break;
     case WASM_SECTION_EXPORTS:
       wasm_parse_section_exports(iu, &bs);
       break;
@@ -1236,7 +1373,7 @@ wasm_parse_module(ir_unit_t *iu, const void *start, const void *end)
       wasm_parse_section_data(iu, &bs);
       break;
     default:
-      vmir_log(iu, VMIR_LOG_DEBUG, "Skipping section type %d", section_code);
+      vmir_log(iu, VMIR_LOG_ERROR, "Skipping section type %d", section_code);
       break;
     }
     bs.ptr = section_end;
