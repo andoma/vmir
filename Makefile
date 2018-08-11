@@ -1,4 +1,6 @@
-SRCS  = src/main.c \
+.PHONY: clean
+
+SRCS = src/main.c \
 	src/vmir.c \
 	tlsf/tlsf.c \
 
@@ -41,3 +43,6 @@ vmir.ppc64: ${DEPS}
 	powerpc64-linux-gnu-gcc -O2 -static ${CFLAGS} -g ${SRCS} -lm -o $@
 
 all: vmir vmir.armv7 vmir.ppc64
+
+clean:
+	rm -f vmir{,.armv7,.ppc64}
