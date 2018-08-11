@@ -675,7 +675,7 @@ instr_print(char **dstp, ir_unit_t *iu, const ir_instr_t *ii, int flags)
   case IR_IC_SWITCH:
     {
       ir_instr_switch_t *s = (ir_instr_switch_t *)ii;
-      len += addstr(dstp, "switch");
+      len += addstr(dstp, "switch ");
       len += value_print_vt(dstp, iu, s->value);
       for(int i = 0; i < s->num_paths; i++)
         len += addstrf(dstp, " [#%"PRId64" -> .%d]",
