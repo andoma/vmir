@@ -166,7 +166,7 @@ vmir_errcode_t vmir_load(ir_unit_t *iu, const uint8_t *bitcode,
 
 /**
  * Destroy the environment and free all resources except the memory
- * passed in to vmir_create(). THe user is responsible for freeing this
+ * passed in to vmir_create(). The user is responsible for freeing this
  * memory.
  *
  * After this the ir_unit is also free'd and no longer available
@@ -300,7 +300,7 @@ uint32_t vmir_mem_copy(ir_unit_t *iu, const void *data, size_t size);
 void vmir_mem_free(ir_unit_t *iu, uint32_t addr);
 
 /**
- * Filedescriptors
+ * File descriptors
  */
 #define VMIR_FD_TYPE_FILEHANDLE 1
 #define VMIR_FD_TYPE_SOCKET     2

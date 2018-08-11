@@ -1063,7 +1063,7 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
 
   if(tib->ib_jit) {
     if(tib->ib_only_jit_sucessors && TAILQ_NEXT(curbb, ib_link) == tib) {
-      // Jumping to consecustive BB can be skipped
+      // Jumping to consecutive BB can be skipped
       false_cond = armcond(invert_pred(pred));
       may_push_pool = 0;
     } else {
@@ -1080,7 +1080,7 @@ jit_emit_conditional_branch(ir_unit_t *iu, int true_bb, int false_bb, int pred,
 
   if(fib->ib_jit) {
     if(fib->ib_only_jit_sucessors && TAILQ_NEXT(curbb, ib_link) == fib) {
-      // Jumping to consecustive BB can be skipped
+      // Jumping to consecutive BB can be skipped
       may_push_pool = 0;
     } else {
       // Jumping to another JITen instruction, emit a branch
@@ -1129,7 +1129,7 @@ jit_br(ir_unit_t *iu, ir_instr_br_t *ii, jitctx_t *jc, ir_bb_t *curbb)
   ir_bb_t *ib = bb_find(iu->iu_current_function, ii->true_branch);
   if(ib->ib_jit) {
     if(TAILQ_NEXT(curbb, ib_link) == ib && ib->ib_only_jit_sucessors) {
-      // Jumping to consecustive BB can be skipped
+      // Jumping to consecutive BB can be skipped
       return;
     }
     // Jumping to another JITed BB, emit a branch

@@ -3624,7 +3624,7 @@ emit_br(ir_unit_t *iu, ir_instr_br_t *ii, ir_bb_t *currentib)
   if(ii->condition.value == -1) {
     ir_bb_t *next = TAILQ_NEXT(currentib, ib_link);
     if(next != NULL && next->ib_id == ii->true_branch) {
-      // Jump to next bb is NOP as basic-blocks are contigous in memory
+      // Jump to next bb is NOP as basic-blocks are contiguous in memory
       VECTOR_POP(&iu->iu_branch_fixups);
       return;
     }
@@ -3806,12 +3806,12 @@ emit_move(ir_unit_t *iu, ir_instr_move_t *ii)
 
     if(v1->iv_reg + 4 != v2->iv_reg ||
        ii->super.ii_rets[0].type != ii->super.ii_rets[1].type)
-      parser_error(iu, "Bad aggregate destionation for move");
+      parser_error(iu, "Bad aggregate destination for move");
 
     const ir_type_t *ty = type_get(iu, ii->super.ii_rets[0].type);
     typecode = legalize_type(ty);
     if(typecode != IR_TYPE_INT32)
-      parser_error(iu, "Bad aggregate destionation type for move");
+      parser_error(iu, "Bad aggregate destination type for move");
 
     // Merge to one 64bit reg
     retreg = value_reg(v1);

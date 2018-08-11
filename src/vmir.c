@@ -914,7 +914,7 @@ vmir_load(ir_unit_t *iu, const uint8_t *u8, int len)
     break;
 
   case 0xdec04342: // LLVM Bitcode
-    // Webassembly need memory at 0. Bitcode dont really.
+    // WebAssembly need memory at 0. Bitcode don't really.
     iu->iu_data_ptr = 4096;
     ir_parse_blocks(iu, 2, NULL, NULL, &bs);
     break;

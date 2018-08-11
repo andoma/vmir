@@ -125,7 +125,7 @@ main(int argc, char **argv)
   }
 
   if(optind >= argc) {
-    fprintf(stderr, "Need .bc file to parse/run\n");
+    fprintf(stderr, "Please provide a .wasm or .bc file as the first argument.\n");
     exit(1);
   }
 
