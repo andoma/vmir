@@ -181,6 +181,8 @@ wasm_parse_value_type(ir_unit_t *iu, wasm_bytestream_t *wbs)
 {
   const uint8_t arg_type = wbs_get_byte(wbs);
   switch(arg_type) {
+  case 0x40:
+    return 0;
   case 0x7f:
   case 0x7e:
   case 0x7d:
@@ -882,6 +884,31 @@ wasm_set_local(ir_unit_t *iu, ir_bb_t *ib, const int localvar)
 
 
 static void
+wasm_load_global(ir_unit_t *iu, ir_bb_t *ib, const ir_valuetype_t global_var)
+{
+  const int pointee_type = value_get(iu, global_var.value)->iv_gvar->ig_type;
+  ir_instr_load_t *i = instr_add(ib, sizeof(ir_instr_load_t), IR_IC_LOAD);
+  i->ptr = global_var;
+  i->immediate_offset = 0;
+  i->value_offset.value = -1;
+  i->cast = -1;
+  i->load_type = pointee_type;
+  value_alloc_instr_ret(iu, pointee_type, &i->super);
+  vstack_push(iu, i->super.ii_ret);
+}
+
+
+static void
+wasm_store_global(ir_unit_t *iu, ir_bb_t *ib, const ir_valuetype_t global_var)
+{
+  ir_instr_store_t *st = instr_add(ib, sizeof(ir_instr_store_t), IR_IC_STORE);
+  st->value = vstack_pop(iu);
+  st->ptr = global_var;
+  st->immediate_offset = 0;
+}
+
+
+static void
 wasm_call(ir_unit_t *iu, ir_bb_t *ib, wasm_bytestream_t *wbs,
           int indirect)
 {
@@ -1037,11 +1064,14 @@ wasm_unreachable(ir_unit_t *iu, ir_bb_t *ib)
 
 #define WASM_OP_BLOCK 0x2
 #define WASM_OP_LOOP  0x3
+#define WASM_OP_IF    0x4
+#define WASM_OP_ELSE  0x5
 
 static ir_bb_t *
 wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
                  wasm_bytestream_t *wbs, uint32_t local_var_base,
-                 label_stack_frame_t *parent, int type, int depth)
+                 label_stack_frame_t *parent, int type, int depth,
+                 int yield_value)
 {
   unsigned int local_var;
   uint8_t rettype;
@@ -1061,6 +1091,16 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
     ib = lsf.label;
     break;
 
+  case WASM_OP_IF:
+    lsf.label = bb_add_named(iu->iu_current_function, ib, "False");
+    exitblock = lsf.label;
+    ir_instr_br_t *i = instr_add(ib, sizeof(ir_instr_br_t), IR_IC_BR);
+    ib = bb_add_named(iu->iu_current_function, ib, "True");
+    i->true_branch = ib->ib_id;
+    i->false_branch = lsf.label->ib_id;
+    i->condition =  vstack_pop(iu);
+    break;
+
   default:
     abort();
   }
@@ -1074,18 +1114,14 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
 
     switch(code) {
     case WASM_OP_BLOCK:
-      rettype = wbs_get_byte(wbs);
-      if(rettype != 0x40)
-        parser_error(iu, "Can't handle block with non-void rettype (0x%x)",
-                     rettype);
-      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code, depth + 1);
-      break;
     case WASM_OP_LOOP:
-      rettype = wbs_get_byte(wbs);
-      if(rettype != 0x40)
-        parser_error(iu, "Can't handle loop with non-void rettype (0x%x) @ %zx",
-                     rettype, wbs->ptr - wbs->start - 2);
-      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code, depth + 1);
+    case WASM_OP_IF:
+      rettype = wasm_parse_value_type(iu, wbs);
+      int yielded = rettype ? value_alloc_temporary(iu, rettype).value : -1;
+      ib = wasm_parse_block(iu, ib, wbs, local_var_base, &lsf, code, depth + 1,
+                            yielded);
+      if(yielded != -1)
+        vstack_push_value(iu, yielded);
       break;
 
     case 0x0:
@@ -1093,11 +1129,26 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       code = wbs_get_byte(wbs);
       while(code == 0)
         code = wbs_get_byte(wbs);
-      if(code != 0xb)
-        parser_error(iu, "unreachable not followed by end");
-      if(depth == 0)
-        return NULL;
-      return exitblock;
+      if(code == 0xb) {
+        if(depth == 0)
+          return NULL;
+        return exitblock;
+      } else if(code != WASM_OP_ELSE) {
+        parser_error(iu, "unreachable not followed by block termination");
+      }
+      // fallthru
+    case WASM_OP_ELSE:
+      if(yield_value != -1)
+        wasm_set_local(iu, ib, yield_value);
+      lsf.label = bb_add_named(iu->iu_current_function, ib, "Else exit");
+      unconditional_branch(ib, lsf.label);
+      ib = exitblock;
+      exitblock = lsf.label;
+      break;
+
+
+    case 1:
+      break;
 
     case 0xf:  // Return
       wasm_return(iu, ib);
@@ -1132,12 +1183,12 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
       vstack_push_value(iu, local_var);
       break;
     case 0x23:
-      vstack_push_value(iu, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
-                                        wbs_get_vu32(wbs)));
+      wasm_load_global(iu, ib, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
+                                           wbs_get_vu32(wbs)));
       break;
     case 0x24:
-      wasm_set_local(iu, ib, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
-                                         wbs_get_vu32(wbs)));
+      wasm_store_global(iu, ib, VECTOR_ITEM(&iu->iu_wasm_globalvar_map,
+                                            wbs_get_vu32(wbs)));
       break;
     case 0x28 ... 0x35:
       wasm_load(iu, ib, code, wbs);
@@ -1164,11 +1215,11 @@ wasm_parse_block(ir_unit_t *iu, ir_bb_t *ib,
     }
   }
 
+  if(yield_value != -1)
+    wasm_set_local(iu, ib, yield_value);
 
   if(exitblock) {
-    ir_instr_br_t *i = instr_add(ib, sizeof(ir_instr_br_t), IR_IC_BR);
-    i->true_branch = exitblock->ib_id;
-    i->condition.value = -1;
+    unconditional_branch(ib, exitblock);
     return exitblock;
   }
   return ib;
@@ -1203,7 +1254,7 @@ wasm_parse_section_code(ir_unit_t *iu, wasm_bytestream_t *wbs)
 
     unconditional_branch(preamble, ib);
 
-    ib = wasm_parse_block(iu, ib, wbs, local_var_base, NULL, 0x02, 0);
+    ib = wasm_parse_block(iu, ib, wbs, local_var_base, NULL, 0x02, 0, -1);
 
     if(ib != NULL)
       wasm_return(iu, ib);
@@ -1276,7 +1327,8 @@ wasm_parse_section_global(ir_unit_t *iu, wasm_bytestream_t *wbs)
     const uint32_t mutable = wbs_get_vu32(wbs);
 
     const int val_id = value_create_global(iu, pointee_type, pointer_type, 0);
-    VECTOR_PUSH_BACK(&iu->iu_wasm_globalvar_map, val_id);
+    const ir_valuetype_t vt = { val_id, pointer_type };
+    VECTOR_PUSH_BACK(&iu->iu_wasm_globalvar_map, vt);
 
     parse_init_expr(iu, wbs); // Will leave value on vstack
     const ir_initializer_t ii = {val_id, vstack_pop(iu).value};
