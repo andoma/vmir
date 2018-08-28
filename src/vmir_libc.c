@@ -928,8 +928,10 @@ static int
 vmir_puts(void *ret, const void *rf, ir_unit_t *iu)
 {
   const char *str = vmir_vm_ptr(&rf, iu);
-  if(iu->iu_stdout != NULL)
+  if(iu->iu_stdout != NULL) {
     fwrite(str, strlen(str), 1, iu->iu_stdout->fp);
+    fwrite("\n", 1, 1, iu->iu_stdout->fp);    
+  }
   vmir_vm_ret32(ret, 0);
   return 0;
 }
