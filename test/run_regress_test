@@ -1,0 +1,18 @@
+#!/bin/bash
+exe_file=$1
+byte_code_file=$2
+correct_file=$3
+out_file=$byte_code_file.out
+
+#$exe_file.dbg $byte_code_file > $out_file
+#$exe_file.trace -v $byte_code_file > $out_file
+$exe_file $byte_code_file > $out_file
+RETVAL=$?
+[ $RETVAL -ne 0 ] && rm $out_file && echo $byte_code_file FAILED && exit $RETVAL
+
+diff -qbwB $out_file $correct_file
+RETVAL=$?
+rm $out_file
+[ $RETVAL -eq 0 ] && echo $byte_code_file PASSED
+[ $RETVAL -ne 0 ] && echo $byte_code_file FAILED
+exit $RETVAL
