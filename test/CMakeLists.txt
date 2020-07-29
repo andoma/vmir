@@ -6,4 +6,4 @@ project(test
 enable_testing()
 add_subdirectory(gcc-torture)
 add_subdirectory(misc)
-
+add_subdirectory(regress)

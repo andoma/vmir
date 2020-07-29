@@ -1,0 +1,52 @@
+Testing pointer arithmetic
+Index 0 OK
+Index 1 OK
+Index 2 OK
+Index 3 OK
+Index 4 OK
+Index 5 OK
+Index 6 OK
+Index 7 OK
+Index 8 OK
+Index 9 OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+char pointer arithmetic OK
+int pointer arithmetic OK
+struct pointer arithmetic OK
+void pointer arithmetic OK
+Test complete

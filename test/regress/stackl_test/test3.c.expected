@@ -1,0 +1,44 @@
+EQ works
+NE works
+AND works
+OR works
+GT works
+LT works
+GE works
+LE works
+PLUS works
+MINUS works
+TIMES works
+DIVIDE works
+MOD works
+XOR works
+Bitwise AND works
+Bitwise OR works
+shift left works
+shift right works
+NEG works
+NOT 1 works
+NOT 2 works
+COMP works
+PLUS_EQ works
+MINUS_EQ works
+TIMES_EQ works
+DIVIDE_EQ works
+MOD_EQ works
+OR_EQ works
+AND_EQ works
+XOR_EQ works
+LEFT_EQ works
+RIGHT_EQ works
+post INC works
+post DEC works
+pre INC works
+pre DEC works
+equals in expr works
+success
+success
+success
+success
+success
+success
+success
