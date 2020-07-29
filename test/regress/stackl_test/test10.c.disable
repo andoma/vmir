@@ -1,0 +1,6 @@
+int main()
+{
+    long i = -1;
+    printf("%d\n", l);
+    return 0;
+}
